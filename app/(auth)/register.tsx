@@ -9,13 +9,6 @@ import { FormField } from '@/components/FormField';
 import { ScreenContainer } from '@/components/ScreenContainer';
 import { useAuth } from '@/hooks/useAuth';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
-import { UserRole } from '@/types';
-
-const roles: { label: string; value: UserRole }[] = [
-  { label: 'Ejecutivo', value: 'executive' },
-  { label: 'Coordinador', value: 'coordinator' },
-  { label: 'Jefe de ventas', value: 'sales_manager' },
-];
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -25,7 +18,6 @@ export default function RegisterScreen() {
   const [rut, setRut] = useState('');
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
-  const [role, setRole] = useState<UserRole>('executive');
   const [accepted, setAccepted] = useState(false);
   const [error, setError] = useState('');
 
@@ -49,7 +41,7 @@ export default function RegisterScreen() {
 
     setError('');
     try {
-      await signUp({ email, name, password, role, rut });
+      await signUp({ email, name, password, rut });
       router.replace('/(tabs)/home');
     } catch (registrationError) {
       setError(registrationError instanceof Error ? registrationError.message : 'No fue posible crear la cuenta.');
@@ -77,20 +69,6 @@ export default function RegisterScreen() {
             <FormField autoCapitalize="characters" icon="card-outline" label="RUT" onChangeText={setRut} placeholder="12.345.678-9" value={rut} />
             <FormField icon="lock-closed-outline" label="Contraseña" onChangeText={setPassword} password placeholder="Mínimo 6 caracteres" value={password} />
             <FormField icon="shield-checkmark-outline" label="Confirmar contraseña" onChangeText={setConfirmation} password placeholder="Repite tu contraseña" value={confirmation} />
-
-            <View style={styles.roleBlock}>
-              <Text style={styles.fieldLabel}>Soy ejecutivo</Text>
-              <View style={styles.roles}>
-                {roles.map((option) => {
-                  const active = role === option.value;
-                  return (
-                    <Pressable key={option.value} onPress={() => setRole(option.value)} style={[styles.role, active && styles.roleActive]}>
-                      <Text adjustsFontSizeToFit numberOfLines={1} style={[styles.roleText, active && styles.roleTextActive]}>{option.label}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
 
             <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: accepted }} aria-checked={accepted} onPress={() => setAccepted((value) => !value)} style={styles.terms}>
               <View style={[styles.checkbox, accepted && styles.checkboxActive]}>
@@ -122,13 +100,6 @@ const styles = StyleSheet.create({
   title: { color: colors.primary, fontFamily: typography.serif, fontSize: 33, fontWeight: '600' },
   subtitle: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 14, marginTop: 5 },
   form: { gap: 15, marginTop: spacing.xxl },
-  roleBlock: { gap: 8 },
-  fieldLabel: { color: colors.text, fontFamily: typography.sans, fontSize: 13, fontWeight: '700' },
-  roles: { backgroundColor: colors.paleGreen, borderRadius: radii.md, flexDirection: 'row', gap: 4, padding: 4 },
-  role: { alignItems: 'center', borderRadius: 12, flex: 1, justifyContent: 'center', minHeight: 42, paddingHorizontal: 4 },
-  roleActive: { backgroundColor: colors.primary },
-  roleText: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 10, fontWeight: '700' },
-  roleTextActive: { color: colors.surface },
   terms: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
   checkbox: { alignItems: 'center', borderColor: colors.border, borderRadius: 6, borderWidth: 1.5, height: 22, justifyContent: 'center', width: 22 },
   checkboxActive: { backgroundColor: colors.primary, borderColor: colors.primary },

@@ -4,7 +4,7 @@ Primera versión completa de la aplicación móvil comercial de Parque del Recue
 
 ## Estado del MVP
 
-- Autenticación real preparada para Supabase y modo demostración cuando no hay credenciales.
+- Autenticación real conectada a Supabase y modo demostración cuando no hay credenciales.
 - Login, registro y cierre de sesión.
 - Perfil Ejecutivo con venta acumulada, indicadores, metas y actividad reciente.
 - Detalle completo de Mis metas, incluyendo productividad medida en negocios y semáforo de mora.
@@ -19,7 +19,7 @@ Primera versión completa de la aplicación móvil comercial de Parque del Recue
 - Expo SDK 57
 - TypeScript estricto
 - Expo Router
-- Supabase Auth opcional
+- Supabase Auth y PostgreSQL con Row Level Security (RLS)
 - React Native Web para validación y vista previa
 
 ## Instalación
@@ -52,10 +52,27 @@ Copia `.env.example` a `.env` y completa las variables solamente cuando exista u
 
 ```dotenv
 EXPO_PUBLIC_SUPABASE_URL=
-EXPO_PUBLIC_SUPABASE_ANON_KEY=
+EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 ```
 
-Si ambas están vacías, la aplicación activa automáticamente el modo demostración. No se incluyen secretos en el repositorio.
+La clave `publishable` es la clave pública para clientes móviles; nunca agregues una clave `secret` o `service_role` a la aplicación. Si ambas variables están vacías, la aplicación activa automáticamente el modo demostración. El archivo `.env` local está excluido de Git.
+
+## Base de datos Supabase
+
+El esquema reproducible está en `supabase/migrations/`. Incluye perfiles vinculados a Supabase Auth, equipos, métricas, metas, competencias, rankings, ventas, mora, noticias, galería y notificaciones.
+
+- Todas las tablas tienen RLS habilitado.
+- Los usuarios anónimos no tienen acceso a las tablas comerciales.
+- Cada usuario autenticado solo puede leer sus datos personales, ventas, metas, mora y notificaciones.
+- Los roles privilegiados no se aceptan desde el formulario de registro; deben administrarse en la base de datos.
+- El perfil y las métricas iniciales se crean automáticamente al registrar un usuario.
+
+Para un proyecto nuevo, vincula Supabase CLI y aplica las migraciones revisadas:
+
+```bash
+npx supabase link --project-ref TU_PROJECT_REF
+npx supabase db push
+```
 
 ## Estructura
 

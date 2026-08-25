@@ -16,8 +16,8 @@ import { colors, radii, shadows, spacing, typography } from '@/theme';
 export default function LoginScreen() {
   const router = useRouter();
   const { authMode, isLoading, signIn } = useAuth();
-  const [email, setEmail] = useState(currentUser.email);
-  const [password, setPassword] = useState('demo1234');
+  const [email, setEmail] = useState(authMode === 'demo' ? currentUser.email : '');
+  const [password, setPassword] = useState(authMode === 'demo' ? 'demo1234' : '');
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState('');
 

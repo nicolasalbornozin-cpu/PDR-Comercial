@@ -7,21 +7,47 @@ export interface RegistrationInput {
   email: string;
   rut: string;
   password: string;
-  role: UserRole;
 }
 
 const authMode: 'demo' | 'supabase' = isSupabaseConfigured ? 'supabase' : 'demo';
 
-function mapSupabaseUser(user: { id: string; email?: string; user_metadata?: Record<string, unknown> }): User {
-  const metadata = user.user_metadata ?? {};
+interface ProfileRow {
+  id: string;
+  full_name: string;
+  email: string;
+  rut: string | null;
+  role: UserRole;
+  avatar_url: string | null;
+  team_id: number | null;
+  supervisor_id: string | null;
+  sales_manager_id: string | null;
+  join_date: string;
+}
+
+function initials(name: string): string {
+  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+}
+
+function mapProfile(profile: ProfileRow): User {
   return {
-    ...currentUser,
-    id: user.id,
-    name: typeof metadata.name === 'string' ? metadata.name : currentUser.name,
-    email: user.email ?? currentUser.email,
-    rut: typeof metadata.rut === 'string' ? metadata.rut : currentUser.rut,
-    role: (typeof metadata.role === 'string' ? metadata.role : currentUser.role) as UserRole,
+    id: profile.id,
+    name: profile.full_name,
+    email: profile.email,
+    rut: profile.rut ?? '',
+    role: profile.role,
+    avatar: profile.avatar_url ?? initials(profile.full_name),
+    teamId: profile.team_id?.toString() ?? '',
+    supervisorId: profile.supervisor_id ?? '',
+    salesManagerId: profile.sales_manager_id ?? '',
+    joinDate: profile.join_date,
   };
+}
+
+async function getProfile(userId: string): Promise<User> {
+  if (!supabase) throw new Error('Supabase no está configurado.');
+  const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
+  if (error) throw new Error(`No fue posible cargar tu perfil: ${error.message}`);
+  return mapProfile(data as ProfileRow);
 }
 
 export const authService = {
@@ -30,7 +56,7 @@ export const authService = {
   async restoreSession(): Promise<User | null> {
     if (!supabase) return null;
     const { data } = await supabase.auth.getSession();
-    return data.session?.user ? mapSupabaseUser(data.session.user) : null;
+    return data.session?.user ? getProfile(data.session.user.id) : null;
   },
 
   async signIn(email: string, password: string): Promise<User> {
@@ -41,23 +67,26 @@ export const authService = {
 
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
-    return mapSupabaseUser(data.user);
+    return getProfile(data.user.id);
   },
 
   async signUp(input: RegistrationInput): Promise<User> {
     if (!supabase) {
       await new Promise((resolve) => setTimeout(resolve, 550));
-      return { ...currentUser, name: input.name, email: input.email, rut: input.rut, role: input.role };
+      return { ...currentUser, name: input.name, email: input.email, rut: input.rut };
     }
 
     const { data, error } = await supabase.auth.signUp({
       email: input.email,
       password: input.password,
-      options: { data: { name: input.name, rut: input.rut, role: input.role } },
+      options: { data: { name: input.name, rut: input.rut } },
     });
     if (error) throw error;
     if (!data.user) throw new Error('No fue posible crear la cuenta.');
-    return mapSupabaseUser(data.user);
+    if (!data.session) {
+      throw new Error('Cuenta creada. Confirma tu correo y luego inicia sesión.');
+    }
+    return getProfile(data.user.id);
   },
 
   async signOut(): Promise<void> {
