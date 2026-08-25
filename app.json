@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "PDR Comercial",
+    "slug": "pdr-comercial",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "pdrcomercial",
+    "userInterfaceStyle": "light",
+    "ios": { "supportsTablet": true, "bundleIdentifier": "cl.parquedelrecuerdo.comercial" },
+    "android": {
+      "package": "cl.parquedelrecuerdo.comercial",
+      "adaptiveIcon": { "foregroundImage": "./assets/adaptive-icon.png", "backgroundColor": "#0E563A" },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": { "bundler": "metro", "output": "static", "favicon": "./assets/favicon.png" },
+    "plugins": [
+      "expo-router",
+      ["expo-splash-screen", { "image": "./assets/icon.png", "imageWidth": 200, "resizeMode": "contain", "backgroundColor": "#0E563A" }]
+    ],
+    "experiments": { "typedRoutes": true }
+  }
+}
