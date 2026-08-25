@@ -83,3 +83,28 @@ npm run export:web
 ## Próximas integraciones
 
 El contrato `CommercialDataSource` permite incorporar adaptadores para ventas, mora y Salesforce sin reescribir las vistas. Las siguientes etapas contemplan importación real de Excel, persistencia de métricas y reglas avanzadas de competencias.
+
+## Generar un APK Android de prueba con EAS
+
+El proyecto incluye un perfil `preview` en `eas.json` que genera un APK de distribución interna, instalable directamente en un teléfono Android.
+
+1. Crea una cuenta gratuita en [Expo](https://expo.dev/signup).
+2. Inicia sesión desde esta carpeta:
+
+```bash
+eas login
+```
+
+3. Genera el APK:
+
+```bash
+npm run build:preview:android
+```
+
+En la primera ejecución, EAS puede pedir crear o vincular el proyecto y generar una clave de firma Android. Acepta que Expo administre la clave. Al terminar, EAS mostrará un enlace y un código QR para descargar e instalar el APK.
+
+El perfil `production` queda reservado para generar posteriormente el archivo AAB destinado a Google Play:
+
+```bash
+npm run build:production:android
+```
