@@ -4,6 +4,7 @@ import { ComponentProps } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { colors, typography } from '@/theme';
+import { useAuth } from '@/hooks/useAuth';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -17,6 +18,7 @@ function TabIcon({ focused, active, inactive }: { focused: boolean; active: Icon
 }
 
 export default function TabLayout() {
+  const { user } = useAuth();
   return (
     <Tabs
       screenOptions={{
@@ -37,6 +39,7 @@ export default function TabLayout() {
       <Tabs.Screen name="home" options={{ title: 'Inicio', tabBarIcon: ({ focused }) => <TabIcon active="home" focused={focused} inactive="home-outline" /> }} />
       <Tabs.Screen name="ranking" options={{ title: 'Ranking', tabBarIcon: ({ focused }) => <TabIcon active="trophy" focused={focused} inactive="trophy-outline" /> }} />
       <Tabs.Screen name="news" options={{ title: 'Noticias', tabBarIcon: ({ focused }) => <TabIcon active="newspaper" focused={focused} inactive="newspaper-outline" /> }} />
+      <Tabs.Screen name="admin" options={{ href: user?.role === 'admin' ? '/(tabs)/admin' : null, title: 'Administrar', tabBarIcon: ({ focused }) => <TabIcon active="settings" focused={focused} inactive="settings-outline" /> }} />
       <Tabs.Screen name="profile" options={{ title: 'Perfil', tabBarIcon: ({ focused }) => <TabIcon active="person-circle" focused={focused} inactive="person-circle-outline" /> }} />
     </Tabs>
   );

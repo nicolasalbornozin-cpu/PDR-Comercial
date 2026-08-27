@@ -4,14 +4,16 @@ Primera versión completa de la aplicación móvil comercial de Parque del Recue
 
 ## Estado del MVP
 
-- Autenticación real conectada a Supabase y modo demostración cuando no hay credenciales.
-- Login, registro y cierre de sesión.
-- Perfil Ejecutivo con venta acumulada, indicadores, metas y actividad reciente.
+- Autenticación real por RUT y contraseña conectada a Supabase, con modo demostración cuando no hay credenciales.
+- Cuentas administradas sin autorregistro público y recuperación resuelta por el administrador.
+- Paneles separados para vendedor, coordinador, jefe de ventas y administrador.
+- Panel administrativo para cuentas, accesos y cargas CSV exportadas desde Excel.
+- Fotos publicables de avance comercial, Senior, categorización, Mora/Sauce, Salesforce y ranking.
 - Detalle completo de Mis metas, incluyendo productividad medida en negocios y semáforo de mora.
 - Ranking Global interactivo para vendedores, equipos y jefaturas, con filtros por competencias de períodos configurables.
 - Noticias, detalle de artículos y galería fotográfica navegable.
-- Perfil administrativo y centro de notificaciones.
-- Datos demostrativos centralizados y contrato de servicio listo para sustituirlos por API, Supabase o importadores Excel.
+- Centro de notificaciones y perfil personal.
+- Datos demostrativos centralizados como respaldo cuando Supabase no está configurado.
 
 ## Tecnologías
 
@@ -44,7 +46,7 @@ npm run ios
 npm run web
 ```
 
-En modo demostración el formulario de acceso viene precargado. Cualquier correo y contraseña no vacíos permiten navegar por el MVP.
+En modo demostración el formulario de acceso viene precargado. Con Supabase configurado, el acceso se realiza con el RUT del trabajador y su contraseña.
 
 ## Variables de entorno
 
@@ -59,13 +61,16 @@ La clave `publishable` es la clave pública para clientes móviles; nunca agregu
 
 ## Base de datos Supabase
 
-El esquema reproducible está en `supabase/migrations/`. Incluye perfiles vinculados a Supabase Auth, equipos, métricas, metas, competencias, rankings, ventas, mora, noticias, galería y notificaciones.
+El esquema reproducible está en `supabase/migrations/`. Incluye perfiles vinculados a Supabase Auth, jerarquías, lotes de carga, fotos agregadas, metas, rankings, mora, noticias y auditoría administrativa.
 
 - Todas las tablas tienen RLS habilitado.
 - Los usuarios anónimos no tienen acceso a las tablas comerciales.
-- Cada usuario autenticado solo puede leer sus datos personales, ventas, metas, mora y notificaciones.
-- Los roles privilegiados no se aceptan desde el formulario de registro; deben administrarse en la base de datos.
-- El perfil y las métricas iniciales se crean automáticamente al registrar un usuario.
+- Cada vendedor solo lee sus datos; coordinadores y jefes ven únicamente su jerarquía; el administrador gestiona el conjunto.
+- Los roles nunca se aceptan desde el cliente: las cuentas se crean mediante una Edge Function que comprueba el rol administrador.
+- Las funciones de administración usan la clave de servicio únicamente en el servidor; esa clave nunca entra a la app.
+- El ranking global comparte solo nombre, equipo, posición y UF, sin RUT ni correo.
+
+El procedimiento y las columnas permitidas para las cargas están en [docs/IMPORTACION_DATOS.md](docs/IMPORTACION_DATOS.md).
 
 Para un proyecto nuevo, vincula Supabase CLI y aplica las migraciones revisadas:
 
@@ -83,7 +88,7 @@ src/components/       Sistema de componentes reutilizables
 src/context/          Estado global de autenticación
 src/data/             Datos mock y registro central de assets
 src/hooks/            Hooks compartidos
-src/services/         Supabase, autenticación y contrato comercial
+src/services/         Supabase, autenticación, administración e importación
 src/theme/            Colores, tipografía, espaciado y sombras
 src/types/            Modelo de dominio TypeScript
 src/utils/            Formateadores y utilidades puras
@@ -96,10 +101,6 @@ npm run typecheck
 npm run lint
 npm run export:web
 ```
-
-## Próximas integraciones
-
-El contrato `CommercialDataSource` permite incorporar adaptadores para ventas, mora y Salesforce sin reescribir las vistas. Las siguientes etapas contemplan importación real de Excel, persistencia de métricas y reglas avanzadas de competencias.
 
 ## Generar un APK Android de prueba con EAS
 

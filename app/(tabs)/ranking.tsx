@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader } from '@/components/AppHeader';
@@ -8,6 +8,8 @@ import { RankingRow } from '@/components/RankingRow';
 import { RankingTabs } from '@/components/RankingTabs';
 import { ScreenContainer } from '@/components/ScreenContainer';
 import { competitions, managementRanking, sellerRanking, teamRanking } from '@/data/mockData';
+import { useAuth } from '@/hooks/useAuth';
+import { snapshotService } from '@/services/snapshotService';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
 import { RankingMode } from '@/types';
 import { formatDate, formatUF } from '@/utils/format';
@@ -15,12 +17,23 @@ import { formatDate, formatUF } from '@/utils/format';
 export default function RankingScreen() {
   const [mode, setMode] = useState<RankingMode>('sellers');
   const [competitionId, setCompetitionId] = useState(competitions[0].id);
+  const [publishedSellerRanking, setPublishedSellerRanking] = useState(sellerRanking);
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    snapshotService.getSellerRanking(user.id)
+      .then((entries) => { if (active && entries.length) setPublishedSellerRanking(entries); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [user]);
 
   const entries = useMemo(() => {
     if (mode === 'teams') return teamRanking;
     if (mode === 'management') return managementRanking;
-    return sellerRanking;
-  }, [mode]);
+    return publishedSellerRanking;
+  }, [mode, publishedSellerRanking]);
 
   const selectedCompetition = competitions.find((competition) => competition.id === competitionId) ?? competitions[0];
   const currentEntry = entries.find((entry) => entry.isCurrentUser) ?? entries[0];
@@ -45,7 +58,7 @@ export default function RankingScreen() {
             <View style={styles.globalPattern}><Ionicons color="rgba(255,255,255,0.08)" name="globe-outline" size={126} /></View>
             <View style={styles.globalItem}>
               <Ionicons color={colors.gold} name="people-outline" size={20} />
-              <Text style={styles.globalValue}>96</Text>
+              <Text style={styles.globalValue}>{publishedSellerRanking.length}</Text>
               <Text style={styles.globalLabel}>Vendedores</Text>
             </View>
             <View style={styles.globalDivider} />

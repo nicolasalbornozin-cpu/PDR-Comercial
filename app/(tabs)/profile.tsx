@@ -10,17 +10,18 @@ import { UserAvatar } from '@/components/UserAvatar';
 import { currentUser } from '@/data/mockData';
 import { useAuth } from '@/hooks/useAuth';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
+import { roleLabels, User } from '@/types';
 import { formatDate } from '@/utils/format';
+import { formatRut } from '@/utils/rut';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
-const profileDetails: { icon: IconName; label: string; getValue: (email: string, rut: string, date: string) => string }[] = [
-  { icon: 'people-outline', label: 'Equipo', getValue: () => 'Equipo Cristian Hernández' },
-  { icon: 'person-outline', label: 'Coordinador', getValue: () => 'Cristian Hernández' },
-  { icon: 'briefcase-outline', label: 'Jefe de ventas', getValue: () => 'Karin Etcheverry' },
-  { icon: 'mail-outline', label: 'Correo', getValue: (email) => email },
-  { icon: 'card-outline', label: 'RUT', getValue: (_, rut) => rut },
-  { icon: 'calendar-outline', label: 'Fecha de ingreso', getValue: (_, __, date) => formatDate(date) },
+const profileDetails: { icon: IconName; label: string; getValue: (profile: User) => string }[] = [
+  { icon: 'card-outline', label: 'Usuario', getValue: (profile) => formatRut(profile.rut) },
+  { icon: 'people-outline', label: 'Equipo', getValue: (profile) => profile.teamId ? 'Equipo asignado' : 'Sin equipo asignado' },
+  { icon: 'person-outline', label: 'Coordinador', getValue: (profile) => profile.supervisorId ? 'Coordinación asignada' : 'No aplica' },
+  { icon: 'briefcase-outline', label: 'Jefe de ventas', getValue: (profile) => profile.salesManagerId ? 'Jefatura asignada' : 'No aplica' },
+  { icon: 'calendar-outline', label: 'Fecha de ingreso', getValue: (profile) => formatDate(profile.joinDate) },
 ];
 
 export default function ProfileScreen() {
@@ -47,8 +48,8 @@ export default function ProfileScreen() {
             <View style={styles.leaf}><Ionicons color="rgba(39,114,80,0.1)" name="leaf-outline" size={112} /></View>
             <UserAvatar highlighted name={profile.name} size={88} />
             <Text style={styles.name}>{profile.name}</Text>
-            <View style={styles.roleBadge}><Ionicons color={colors.gold} name="ribbon-outline" size={15} /><Text style={styles.roleText}>Ejecutiva comercial</Text></View>
-            <Text style={styles.employee}>Colaboradora desde {new Date(`${profile.joinDate}T12:00:00`).getFullYear()}</Text>
+            <View style={styles.roleBadge}><Ionicons color={colors.gold} name="ribbon-outline" size={15} /><Text style={styles.roleText}>{roleLabels[profile.role]}</Text></View>
+            <Text style={styles.employee}>En la plataforma desde {new Date(`${profile.joinDate}T12:00:00`).getFullYear()}</Text>
           </View>
 
           <View style={styles.infoCard}>
@@ -57,7 +58,7 @@ export default function ProfileScreen() {
                 <View style={styles.detailIcon}><Ionicons color={colors.secondary} name={detail.icon} size={19} /></View>
                 <View style={styles.detailContent}>
                   <Text style={styles.detailLabel}>{detail.label}</Text>
-                  <Text numberOfLines={2} style={styles.detailValue}>{detail.getValue(profile.email, profile.rut, profile.joinDate)}</Text>
+                  <Text numberOfLines={2} style={styles.detailValue}>{detail.getValue(profile)}</Text>
                 </View>
               </View>
             ))}
@@ -67,7 +68,7 @@ export default function ProfileScreen() {
             <Ionicons color={colors.gold} name="help-circle-outline" size={24} />
             <View style={styles.supportContent}>
               <Text style={styles.supportTitle}>¿Necesitas actualizar tus datos?</Text>
-              <Text style={styles.supportText}>Contacta a tu coordinador para solicitar cambios administrativos.</Text>
+              <Text style={styles.supportText}>Solicita el cambio al administrador de la plataforma.</Text>
             </View>
           </View>
 

@@ -14,12 +14,14 @@ export const currentUser: User = {
   name: 'Erika Sepúlveda',
   email: 'erika.sepulveda@parquedelrecuerdo.cl',
   rut: '15.842.761-8',
-  role: 'executive',
+  role: 'seller',
   avatar: 'ES',
   teamId: 'team-cristian',
   supervisorId: 'cristian-hernandez',
   salesManagerId: 'karin-etcheverry',
   joinDate: '2022-03-14',
+  active: true,
+  mustChangePassword: false,
 };
 
 export const executiveMetrics: ExecutiveMetrics = {

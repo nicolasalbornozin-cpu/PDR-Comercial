@@ -1,14 +1,14 @@
 import { createContext, PropsWithChildren, useCallback, useEffect, useMemo, useState } from 'react';
 
-import { authService, RegistrationInput } from '@/services/authService';
+import { authService } from '@/services/authService';
 import { User } from '@/types';
 
 interface AuthContextValue {
   user: User | null;
   isLoading: boolean;
   authMode: 'demo' | 'supabase';
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (input: RegistrationInput) => Promise<void>;
+  signIn: (rut: string, password: string) => Promise<void>;
+  requestPasswordReset: (rut: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -33,22 +33,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
     };
   }, []);
 
-  const signIn = useCallback(async (email: string, password: string) => {
+  const signIn = useCallback(async (rut: string, password: string) => {
     setIsLoading(true);
     try {
-      setUser(await authService.signIn(email, password));
+      setUser(await authService.signIn(rut, password));
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  const signUp = useCallback(async (input: RegistrationInput) => {
-    setIsLoading(true);
-    try {
-      setUser(await authService.signUp(input));
-    } finally {
-      setIsLoading(false);
-    }
+  const requestPasswordReset = useCallback(async (rut: string) => {
+    await authService.requestPasswordReset(rut);
   }, []);
 
   const signOut = useCallback(async () => {
@@ -62,8 +57,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, isLoading, authMode: authService.mode, signIn, signUp, signOut }),
-    [isLoading, signIn, signOut, signUp, user],
+    () => ({ user, isLoading, authMode: authService.mode, signIn, requestPasswordReset, signOut }),
+    [isLoading, requestPasswordReset, signIn, signOut, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

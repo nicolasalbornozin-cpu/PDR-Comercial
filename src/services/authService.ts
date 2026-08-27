@@ -1,13 +1,7 @@
 import { currentUser } from '@/data/mockData';
 import { isSupabaseConfigured, supabase } from '@/services/supabase';
 import { User, UserRole } from '@/types';
-
-export interface RegistrationInput {
-  name: string;
-  email: string;
-  rut: string;
-  password: string;
-}
+import { isValidRut, normalizeRut, rutToInternalEmail } from '@/utils/rut';
 
 const authMode: 'demo' | 'supabase' = isSupabaseConfigured ? 'supabase' : 'demo';
 
@@ -22,10 +16,18 @@ interface ProfileRow {
   supervisor_id: string | null;
   sales_manager_id: string | null;
   join_date: string;
+  active: boolean;
+  must_change_password: boolean;
 }
 
 function initials(name: string): string {
-  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase();
 }
 
 function mapProfile(profile: ProfileRow): User {
@@ -40,6 +42,8 @@ function mapProfile(profile: ProfileRow): User {
     supervisorId: profile.supervisor_id ?? '',
     salesManagerId: profile.sales_manager_id ?? '',
     joinDate: profile.join_date,
+    active: profile.active,
+    mustChangePassword: profile.must_change_password,
   };
 }
 
@@ -47,7 +51,12 @@ async function getProfile(userId: string): Promise<User> {
   if (!supabase) throw new Error('Supabase no está configurado.');
   const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
   if (error) throw new Error(`No fue posible cargar tu perfil: ${error.message}`);
-  return mapProfile(data as ProfileRow);
+  const user = mapProfile(data as ProfileRow);
+  if (!user.active) {
+    await supabase.auth.signOut();
+    throw new Error('Esta cuenta está desactivada. Contacta al administrador.');
+  }
+  return user;
 }
 
 export const authService = {
@@ -56,43 +65,46 @@ export const authService = {
   async restoreSession(): Promise<User | null> {
     if (!supabase) return null;
     const { data } = await supabase.auth.getSession();
-    return data.session?.user ? getProfile(data.session.user.id) : null;
+    if (!data.session?.user) return null;
+    try {
+      return await getProfile(data.session.user.id);
+    } catch {
+      await supabase.auth.signOut();
+      return null;
+    }
   },
 
-  async signIn(email: string, password: string): Promise<User> {
+  async signIn(rut: string, password: string): Promise<User> {
+    if (!isValidRut(rut)) throw new Error('Ingresa un RUT válido.');
+
     if (!supabase) {
       await new Promise((resolve) => setTimeout(resolve, 450));
-      return { ...currentUser, email: email.trim() || currentUser.email };
+      return { ...currentUser, rut: normalizeRut(rut) };
     }
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: rutToInternalEmail(rut),
+      password,
+    });
+    if (error) throw new Error('RUT o contraseña incorrectos.');
     return getProfile(data.user.id);
   },
 
-  async signUp(input: RegistrationInput): Promise<User> {
+  async requestPasswordReset(rut: string): Promise<void> {
+    if (!isValidRut(rut)) throw new Error('Ingresa un RUT válido.');
     if (!supabase) {
-      await new Promise((resolve) => setTimeout(resolve, 550));
-      return { ...currentUser, name: input.name, email: input.email, rut: input.rut };
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      return;
     }
-
-    const { data, error } = await supabase.auth.signUp({
-      email: input.email,
-      password: input.password,
-      options: { data: { name: input.name, rut: input.rut } },
+    const { error } = await supabase.functions.invoke('password-reset-request', {
+      body: { rut: normalizeRut(rut) },
     });
-    if (error) throw error;
-    if (!data.user) throw new Error('No fue posible crear la cuenta.');
-    if (!data.session) {
-      throw new Error('Cuenta creada. Confirma tu correo y luego inicia sesión.');
-    }
-    return getProfile(data.user.id);
+    if (error) throw new Error('No fue posible registrar la solicitud. Inténtalo nuevamente.');
   },
 
   async signOut(): Promise<void> {
-    if (supabase) {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-    }
+    if (!supabase) return;
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
   },
 };

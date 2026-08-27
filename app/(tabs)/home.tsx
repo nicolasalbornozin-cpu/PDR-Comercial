@@ -1,28 +1,57 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { ComponentProps } from 'react';
-import { ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader } from '@/components/AppHeader';
-import { GoalCard } from '@/components/GoalCard';
 import { MetricCard } from '@/components/MetricCard';
 import { ScreenContainer } from '@/components/ScreenContainer';
-import { SectionHeader } from '@/components/SectionHeader';
 import { images } from '@/data/assets';
-import { activities, executiveMetrics, goals } from '@/data/mockData';
 import { useAuth } from '@/hooks/useAuth';
+import { snapshotService } from '@/services/snapshotService';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
-import { formatUF, getProgress } from '@/utils/format';
+import { DashboardData, MetricSnapshot, roleLabels, VisibleProfile } from '@/types';
+import { formatUF } from '@/utils/format';
 
-type IconName = ComponentProps<typeof Ionicons>['name'];
+function metricUf(metric?: Partial<MetricSnapshot>): number {
+  return metric?.productionUf ?? metric?.eligibleTotalUf ?? metric?.quarterTotalUf ?? 0;
+}
+
+function sumMetric(workers: VisibleProfile[], latest: DashboardData['latestByUser'], key: keyof MetricSnapshot): number {
+  return workers.reduce((total, worker) => total + Number(latest[worker.id]?.[key] ?? 0), 0);
+}
 
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const firstName = user?.name.split(' ')[0] ?? 'Erika';
-  const seniorGoal = goals[0];
-  const categoryGoal = goals[1];
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    snapshotService.getDashboard(user)
+      .then((result) => { if (active) setData(result); })
+      .catch((loadError) => { if (active) setError(loadError instanceof Error ? loadError.message : 'No fue posible cargar el tablero.'); });
+    return () => { active = false; };
+  }, [user]);
+
+  const sellers = useMemo(
+    () => data?.profiles.filter((profile) => profile.role === 'seller' && profile.active) ?? [],
+    [data],
+  );
+  const ownMetric = user && data ? data.latestByUser[user.id] : undefined;
+  const sellerRows = useMemo(
+    () => [...sellers].sort((left, right) => metricUf(data?.latestByUser[right.id]) - metricUf(data?.latestByUser[left.id])),
+    [data, sellers],
+  );
+  const isSeller = user?.role === 'seller';
+  const firstName = user?.name.split(' ')[0] ?? '';
+  const totalUf = isSeller ? metricUf(ownMetric) : sellerRows.reduce((total, seller) => total + metricUf(data?.latestByUser[seller.id]), 0);
+  const totalMora = isSeller ? ownMetric?.delinquentClientsCount ?? 0 : sumMetric(sellerRows, data?.latestByUser ?? {}, 'delinquentClientsCount');
+  const totalSalesforce = isSeller ? ownMetric?.salesforceRecords ?? 0 : sumMetric(sellerRows, data?.latestByUser ?? {}, 'salesforceRecords');
+  const totalBusinesses = isSeller ? ownMetric?.businessCount ?? 0 : sumMetric(sellerRows, data?.latestByUser ?? {}, 'businessCount');
 
   return (
     <ScreenContainer contentContainerStyle={styles.page} edges={['top', 'left', 'right']}>
@@ -33,80 +62,81 @@ export default function HomeScreen() {
             <AppHeader />
             <View style={styles.greeting}>
               <Text style={styles.hello}>Hola, {firstName}</Text>
-              <Text style={styles.team}>Equipo Cristian Hernández</Text>
+              <Text style={styles.team}>{user ? roleLabels[user.role] : 'Panel comercial'}</Text>
             </View>
           </View>
         </ImageBackground>
 
         <View style={styles.content}>
-          <Text style={styles.screenTitle}>Perfil Ejecutivo</Text>
+          <View style={styles.titleRow}>
+            <View>
+              <Text style={styles.screenTitle}>{isSeller ? 'Mi avance' : user?.role === 'coordinator' ? 'Mi equipo' : user?.role === 'sales_manager' ? 'Mi jefatura' : 'Vista general'}</Text>
+              <Text style={styles.period}>{data?.periodLabel ?? 'Cargando última foto…'}</Text>
+            </View>
+            {user?.role === 'admin' ? (
+              <Pressable onPress={() => router.push('/(tabs)/admin')} style={styles.adminShortcut}>
+                <Ionicons color={colors.primary} name="settings-outline" size={20} />
+              </Pressable>
+            ) : null}
+          </View>
+
+          {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+          {!data && !error ? <ActivityIndicator color={colors.gold} style={styles.loader} /> : null}
 
           <View style={styles.salesCard}>
-            <View style={styles.botanicalOne}><Ionicons color="rgba(255,255,255,0.07)" name="leaf-outline" size={110} /></View>
-            <View style={styles.botanicalTwo}><Ionicons color="rgba(198,162,76,0.11)" name="leaf-outline" size={78} /></View>
-            <View style={styles.salesTop}>
-              <View>
-                <Text style={styles.salesLabel}>VENTA ACUMULADA</Text>
-                <Text style={styles.salesValue}>{formatUF(executiveMetrics.ufSold)} <Text style={styles.salesUnit}>UF</Text></Text>
-              </View>
-              <View style={styles.trendIcon}>
-                <Ionicons color={colors.gold} name="trending-up" size={25} />
-              </View>
-            </View>
-            <Text style={styles.updated}>Actualizado hoy · 18:30</Text>
+            <Ionicons color="rgba(255,255,255,0.07)" name="leaf-outline" size={120} style={styles.leaf} />
+            <Text style={styles.salesLabel}>{isSeller ? 'VENTA / PRODUCCIÓN ACUMULADA' : 'PRODUCCIÓN DEL EQUIPO VISIBLE'}</Text>
+            <Text style={styles.salesValue}>{formatUF(totalUf)} <Text style={styles.salesUnit}>UF</Text></Text>
+            <Text style={styles.updated}>{data ? `Última foto publicada · ${data.periodLabel}` : 'Esperando datos publicados'}</Text>
           </View>
 
           <View style={styles.metricsRow}>
-            <MetricCard detail="clientes" icon="alert-circle-outline" label="MORA" tone="red" value={`${executiveMetrics.delinquencyRate}%`} />
-            <MetricCard detail="negocios" icon="briefcase-outline" label="PRODUCTIVIDAD" value={`${executiveMetrics.businessCount}`} />
-            <MetricCard detail="global" icon="trophy-outline" label="RANKING" tone="gold" value={`#${executiveMetrics.rankingPosition}`} />
-            <MetricCard detail="registros" icon="cloud-upload-outline" label="SALESFORCE" value={`${executiveMetrics.salesforceRecords}`} />
+            <MetricCard detail={ownMetric?.delinquencyRate !== undefined && isSeller ? `${ownMetric.delinquencyRate}%` : 'clientes'} icon="alert-circle-outline" label="MORA / SAUCE" tone="red" value={`${totalMora}`} />
+            <MetricCard detail="negocios" icon="briefcase-outline" label="PRODUCTIVIDAD" value={`${totalBusinesses}`} />
+            <MetricCard detail={isSeller ? 'posición' : 'vendedores'} icon="trophy-outline" label={isSeller ? 'RANKING' : 'EQUIPO'} tone="gold" value={isSeller ? (ownMetric?.rankingPosition ? `#${ownMetric.rankingPosition}` : '—') : `${sellers.length}`} />
+            <MetricCard detail="registros" icon="cloud-upload-outline" label="SALESFORCE" value={`${totalSalesforce}`} />
           </View>
 
-          <View style={styles.section}>
-            <SectionHeader actionLabel="Ver detalle" onAction={() => router.push('/goals')} title="Mis metas" />
-            <GoalCard
-              compact
-              badge="Meta principal"
-              icon="diamond-outline"
-              insight={`Te faltan ${seniorGoal.targetValue - seniorGoal.currentValue} UF`}
-              progress={getProgress(seniorGoal.currentValue, seniorGoal.targetValue)}
-              title={seniorGoal.name}
-              value={`${formatUF(seniorGoal.currentValue)} / ${formatUF(seniorGoal.targetValue)} UF`}
-            />
-            <View style={styles.goalPair}>
-              <View style={styles.smallGoal}>
-                <Text style={styles.smallGoalLabel}>{categoryGoal.name}</Text>
-                <Text style={styles.smallGoalValue}>91%</Text>
-                <View style={styles.smallTrack}><View style={[styles.smallFill, { width: '91%' }]} /></View>
+          {isSeller ? (
+            <View style={styles.detailGrid}>
+              <View style={styles.detailCard}>
+                <Text style={styles.detailLabel}>CATEGORÍA</Text>
+                <Text style={styles.detailValue}>{ownMetric?.category ?? 'Sin foto publicada'}</Text>
+                <Text style={styles.detailHint}>{ownMetric?.estimatedPrizeClp ? `$${ownMetric.estimatedPrizeClp.toLocaleString('es-CL')} estimado` : 'Según avance agregado'}</Text>
               </View>
-              <View style={styles.smallGoal}>
-                <Text style={styles.smallGoalLabel}>Senior Q3</Text>
-                <Text style={styles.smallGoalValue}>78%</Text>
-                <View style={styles.smallTrack}><View style={[styles.smallFill, { width: '78%' }]} /></View>
+              <View style={styles.detailCard}>
+                <Text style={styles.detailLabel}>SENIOR</Text>
+                <Text style={styles.detailValue}>{ownMetric?.seniorLevel ?? 'Sin foto publicada'}</Text>
+                <Text style={styles.detailHint}>{ownMetric?.eligibleTotalUf !== undefined ? `${formatUF(ownMetric.eligibleTotalUf)} UF válidas` : 'Según última carga'}</Text>
               </View>
             </View>
-          </View>
+          ) : (
+            <View style={styles.section}>
+              <View style={styles.sectionHeading}>
+                <Text style={styles.sectionTitle}>{user?.role === 'sales_manager' ? 'Vendedores de la jefatura' : 'Detalle de vendedores'}</Text>
+                <Text style={styles.sectionCount}>{sellerRows.length} visibles</Text>
+              </View>
+              <View style={styles.workerList}>
+                {sellerRows.length ? sellerRows.slice(0, 20).map((seller, index) => {
+                  const metric = data?.latestByUser[seller.id];
+                  return (
+                    <View key={seller.id} style={[styles.workerRow, index < Math.min(sellerRows.length, 20) - 1 && styles.workerBorder]}>
+                      <View style={styles.position}><Text style={styles.positionText}>{index + 1}</Text></View>
+                      <View style={styles.workerMain}>
+                        <Text numberOfLines={1} style={styles.workerName}>{seller.name}</Text>
+                        <Text style={styles.workerMeta}>{metric?.category ?? 'Sin categoría'} · Mora {metric?.delinquentClientsCount ?? 0}</Text>
+                      </View>
+                      <Text style={styles.workerUf}>{formatUF(metricUf(metric))} UF</Text>
+                    </View>
+                  );
+                }) : <Text style={styles.empty}>Aún no hay vendedores asignados o fotos publicadas.</Text>}
+              </View>
+            </View>
+          )}
 
-          <View style={styles.section}>
-            <SectionHeader title="Actividad reciente" />
-            <View style={styles.activityCard}>
-              {activities.map((activity, index) => {
-                const tone = activity.tone === 'gold' ? colors.gold : activity.tone === 'success' ? colors.secondary : colors.textMuted;
-                return (
-                  <Pressable key={activity.id} onPress={() => activity.id === 'positions' ? router.push('/(tabs)/ranking') : activity.id === 'race' ? router.push('/goals') : router.push('/notifications')} style={[styles.activityRow, index < activities.length - 1 && styles.activityBorder]}>
-                    <View style={[styles.activityIcon, { backgroundColor: `${tone}16` }]}>
-                      <Ionicons color={tone} name={activity.icon as IconName} size={19} />
-                    </View>
-                    <View style={styles.activityContent}>
-                      <Text style={styles.activityTitle}>{activity.title}</Text>
-                      <Text style={styles.activityDescription}>{activity.description}</Text>
-                    </View>
-                    <Text style={styles.activityDate}>{activity.relativeDate}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+          <View style={styles.privacyNote}>
+            <Ionicons color={colors.secondary} name="shield-checkmark-outline" size={21} />
+            <Text style={styles.privacyText}>Este tablero muestra totales de trabajadores. No almacena información individual de clientes.</Text>
           </View>
         </View>
       </View>
@@ -115,38 +145,46 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  page: { alignItems: 'center', paddingBottom: 28 },
-  mobileFrame: { maxWidth: 620, width: '100%' },
-  hero: { height: 244 },
-  heroContent: { flex: 1, paddingHorizontal: spacing.xl, paddingTop: spacing.sm },
-  greeting: { marginTop: 48 },
-  hello: { color: colors.primary, fontFamily: typography.serif, fontSize: 29, fontWeight: '600' },
-  team: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 13, fontWeight: '600', marginTop: 4 },
-  content: { gap: spacing.xl, marginTop: -35, paddingHorizontal: spacing.xl },
-  screenTitle: { color: colors.text, fontFamily: typography.serif, fontSize: 27, fontWeight: '600' },
-  salesCard: { ...shadows.floating, backgroundColor: colors.primary, borderRadius: radii.xl, minHeight: 164, overflow: 'hidden', padding: spacing.xxl },
-  botanicalOne: { bottom: -35, position: 'absolute', right: -15, transform: [{ rotate: '-15deg' }] },
-  botanicalTwo: { position: 'absolute', right: 60, top: -30, transform: [{ rotate: '28deg' }] },
-  salesTop: { alignItems: 'flex-start', flexDirection: 'row', justifyContent: 'space-between' },
-  salesLabel: { color: 'rgba(255,255,255,0.68)', fontFamily: typography.sans, fontSize: 11, fontWeight: '800', letterSpacing: 1.4 },
-  salesValue: { color: colors.surface, fontFamily: typography.serif, fontSize: 42, fontWeight: '600', marginTop: 9 },
-  salesUnit: { color: colors.goldOnDark, fontFamily: typography.sans, fontSize: 18, fontWeight: '800' },
-  trendIcon: { alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.11)', borderRadius: radii.md, height: 48, justifyContent: 'center', width: 48 },
-  updated: { color: 'rgba(255,255,255,0.52)', fontFamily: typography.sans, fontSize: 10, marginTop: 15 },
+  page: { alignItems: 'center', paddingBottom: 30 },
+  mobileFrame: { maxWidth: 700, width: '100%' },
+  hero: { height: 225, overflow: 'hidden' },
+  heroContent: { paddingHorizontal: spacing.xl, paddingTop: spacing.sm },
+  greeting: { marginTop: 35 },
+  hello: { color: colors.primary, fontFamily: typography.serif, fontSize: 34, fontWeight: '600' },
+  team: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 12, fontWeight: '700', marginTop: 3 },
+  content: { gap: spacing.lg, marginTop: -15, paddingHorizontal: spacing.xl },
+  titleRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
+  screenTitle: { color: colors.primary, fontFamily: typography.serif, fontSize: 27, fontWeight: '600' },
+  period: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 10, marginTop: 3 },
+  adminShortcut: { alignItems: 'center', backgroundColor: colors.softGreen, borderRadius: radii.pill, height: 44, justifyContent: 'center', width: 44 },
+  loader: { paddingVertical: spacing.xxl },
+  error: { backgroundColor: '#FBECE9', borderRadius: radii.md, color: colors.danger, fontFamily: typography.sans, fontSize: 12, lineHeight: 18, padding: spacing.md },
+  salesCard: { ...shadows.floating, backgroundColor: colors.primary, borderRadius: radii.xl, minHeight: 158, overflow: 'hidden', padding: spacing.xl },
+  leaf: { bottom: -34, position: 'absolute', right: -13 },
+  salesLabel: { color: 'rgba(255,255,255,0.67)', fontFamily: typography.sans, fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
+  salesValue: { color: colors.surface, fontFamily: typography.serif, fontSize: 40, fontWeight: '600', marginTop: spacing.md },
+  salesUnit: { color: colors.goldOnDark, fontFamily: typography.sans, fontSize: 15, fontWeight: '800' },
+  updated: { color: 'rgba(255,255,255,0.57)', fontFamily: typography.sans, fontSize: 9, marginTop: spacing.sm },
   metricsRow: { flexDirection: 'row', gap: 7 },
-  section: { gap: spacing.md, marginTop: 5 },
-  goalPair: { flexDirection: 'row', gap: spacing.md },
-  smallGoal: { ...shadows.card, backgroundColor: colors.surface, borderRadius: radii.lg, flex: 1, gap: 7, padding: spacing.lg },
-  smallGoalLabel: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 11, fontWeight: '700' },
-  smallGoalValue: { color: colors.primary, fontFamily: typography.serif, fontSize: 24, fontWeight: '600' },
-  smallTrack: { backgroundColor: colors.border, borderRadius: radii.pill, height: 6, overflow: 'hidden' },
-  smallFill: { backgroundColor: colors.gold, borderRadius: radii.pill, height: '100%' },
-  activityCard: { ...shadows.card, backgroundColor: colors.surface, borderRadius: radii.lg, overflow: 'hidden', paddingHorizontal: spacing.lg },
-  activityRow: { alignItems: 'center', flexDirection: 'row', gap: spacing.md, minHeight: 78, paddingVertical: spacing.md },
-  activityBorder: { borderBottomColor: colors.border, borderBottomWidth: 1 },
-  activityIcon: { alignItems: 'center', borderRadius: 14, height: 40, justifyContent: 'center', width: 40 },
-  activityContent: { flex: 1 },
-  activityTitle: { color: colors.text, fontFamily: typography.sans, fontSize: 13, fontWeight: '800' },
-  activityDescription: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 11, marginTop: 3 },
-  activityDate: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 9 },
+  detailGrid: { flexDirection: 'row', gap: spacing.md },
+  detailCard: { ...shadows.card, backgroundColor: colors.surface, borderRadius: radii.lg, flex: 1, minHeight: 116, padding: spacing.lg },
+  detailLabel: { color: colors.goldText, fontFamily: typography.sans, fontSize: 9, fontWeight: '900', letterSpacing: 0.7 },
+  detailValue: { color: colors.primary, fontFamily: typography.serif, fontSize: 19, fontWeight: '600', marginTop: spacing.sm },
+  detailHint: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 9, marginTop: spacing.sm },
+  section: { gap: spacing.md },
+  sectionHeading: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
+  sectionTitle: { color: colors.text, fontFamily: typography.serif, fontSize: 21, fontWeight: '600' },
+  sectionCount: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 10 },
+  workerList: { ...shadows.card, backgroundColor: colors.surface, borderRadius: radii.lg, overflow: 'hidden', paddingHorizontal: spacing.md },
+  workerRow: { alignItems: 'center', flexDirection: 'row', gap: spacing.md, minHeight: 70, paddingVertical: spacing.md },
+  workerBorder: { borderBottomColor: colors.border, borderBottomWidth: 1 },
+  position: { alignItems: 'center', backgroundColor: colors.softGreen, borderRadius: radii.pill, height: 32, justifyContent: 'center', width: 32 },
+  positionText: { color: colors.primary, fontFamily: typography.sans, fontSize: 11, fontWeight: '900' },
+  workerMain: { flex: 1 },
+  workerName: { color: colors.text, fontFamily: typography.sans, fontSize: 12, fontWeight: '800' },
+  workerMeta: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 9, marginTop: 4 },
+  workerUf: { color: colors.primary, fontFamily: typography.sans, fontSize: 11, fontWeight: '900' },
+  empty: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 12, lineHeight: 18, padding: spacing.xl, textAlign: 'center' },
+  privacyNote: { alignItems: 'flex-start', backgroundColor: colors.softGreen, borderRadius: radii.lg, flexDirection: 'row', gap: spacing.md, padding: spacing.lg },
+  privacyText: { color: colors.textMuted, flex: 1, fontFamily: typography.sans, fontSize: 10, lineHeight: 16 },
 });
