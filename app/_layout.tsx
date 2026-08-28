@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 
 import { BrandLogo } from '@/components/BrandLogo';
+import { UpdateController } from '@/components/UpdateController';
 import { AuthProvider } from '@/context/AuthContext';
 import { useAuth } from '@/hooks/useAuth';
 import { colors } from '@/theme';
@@ -36,6 +37,7 @@ function RootNavigator() {
   return (
     <>
       <StatusBar style="dark" />
+      <UpdateController />
       <Stack screenOptions={{ animation: 'fade', contentStyle: { backgroundColor: colors.background }, headerShown: false }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="(auth)" />

@@ -3,13 +3,15 @@
 ## Flujo habitual
 
 1. Mantener el Excel original dentro del entorno corporativo.
-2. Crear una hoja auxiliar que contenga solo una fila por trabajador.
-3. Exportar esa hoja como **CSV UTF-8**.
-4. En la app, entrar con el perfil administrador y abrir **Administrar → Cargas**.
-5. Elegir el tipo de foto, indicar el período, seleccionar el CSV y revisar la validación.
-6. Publicar. La nueva foto queda visible para los perfiles autorizados; la foto anterior del mismo tipo y período queda reemplazada.
+2. En la app, entrar con el perfil administrador y abrir **Administrar → Cargas**.
+3. Elegir el tipo de foto, indicar el período y seleccionar el archivo **Excel (.xlsx/.xls)** o **CSV UTF-8**.
+4. Si es un Excel, confirmar la hoja resumen detectada por la app.
+5. Revisar la cantidad de trabajadores, las columnas descartadas y cualquier error.
+6. Publicar. La nueva foto queda visible para los perfiles autorizados.
 
-El archivo original se procesa en el dispositivo y no se almacena en Supabase. La base solo recibe el identificador interno del trabajador y los totales autorizados.
+El archivo original se procesa en el dispositivo y no se almacena ni se envía completo a Supabase. La base solo recibe el identificador interno del trabajador y los totales autorizados. El límite por Excel es de 20 MB para proteger la memoria del teléfono.
+
+En los archivos originales de Sauce, la app puede contar localmente los clientes en mora usando las hojas de detalle. Los identificadores de esos clientes se descartan antes de publicar y nunca forman parte de la carga.
 
 ## Datos que nunca deben incluirse
 
@@ -17,15 +19,15 @@ El archivo original se procesa en el dispositivo y no se almacena en Supabase. L
 - Número de contrato, póliza, sepultura o identificador de negocio de un cliente.
 - Detalle de cuotas, fechas de pago, deuda individual o motivo de mora.
 - Observaciones comerciales libres que puedan identificar a una persona.
-- Cualquier columna distinta de las indicadas abajo.
+- Cualquier valor individual de un cliente, aunque su columna no tenga un nombre evidente.
 
-El importador bloquea la carga completa si encuentra una columna desconocida.
+En CSV, el importador bloquea la carga si encuentra columnas desconocidas. En Excel, solo ofrece hojas resumen seguras, descarta columnas administrativas no necesarias y bloquea las hojas que contengan encabezados de clientes, contratos, cuotas o pagos.
 
 ## Columnas generales
 
-Todos los archivos requieren `rut`. Se acepta también `rut_trabajador`. El RUT puede venir con o sin puntos y guion.
+El identificador recomendado es `rut`, `rut_trabajador`, `rut_vendedor` o `rut_agente`. El RUT puede venir con o sin puntos y guion.
 
-`nombre`, `nombre_trabajador` o `vendedor` son opcionales y se usan solo para revisar visualmente la hoja: no se guardan en la foto porque el nombre ya pertenece a la cuenta.
+Si una hoja resumen oficial no contiene RUT, la app puede asociar `nombre`, `nombre_trabajador`, `nombre_vendedor`, `nombre_agente`, `vendedor` o `ejecutivo` con una cuenta activa. El nombre debe coincidir de forma única; si hay dos personas iguales o no existe la cuenta, la publicación se bloquea y solicita agregar/corregir el RUT.
 
 ## Fotos aceptadas
 
@@ -67,6 +69,8 @@ rut;clientes_mora;porcentaje_mora
 
 `clientes_mora` es la cantidad agregada de clientes caídos asociada al trabajador. No se carga ningún cliente individual. `porcentaje_mora` es opcional.
 
+El Excel oficial también reconoce `RUT AGENTE`, `% RIESGO`/`PORC RIESGO` y calcula `clientes_mora` localmente desde las hojas de detalle cuando están disponibles.
+
 ### Salesforce
 
 Columnas permitidas:
@@ -97,6 +101,7 @@ Así, cada vendedor ve sus datos; el coordinador ve sus vendedores; el jefe de v
 
 - Usar períodos explícitos en formato `AAAA-MM-DD`.
 - Conservar el Excel original fuera de la aplicación.
+- Verificar que la hoja sugerida corresponda al resumen esperado antes de publicar.
 - Revisar el número de filas válidas antes de publicar.
 - No reutilizar contraseñas entre trabajadores.
 - Desactivar una cuenta apenas una persona deje de requerir acceso.

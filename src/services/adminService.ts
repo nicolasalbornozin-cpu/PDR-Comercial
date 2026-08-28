@@ -1,4 +1,4 @@
-import { CsvParseResult } from '@/services/csvImportService';
+import { CsvParseResult, ParsedSnapshotRow } from '@/services/csvImportService';
 import { supabase } from '@/services/supabase';
 import { AdminUser, PasswordResetRequest, SnapshotKind, UserRole } from '@/types';
 import { normalizeRut } from '@/utils/rut';
@@ -66,16 +66,37 @@ export const adminService = {
     if (input.parsed.errors.length) throw new Error('Corrige los errores del archivo antes de publicarlo.');
     if (!input.parsed.rows.length) throw new Error('No hay filas válidas para publicar.');
 
-    const ruts = [...new Set(input.parsed.rows.map((row) => row.rut))];
+    const ruts = [...new Set(input.parsed.rows.map((row) => row.rut).filter((rut): rut is string => Boolean(rut)))];
     const { data: profiles, error: profilesError } = await supabase
       .from('profiles')
-      .select('id,rut,active')
-      .in('rut', ruts);
+      .select('id,rut,full_name,active')
+      .eq('active', true);
     if (profilesError) throw new Error(`No fue posible validar los RUT: ${profilesError.message}`);
 
-    const profileByRut = new Map((profiles ?? []).filter((profile) => profile.active).map((profile) => [profile.rut, profile.id]));
+    const normalizeName = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const profileByRut = new Map((profiles ?? []).map((profile) => [profile.rut, profile.id]));
     const missingRuts = ruts.filter((rut) => !profileByRut.has(rut));
     if (missingRuts.length) throw new Error(`RUT sin cuenta activa: ${missingRuts.join(', ')}.`);
+
+    const idsByName = new Map<string, string[]>();
+    (profiles ?? []).forEach((profile) => {
+      const key = normalizeName(profile.full_name);
+      idsByName.set(key, [...(idsByName.get(key) ?? []), profile.id]);
+    });
+    const resolvedRows: (ParsedSnapshotRow & { userId?: string; nameMatches: number })[] = input.parsed.rows.map((row) => {
+      if (row.rut) return { ...row, userId: profileByRut.get(row.rut), nameMatches: 0 };
+      const matches = row.name ? idsByName.get(normalizeName(row.name)) ?? [] : [];
+      return { ...row, userId: matches.length === 1 ? matches[0] : undefined, nameMatches: matches.length };
+    });
+    const unresolved = resolvedRows.filter((row) => !row.userId);
+    if (unresolved.length) {
+      const details = unresolved.slice(0, 8).map((row) => row.nameMatches && row.nameMatches > 1
+        ? `${row.name} (nombre repetido)`
+        : row.name ?? `fila ${row.rowNumber}`);
+      throw new Error(`Trabajadores sin coincidencia única: ${details.join(', ')}. Crea/corrige sus cuentas o agrega el RUT al Excel.`);
+    }
+    const duplicateIds = resolvedRows.map((row) => row.userId).filter((id, index, all) => all.indexOf(id) !== index);
+    if (duplicateIds.length) throw new Error('El archivo contiene más de una fila para el mismo trabajador. Usa una sola hoja resumen.');
 
     const { data: batch, error: batchError } = await supabase
       .from('upload_batches')
@@ -91,9 +112,9 @@ export const adminService = {
       .single();
     if (batchError) throw new Error(`No fue posible crear el lote: ${batchError.message}`);
 
-    const payload = input.parsed.rows.map((row) => ({
+    const payload = resolvedRows.map((row) => ({
       batch_id: batch.id,
-      user_id: profileByRut.get(row.rut),
+      user_id: row.userId,
       ...row.values,
     }));
 

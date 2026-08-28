@@ -17,7 +17,10 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0E563A"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "runtimeVersion": {
+        "policy": "fingerprint"
+      }
     },
     "web": {
       "bundler": "metro",
@@ -45,6 +48,9 @@
         "projectId": "9dc54597-4f92-4f8a-afb3-004f041def89"
       }
     },
-    "owner": "nanoeslanchs-team"
+    "owner": "nanoeslanchs-team",
+    "updates": {
+      "url": "https://u.expo.dev/9dc54597-4f92-4f8a-afb3-004f041def89"
+    }
   }
 }

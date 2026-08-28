@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
+import { File } from 'expo-file-system';
 import { Redirect } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -11,6 +12,7 @@ import { ScreenContainer } from '@/components/ScreenContainer';
 import { useAuth } from '@/hooks/useAuth';
 import { adminService } from '@/services/adminService';
 import { CsvParseResult, parseSnapshotCsv } from '@/services/csvImportService';
+import { openSnapshotWorkbook, parseSnapshotWorkbookSheet, SnapshotWorkbook } from '@/services/xlsxImportService';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
 import { AdminUser, PasswordResetRequest, roleLabels, SnapshotKind, snapshotKindLabels, UserRole } from '@/types';
 import { formatRut } from '@/utils/rut';
@@ -45,6 +47,7 @@ export default function AdminScreen() {
   const [periodEnd, setPeriodEnd] = useState(initialPeriodEnd);
   const [sourceName, setSourceName] = useState('');
   const [parsed, setParsed] = useState<CsvParseResult | null>(null);
+  const [workbookSource, setWorkbookSource] = useState<SnapshotWorkbook | null>(null);
 
   const [resetTarget, setResetTarget] = useState<AdminUser | null>(null);
   const [newPassword, setNewPassword] = useState('');
@@ -88,10 +91,22 @@ export default function AdminScreen() {
     setMessage('');
   }
 
-  async function selectCsv() {
+  function clearSelectedFile() {
+    setParsed(null);
+    setSourceName('');
+    setWorkbookSource(null);
+  }
+
+  async function selectDataFile() {
     clearFeedback();
     const result = await DocumentPicker.getDocumentAsync({
-      type: ['text/csv', 'text/comma-separated-values', 'application/vnd.ms-excel', 'text/plain'],
+      type: [
+        'text/csv',
+        'text/comma-separated-values',
+        'text/plain',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      ],
       copyToCacheDirectory: true,
       multiple: false,
     });
@@ -99,27 +114,45 @@ export default function AdminScreen() {
     const asset = result.assets[0];
     try {
       const webFile = (asset as typeof asset & { file?: Blob }).file;
-      const text = webFile ? await webFile.text() : await (await fetch(asset.uri)).text();
-      setSourceName(asset.name);
-      setParsed(parseSnapshotCsv(text, kind));
-    } catch {
-      setError('No fue posible leer el archivo. Expórtalo desde Excel como CSV UTF-8.');
+      const fileName = asset.name || 'archivo';
+      const isWorkbook = /\.xlsx?$/i.test(fileName)
+        || asset.mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      if (isWorkbook) {
+        const buffer = webFile ? await webFile.arrayBuffer() : await new File(asset.uri).arrayBuffer();
+        const opened = await openSnapshotWorkbook(buffer, kind, asset.size ?? buffer.byteLength);
+        setWorkbookSource(opened);
+        setParsed(parseSnapshotWorkbookSheet(opened, opened.recommendedSheet, kind));
+      } else {
+        const text = webFile ? await webFile.text() : await new File(asset.uri).text();
+        setWorkbookSource(null);
+        setParsed(parseSnapshotCsv(text, kind));
+      }
+      setSourceName(fileName);
+    } catch (readError) {
+      clearSelectedFile();
+      setError(readError instanceof Error ? readError.message : 'No fue posible leer el archivo.');
     }
+  }
+
+  function selectWorkbookSheet(sheetName: string) {
+    if (!workbookSource) return;
+    clearFeedback();
+    setParsed(parseSnapshotWorkbookSheet(workbookSource, sheetName, kind));
   }
 
   async function publishSnapshot() {
     clearFeedback();
-    if (!parsed || !sourceName) { setError('Selecciona primero un archivo CSV.'); return; }
+    if (!parsed || !sourceName) { setError('Selecciona primero un archivo Excel o CSV.'); return; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(periodStart) || !/^\d{4}-\d{2}-\d{2}$/.test(periodEnd) || periodEnd < periodStart) {
       setError('Revisa las fechas del período. Usa el formato AAAA-MM-DD.');
       return;
     }
     setBusy(true);
     try {
-      const count = await adminService.importSnapshot({ kind, periodStart, periodEnd, sourceName, parsed, adminId });
+      const uploadSourceName = parsed.sheetName ? `${sourceName} · ${parsed.sheetName}` : sourceName;
+      const count = await adminService.importSnapshot({ kind, periodStart, periodEnd, sourceName: uploadSourceName, parsed, adminId });
       setMessage(`Foto publicada correctamente para ${count} trabajadores.`);
-      setParsed(null);
-      setSourceName('');
+      clearSelectedFile();
     } catch (publishError) {
       setError(publishError instanceof Error ? publishError.message : 'No fue posible publicar la foto.');
     } finally {
@@ -201,11 +234,11 @@ export default function AdminScreen() {
           {section === 'uploads' ? (
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Publicar una foto de totales</Text>
-              <Text style={styles.cardText}>Exporta la hoja necesaria desde Excel como “CSV UTF-8”. El archivo se valida en este dispositivo y no se guarda completo.</Text>
+              <Text style={styles.cardText}>Selecciona el Excel original o un CSV. El archivo se procesa en este dispositivo: Supabase recibe únicamente el trabajador y sus totales permitidos.</Text>
               <Text style={styles.label}>Tipo de foto</Text>
               <View style={styles.chips}>
                 {snapshotKinds.map((value) => (
-                  <Pressable key={value} onPress={() => { setKind(value); setParsed(null); setSourceName(''); }} style={[styles.chip, kind === value && styles.chipActive]}>
+                  <Pressable key={value} onPress={() => { setKind(value); clearSelectedFile(); }} style={[styles.chip, kind === value && styles.chipActive]}>
                     <Text style={[styles.chipText, kind === value && styles.chipTextActive]}>{snapshotKindLabels[value]}</Text>
                   </Pressable>
                 ))}
@@ -214,20 +247,33 @@ export default function AdminScreen() {
                 <View style={styles.flex}><FormField autoCapitalize="none" icon="calendar-outline" label="Desde" onChangeText={setPeriodStart} placeholder="AAAA-MM-DD" value={periodStart} /></View>
                 <View style={styles.flex}><FormField autoCapitalize="none" icon="calendar-outline" label="Hasta" onChangeText={setPeriodEnd} placeholder="AAAA-MM-DD" value={periodEnd} /></View>
               </View>
-              <AppButton icon="document-attach-outline" label={sourceName || 'Seleccionar CSV'} onPress={selectCsv} variant="secondary" />
+              <AppButton icon="document-attach-outline" label={sourceName || 'Seleccionar Excel o CSV'} onPress={selectDataFile} variant="secondary" />
+              {workbookSource ? (
+                <View style={styles.sheetPicker}>
+                  <Text style={styles.label}>Hoja resumen que se procesará</Text>
+                  <View style={styles.chips}>
+                    {workbookSource.safeSheets.map((sheetName) => (
+                      <Pressable key={sheetName} onPress={() => selectWorkbookSheet(sheetName)} style={[styles.chip, parsed?.sheetName === sheetName && styles.chipActive]}>
+                        <Text style={[styles.chipText, parsed?.sheetName === sheetName && styles.chipTextActive]}>{sheetName}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              ) : null}
               {parsed ? (
                 <View style={[styles.validation, parsed.errors.length ? styles.validationError : styles.validationOk]}>
                   <Ionicons color={parsed.errors.length ? colors.danger : colors.success} name={parsed.errors.length ? 'alert-circle-outline' : 'checkmark-circle-outline'} size={22} />
                   <View style={styles.flex}>
                     <Text style={styles.validationTitle}>{parsed.rows.length} filas válidas</Text>
                     {parsed.errors.slice(0, 8).map((item) => <Text key={item} style={styles.validationText}>• {item}</Text>)}
+                    {parsed.warnings?.map((item) => <Text key={item} style={styles.validationText}>• {item}</Text>)}
                   </View>
                 </View>
               ) : null}
               <AppButton disabled={!parsed || Boolean(parsed.errors.length)} label="Validar y publicar" loading={busy} onPress={publishSnapshot} />
               <View style={styles.privacy}>
                 <Ionicons color={colors.secondary} name="shield-checkmark-outline" size={21} />
-                <Text style={styles.privacyText}>Solo se aceptan RUT de trabajadores y totales permitidos. Cualquier columna adicional bloquea la publicación.</Text>
+                <Text style={styles.privacyText}>Las hojas con RUT, nombres, contratos o pagos de clientes se bloquean. El Excel original nunca se almacena ni se envía completo.</Text>
               </View>
             </View>
           ) : null}
@@ -328,6 +374,7 @@ const styles = StyleSheet.create({
   validationError: { backgroundColor: '#FBECE9' },
   validationTitle: { color: colors.text, fontFamily: typography.sans, fontSize: 12, fontWeight: '800' },
   validationText: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 10, lineHeight: 15, marginTop: 3 },
+  sheetPicker: { gap: spacing.sm },
   privacy: { alignItems: 'flex-start', backgroundColor: colors.softGreen, borderRadius: radii.md, flexDirection: 'row', gap: spacing.md, padding: spacing.md },
   privacyText: { color: colors.textMuted, flex: 1, fontFamily: typography.sans, fontSize: 10, lineHeight: 16 },
   error: { backgroundColor: '#FBECE9', borderRadius: radii.md, color: colors.danger, fontFamily: typography.sans, fontSize: 11, lineHeight: 17, padding: spacing.md },

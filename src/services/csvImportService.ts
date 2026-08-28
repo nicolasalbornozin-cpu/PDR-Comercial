@@ -29,7 +29,8 @@ export type SnapshotDatabaseColumn =
 
 export interface ParsedSnapshotRow {
   rowNumber: number;
-  rut: string;
+  rut?: string;
+  name?: string;
   values: Partial<Record<SnapshotDatabaseColumn, string | number>>;
 }
 
@@ -37,6 +38,8 @@ export interface CsvParseResult {
   rows: ParsedSnapshotRow[];
   errors: string[];
   unknownHeaders: string[];
+  warnings?: string[];
+  sheetName?: string;
 }
 
 const headerAliases: Record<string, 'rut' | 'name' | SnapshotDatabaseColumn> = {
@@ -99,6 +102,18 @@ const allowedByKind: Record<SnapshotKind, Set<SnapshotDatabaseColumn>> = {
 };
 
 const textColumns = new Set<SnapshotDatabaseColumn>(['category', 'senior_level']);
+const nonNegativeColumns = new Set<SnapshotDatabaseColumn>([
+  'business_count',
+  'smad_count',
+  'rest_count',
+  'ssff_count',
+  'delinquent_clients_count',
+  'delinquency_rate',
+  'salesforce_records',
+  'tenure_months',
+  'ranking_position',
+  'estimated_prize_clp',
+]);
 
 function normalizeHeader(value: string): string {
   return value
@@ -189,7 +204,7 @@ export function parseSnapshotCsv(text: string, kind: SnapshotKind): CsvParseResu
         return;
       }
       const numeric = parseNumber(raw);
-      if (numeric === null || numeric < 0) {
+      if (numeric === null || (numeric < 0 && nonNegativeColumns.has(mapped))) {
         errors.push(`Fila ${lineIndex + 1}: valor inválido en ${originalHeaders[fieldIndex]}.`);
         invalidValue = true;
       } else {
