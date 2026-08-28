@@ -1,5 +1,6 @@
 import {
   ActivityItem,
+  AdminUser,
   Competition,
   ExecutiveMetrics,
   Goal,
@@ -8,6 +9,21 @@ import {
   Team,
   User,
 } from '@/types';
+
+export const demoAdminUser: User = {
+  id: 'demo-admin',
+  name: 'Administrador PDR',
+  email: 'administrador.demo@pdr.internal',
+  rut: '123456785',
+  role: 'admin',
+  avatar: 'AP',
+  teamId: '',
+  supervisorId: '',
+  salesManagerId: '',
+  joinDate: '2018-01-15',
+  active: true,
+  mustChangePassword: false,
+};
 
 export const currentUser: User = {
   id: 'user-erika',
@@ -23,6 +39,64 @@ export const currentUser: User = {
   active: true,
   mustChangePassword: false,
 };
+
+export const demoManagedUsers: AdminUser[] = [
+  {
+    id: demoAdminUser.id,
+    name: demoAdminUser.name,
+    rut: demoAdminUser.rut,
+    role: demoAdminUser.role,
+    active: true,
+    teamId: '',
+    supervisorId: '',
+    salesManagerId: '',
+    createdAt: '2018-01-15T12:00:00-03:00',
+  },
+  {
+    id: 'demo-sales-manager',
+    name: 'Karin Etcheverry',
+    rut: '146789012',
+    role: 'sales_manager',
+    active: true,
+    teamId: '',
+    supervisorId: '',
+    salesManagerId: '',
+    createdAt: '2019-05-21T12:00:00-04:00',
+  },
+  {
+    id: 'demo-coordinator',
+    name: 'Cristian Hernández',
+    rut: '132456789',
+    role: 'coordinator',
+    active: true,
+    teamId: 'demo-team-cristian',
+    supervisorId: '',
+    salesManagerId: 'demo-sales-manager',
+    createdAt: '2020-08-10T12:00:00-04:00',
+  },
+  {
+    id: currentUser.id,
+    name: currentUser.name,
+    rut: currentUser.rut,
+    role: currentUser.role,
+    active: true,
+    teamId: currentUser.teamId,
+    supervisorId: 'demo-coordinator',
+    salesManagerId: 'demo-sales-manager',
+    createdAt: `${currentUser.joinDate}T12:00:00-03:00`,
+  },
+  {
+    id: 'demo-seller-andrea',
+    name: 'Andrea Contreras',
+    rut: '163334440',
+    role: 'seller',
+    active: true,
+    teamId: 'demo-team-cristian',
+    supervisorId: 'demo-coordinator',
+    salesManagerId: 'demo-sales-manager',
+    createdAt: '2021-11-04T12:00:00-03:00',
+  },
+];
 
 export const executiveMetrics: ExecutiveMetrics = {
   userId: currentUser.id,
