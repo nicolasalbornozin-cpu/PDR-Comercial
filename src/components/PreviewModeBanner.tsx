@@ -33,7 +33,7 @@ export function PreviewModeBanner() {
           <Ionicons color={colors.goldOnDark} name="eye-outline" size={18} />
         </View>
         <View style={styles.copy}>
-          <Text numberOfLines={1} style={styles.eyebrow}>VISTA PREVIA · {roleLabels[user.role].toUpperCase()}</Text>
+          <Text numberOfLines={1} style={styles.eyebrow}>VISTA PREVIA CON DATOS DE EJEMPLO · {roleLabels[user.role].toUpperCase()}</Text>
           <Text numberOfLines={1} style={styles.name}>{user.name}</Text>
         </View>
         <View style={styles.returnAction}>
