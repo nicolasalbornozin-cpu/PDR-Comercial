@@ -1,4 +1,5 @@
 import { CsvParseResult, ParsedSnapshotRow } from '@/services/csvImportService';
+import { demoManagedUsers } from '@/data/mockData';
 import { supabase } from '@/services/supabase';
 import { AdminUser, PasswordResetRequest, SnapshotKind, UserRole } from '@/types';
 import { normalizeRut } from '@/utils/rut';
@@ -37,6 +38,7 @@ async function invokeAdmin<T>(body: Record<string, unknown>): Promise<T> {
 
 export const adminService = {
   async list(): Promise<AdminListResponse> {
+    if (!supabase) return { users: demoManagedUsers, resetRequests: [] };
     return invokeAdmin<AdminListResponse>({ action: 'list' });
   },
 

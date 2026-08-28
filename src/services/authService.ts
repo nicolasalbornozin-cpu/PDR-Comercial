@@ -1,4 +1,4 @@
-import { currentUser } from '@/data/mockData';
+import { currentUser, demoAdminUser } from '@/data/mockData';
 import { isSupabaseConfigured, supabase } from '@/services/supabase';
 import { User, UserRole } from '@/types';
 import { isValidRut, normalizeRut, rutToInternalEmail } from '@/utils/rut';
@@ -79,6 +79,7 @@ export const authService = {
 
     if (!supabase) {
       await new Promise((resolve) => setTimeout(resolve, 450));
+      if (normalizeRut(rut) === normalizeRut(demoAdminUser.rut)) return demoAdminUser;
       return { ...currentUser, rut: normalizeRut(rut) };
     }
 
