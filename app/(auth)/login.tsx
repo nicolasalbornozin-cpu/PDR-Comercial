@@ -9,7 +9,7 @@ import { AppButton } from '@/components/Buttons';
 import { FormField } from '@/components/FormField';
 import { ScreenContainer } from '@/components/ScreenContainer';
 import { images } from '@/data/assets';
-import { currentUser } from '@/data/mockData';
+import { demoAdminUser } from '@/data/mockData';
 import { useAuth } from '@/hooks/useAuth';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
 import { formatRut, normalizeRut } from '@/utils/rut';
@@ -17,7 +17,7 @@ import { formatRut, normalizeRut } from '@/utils/rut';
 export default function LoginScreen() {
   const router = useRouter();
   const { authMode, isLoading, requestPasswordReset, signIn } = useAuth();
-  const [rut, setRut] = useState(authMode === 'demo' ? currentUser.rut : '');
+  const [rut, setRut] = useState(authMode === 'demo' ? demoAdminUser.rut : '');
   const [password, setPassword] = useState(authMode === 'demo' ? 'demo1234' : '');
   const [resetMode, setResetMode] = useState(false);
   const [message, setMessage] = useState('');
