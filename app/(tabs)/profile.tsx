@@ -53,19 +53,23 @@ function accountToPreviewUser(account: AdminUser): User {
   };
 }
 
-function emptyPreviewUser(role: PreviewRole): User {
-  const name = role === 'seller' ? 'Vista de vendedor' : role === 'coordinator' ? 'Vista de coordinador' : 'Vista de jefe de venta';
+function demoPreviewUser(role: PreviewRole): User {
+  const profile = role === 'seller'
+    ? { name: 'Erika Sepúlveda', rut: '158427618', teamId: 'preview-team-cristian', supervisorId: 'preview-coordinator', salesManagerId: 'preview-sales-manager', joinDate: '2022-03-14' }
+    : role === 'coordinator'
+      ? { name: 'Cristian Hernández', rut: '132456789', teamId: 'preview-team-cristian', supervisorId: '', salesManagerId: 'preview-sales-manager', joinDate: '2020-08-10' }
+      : { name: 'Karin Etcheverry', rut: '146789012', teamId: '', supervisorId: '', salesManagerId: '', joinDate: '2018-05-21' };
   return {
     id: `preview-${role}`,
-    name,
+    name: profile.name,
     email: '',
-    rut: '',
+    rut: profile.rut,
     role,
-    avatar: initials(name),
-    teamId: '',
-    supervisorId: '',
-    salesManagerId: '',
-    joinDate: new Date().toISOString().slice(0, 10),
+    avatar: initials(profile.name),
+    teamId: profile.teamId,
+    supervisorId: profile.supervisorId,
+    salesManagerId: profile.salesManagerId,
+    joinDate: profile.joinDate,
     active: true,
     mustChangePassword: false,
   };
@@ -174,33 +178,38 @@ export default function ProfileScreen() {
               {previewError ? <Text accessibilityRole="alert" style={styles.previewError}>{previewError}</Text> : null}
               {selectedPreviewRole && !previewLoading ? (
                 <View style={styles.previewPicker}>
-                  <Text style={styles.previewPickerLabel}>Elige la cuenta cuya experiencia quieres revisar</Text>
-                  {previewCandidates.length ? previewCandidates.map((account) => (
-                    <Pressable
-                      accessibilityLabel={`Ver la aplicación como ${account.name}, ${roleLabels[account.role]}`}
-                      accessibilityRole="button"
-                      key={account.id}
-                      onPress={() => openPreview(accountToPreviewUser(account))}
-                      style={({ pressed }) => [styles.previewAccount, pressed && styles.previewPressed]}
-                    >
-                      <UserAvatar name={account.name} size={38} />
-                      <View style={styles.previewAccountCopy}>
-                        <Text numberOfLines={1} style={styles.previewAccountName}>{account.name}</Text>
-                        <Text style={styles.previewAccountRole}>{roleLabels[account.role]}</Text>
-                      </View>
-                      <Ionicons color={colors.primary} name="eye-outline" size={19} />
-                    </Pressable>
-                  )) : (
-                    <View style={styles.emptyPreview}>
-                      <Text style={styles.emptyPreviewText}>Todavía no hay una cuenta activa con este perfil. Puedes abrir igualmente la interfaz vacía para revisar su diseño.</Text>
-                      <AppButton
-                        icon="eye-outline"
-                        label="Abrir vista sin datos"
-                        onPress={() => openPreview(emptyPreviewUser(selectedPreviewRole))}
-                        variant="secondary"
-                      />
-                    </View>
-                  )}
+                  <View style={styles.emptyPreview}>
+                    <Text style={styles.previewPickerLabel}>Simulación completa</Text>
+                    <Text style={styles.emptyPreviewText}>Abre esta experiencia con avance comercial, mora, productividad, Salesforce, categorías, Senior y ranking como si los documentos del período ya estuvieran publicados.</Text>
+                    <AppButton
+                      icon="sparkles-outline"
+                      label="Abrir con datos de ejemplo"
+                      onPress={() => openPreview(demoPreviewUser(selectedPreviewRole))}
+                      variant="secondary"
+                    />
+                  </View>
+
+                  {previewCandidates.length ? (
+                    <>
+                      <Text style={styles.previewPickerLabel}>O elige una cuenta activa</Text>
+                      {previewCandidates.map((account) => (
+                        <Pressable
+                          accessibilityLabel={`Ver la aplicación como ${account.name}, ${roleLabels[account.role]}`}
+                          accessibilityRole="button"
+                          key={account.id}
+                          onPress={() => openPreview(accountToPreviewUser(account))}
+                          style={({ pressed }) => [styles.previewAccount, pressed && styles.previewPressed]}
+                        >
+                          <UserAvatar name={account.name} size={38} />
+                          <View style={styles.previewAccountCopy}>
+                            <Text numberOfLines={1} style={styles.previewAccountName}>{account.name}</Text>
+                            <Text style={styles.previewAccountRole}>{roleLabels[account.role]} · se mostrarán datos de ejemplo</Text>
+                          </View>
+                          <Ionicons color={colors.primary} name="eye-outline" size={19} />
+                        </Pressable>
+                      ))}
+                    </>
+                  ) : <Text style={styles.emptyPreviewText}>Todavía no hay cuentas activas con este perfil; la simulación superior permanece disponible.</Text>}
                 </View>
               ) : null}
             </View>

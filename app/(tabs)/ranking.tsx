@@ -18,16 +18,16 @@ export default function RankingScreen() {
   const [mode, setMode] = useState<RankingMode>('sellers');
   const [competitionId, setCompetitionId] = useState(competitions[0].id);
   const [publishedSellerRanking, setPublishedSellerRanking] = useState(sellerRanking);
-  const { user } = useAuth();
+  const { isPreviewing, user } = useAuth();
 
   useEffect(() => {
     if (!user) return;
     let active = true;
-    snapshotService.getSellerRanking(user.id)
+    snapshotService.getSellerRanking(user, { preview: isPreviewing })
       .then((entries) => { if (active && entries.length) setPublishedSellerRanking(entries); })
       .catch(() => undefined);
     return () => { active = false; };
-  }, [user]);
+  }, [isPreviewing, user]);
 
   const entries = useMemo(() => {
     if (mode === 'teams') return teamRanking;

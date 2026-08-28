@@ -24,18 +24,18 @@ function sumMetric(workers: VisibleProfile[], latest: DashboardData['latestByUse
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { isPreviewing, user } = useAuth();
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (!user) return;
     let active = true;
-    snapshotService.getDashboard(user)
+    snapshotService.getDashboard(user, { preview: isPreviewing })
       .then((result) => { if (active) setData(result); })
       .catch((loadError) => { if (active) setError(loadError instanceof Error ? loadError.message : 'No fue posible cargar el tablero.'); });
     return () => { active = false; };
-  }, [user]);
+  }, [isPreviewing, user]);
 
   const sellers = useMemo(
     () => data?.profiles.filter((profile) => profile.role === 'seller' && profile.active) ?? [],
