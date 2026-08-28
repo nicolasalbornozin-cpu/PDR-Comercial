@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 
 import { BrandLogo } from '@/components/BrandLogo';
+import { PreviewModeBanner } from '@/components/PreviewModeBanner';
 import { UpdateController } from '@/components/UpdateController';
 import { AuthProvider } from '@/context/AuthContext';
 import { useAuth } from '@/hooks/useAuth';
@@ -38,15 +39,18 @@ function RootNavigator() {
     <>
       <StatusBar style="dark" />
       <UpdateController />
-      <Stack screenOptions={{ animation: 'fade', contentStyle: { backgroundColor: colors.background }, headerShown: false }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="goals" options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="notifications" options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="gallery" options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="news/[id]" options={{ animation: 'slide_from_right' }} />
-      </Stack>
+      <View style={styles.app}>
+        <Stack screenOptions={{ animation: 'fade', contentStyle: { backgroundColor: colors.background }, headerShown: false }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="goals" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="notifications" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="gallery" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="news/[id]" options={{ animation: 'slide_from_right' }} />
+        </Stack>
+        <PreviewModeBanner />
+      </View>
     </>
   );
 }
@@ -56,5 +60,6 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
+  app: { flex: 1 },
   loading: { alignItems: 'center', backgroundColor: colors.background, flex: 1, gap: 20, justifyContent: 'center' },
 });

@@ -118,6 +118,23 @@ function latestByUser(snapshots: MetricSnapshot[]): Record<string, Partial<Metri
     }, {});
 }
 
+function profileIsVisibleTo(user: User, profile: VisibleProfile): boolean {
+  if (user.role === 'admin') return true;
+  if (profile.id === user.id) return true;
+  if (user.role === 'coordinator') return profile.supervisorId === user.id;
+  if (user.role === 'sales_manager') return profile.salesManagerId === user.id;
+  return false;
+}
+
+function scopeDashboard(user: User, profiles: VisibleProfile[], snapshots: MetricSnapshot[]) {
+  const visibleProfiles = profiles.filter((profile) => profileIsVisibleTo(user, profile));
+  const visibleIds = new Set(visibleProfiles.map((profile) => profile.id));
+  return {
+    profiles: visibleProfiles,
+    snapshots: snapshots.filter((snapshot) => visibleIds.has(snapshot.userId)),
+  };
+}
+
 function demoDashboard(): DashboardData {
   const demoSnapshot: MetricSnapshot = {
     id: 1,
@@ -155,7 +172,7 @@ function demoDashboard(): DashboardData {
 }
 
 export const snapshotService = {
-  async getDashboard(_user: User): Promise<DashboardData> {
+  async getDashboard(user: User): Promise<DashboardData> {
     if (!supabase) return demoDashboard();
 
     const [profilesResult, snapshotsResult] = await Promise.all([
@@ -169,8 +186,9 @@ export const snapshotService = {
     if (profilesResult.error) throw new Error(`No fue posible cargar el equipo: ${profilesResult.error.message}`);
     if (snapshotsResult.error) throw new Error(`No fue posible cargar los indicadores: ${snapshotsResult.error.message}`);
 
-    const profiles = (profilesResult.data as ProfileRow[]).map(mapProfile);
-    const snapshots = (snapshotsResult.data as SnapshotRow[]).map(mapSnapshot);
+    const allProfiles = (profilesResult.data as ProfileRow[]).map(mapProfile);
+    const allSnapshots = (snapshotsResult.data as SnapshotRow[]).map(mapSnapshot);
+    const { profiles, snapshots } = scopeDashboard(user, allProfiles, allSnapshots);
     const latest = snapshots.reduce<MetricSnapshot | null>((found, row) => {
       if (!found || row.publishedAt > found.publishedAt) return row;
       return found;

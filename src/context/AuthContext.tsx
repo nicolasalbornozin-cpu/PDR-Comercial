@@ -5,17 +5,22 @@ import { User } from '@/types';
 
 interface AuthContextValue {
   user: User | null;
+  authenticatedUser: User | null;
   isLoading: boolean;
+  isPreviewing: boolean;
   authMode: 'demo' | 'supabase';
   signIn: (rut: string, password: string) => Promise<void>;
   requestPasswordReset: (rut: string) => Promise<void>;
   signOut: () => Promise<void>;
+  startPreview: (previewUser: User) => void;
+  stopPreview: () => void;
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: PropsWithChildren) {
-  const [user, setUser] = useState<User | null>(null);
+  const [authenticatedUser, setAuthenticatedUser] = useState<User | null>(null);
+  const [previewUser, setPreviewUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -23,7 +28,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     authService
       .restoreSession()
       .then((restoredUser) => {
-        if (mounted) setUser(restoredUser);
+        if (mounted) setAuthenticatedUser(restoredUser);
       })
       .finally(() => {
         if (mounted) setIsLoading(false);
@@ -36,7 +41,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const signIn = useCallback(async (rut: string, password: string) => {
     setIsLoading(true);
     try {
-      setUser(await authService.signIn(rut, password));
+      setPreviewUser(null);
+      setAuthenticatedUser(await authService.signIn(rut, password));
     } finally {
       setIsLoading(false);
     }
@@ -50,15 +56,40 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setIsLoading(true);
     try {
       await authService.signOut();
-      setUser(null);
+      setPreviewUser(null);
+      setAuthenticatedUser(null);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
+  const startPreview = useCallback((targetUser: User) => {
+    if (authenticatedUser?.role !== 'admin') throw new Error('Solo el administrador puede iniciar una vista previa.');
+    if (targetUser.role === 'admin') throw new Error('Selecciona un perfil operativo para la vista previa.');
+    setPreviewUser(targetUser);
+  }, [authenticatedUser]);
+
+  const stopPreview = useCallback(() => {
+    setPreviewUser(null);
+  }, []);
+
+  const user = previewUser ?? authenticatedUser;
+  const isPreviewing = Boolean(previewUser && authenticatedUser?.role === 'admin');
+
   const value = useMemo<AuthContextValue>(
-    () => ({ user, isLoading, authMode: authService.mode, signIn, requestPasswordReset, signOut }),
-    [isLoading, requestPasswordReset, signIn, signOut, user],
+    () => ({
+      user,
+      authenticatedUser,
+      isLoading,
+      isPreviewing,
+      authMode: authService.mode,
+      signIn,
+      requestPasswordReset,
+      signOut,
+      startPreview,
+      stopPreview,
+    }),
+    [authenticatedUser, isLoading, isPreviewing, requestPasswordReset, signIn, signOut, startPreview, stopPreview, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
