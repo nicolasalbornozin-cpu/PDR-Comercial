@@ -9,7 +9,10 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "cl.parquedelrecuerdo.comercial"
+      "bundleIdentifier": "cl.parquedelrecuerdo.comercial",
+      "runtimeVersion": {
+        "policy": "appVersion"
+      }
     },
     "android": {
       "package": "cl.parquedelrecuerdo.comercial",
