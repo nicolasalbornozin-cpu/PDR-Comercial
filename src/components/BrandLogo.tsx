@@ -13,21 +13,20 @@ export function BrandLogo({ compact = false, light = false, style }: BrandLogoPr
   const color = light ? colors.surface : colors.primary;
   return (
     <View accessibilityLabel="Parque del Recuerdo" style={[styles.container, style]}>
-      <Ionicons color={color} name="leaf-outline" size={compact ? 21 : 27} />
-      <View style={styles.goldLine} />
       <View>
-        <Text style={[styles.parque, compact && styles.parqueCompact, { color }]}>PARQUE DEL</Text>
-        <Text style={[styles.recuerdo, compact && styles.recuerdoCompact, { color }]}>RECUERDO</Text>
+        <Text style={[styles.wordmark, compact && styles.wordmarkCompact, { color }]}>PARQUE</Text>
+        <Text style={[styles.wordmark, compact && styles.wordmarkCompact, { color }]}>DEL RECUERDO</Text>
       </View>
+      <View style={[styles.goldLine, compact && styles.goldLineCompact]} />
+      <Ionicons color={color} name="leaf-outline" size={compact ? 20 : 25} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { alignItems: 'center', flexDirection: 'row', gap: 8 },
-  goldLine: { backgroundColor: colors.gold, height: 33, width: 2 },
-  parque: { fontFamily: typography.sans, fontSize: 9, fontWeight: '600', letterSpacing: 2.4 },
-  parqueCompact: { fontSize: 7, letterSpacing: 1.8 },
-  recuerdo: { fontFamily: typography.serif, fontSize: 17, fontWeight: '600', letterSpacing: 0.5, marginTop: -1 },
-  recuerdoCompact: { fontSize: 13 },
+  goldLine: { backgroundColor: colors.gold, height: 38, width: 1 },
+  goldLineCompact: { height: 30 },
+  wordmark: { fontFamily: typography.sans, fontSize: 13, fontWeight: '500', letterSpacing: -0.4, lineHeight: 13 },
+  wordmarkCompact: { fontSize: 11, lineHeight: 11 },
 });

@@ -1,12 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ImageBackground, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader } from '@/components/AppHeader';
 import { FilterChip } from '@/components/FilterChip';
 import { RankingRow } from '@/components/RankingRow';
 import { RankingTabs } from '@/components/RankingTabs';
 import { ScreenContainer } from '@/components/ScreenContainer';
+import { images } from '@/data/assets';
 import { competitions, managementRanking, sellerRanking, teamRanking } from '@/data/mockData';
 import { useAuth } from '@/hooks/useAuth';
 import { snapshotService } from '@/services/snapshotService';
@@ -39,6 +41,8 @@ export default function RankingScreen() {
   const currentEntry = entries.find((entry) => entry.isCurrentUser) ?? entries[0];
   const nextEntry = entries.find((entry) => entry.position === currentEntry.position - 1);
   const gap = mode === 'sellers' ? 52 : nextEntry ? Math.max(nextEntry.value - currentEntry.value, 0) : 0;
+  const teamCount = new Set(publishedSellerRanking.map((entry) => entry.teamId).filter(Boolean)).size;
+  const totalUf = publishedSellerRanking.reduce((total, entry) => total + entry.value, 0);
 
   function handleModeChange(nextMode: RankingMode) {
     setMode(nextMode);
@@ -47,31 +51,30 @@ export default function RankingScreen() {
   return (
     <ScreenContainer contentContainerStyle={styles.page} edges={['top', 'left', 'right']}>
       <View style={styles.mobileFrame}>
-        <View style={styles.header}>
-          <AppHeader />
-          <Text style={styles.title}>Global</Text>
-          <Text style={styles.subtitle}>Compara tu avance con todos</Text>
-        </View>
+        <ImageBackground source={images.park} style={styles.hero}>
+          <LinearGradient colors={['rgba(255,255,255,0.97)', 'rgba(255,255,255,0.72)', 'rgba(248,247,243,0.08)']} locations={[0, 0.47, 1]} style={StyleSheet.absoluteFill} />
+          <View style={styles.header}>
+            <AppHeader />
+            <Text style={styles.title}>Global</Text>
+            <Text style={styles.subtitle}>Compara tu avance con todos</Text>
+          </View>
+        </ImageBackground>
 
         <View style={styles.content}>
           <View style={styles.globalCard}>
-            <View style={styles.globalPattern}><Ionicons color="rgba(255,255,255,0.08)" name="globe-outline" size={126} /></View>
             <View style={styles.globalItem}>
-              <Ionicons color={colors.gold} name="people-outline" size={20} />
-              <Text style={styles.globalValue}>{publishedSellerRanking.length}</Text>
-              <Text style={styles.globalLabel}>Vendedores</Text>
+              <View style={styles.globalIcon}><Ionicons color={colors.primary} name="people-outline" size={23} /></View>
+              <View><Text style={styles.globalLabel}>Vendedores</Text><Text style={styles.globalValue}>{publishedSellerRanking.length}</Text></View>
             </View>
             <View style={styles.globalDivider} />
             <View style={styles.globalItem}>
-              <Ionicons color={colors.gold} name="git-network-outline" size={20} />
-              <Text style={styles.globalValue}>12</Text>
-              <Text style={styles.globalLabel}>Equipos</Text>
+              <View style={styles.globalIcon}><Ionicons color={colors.primary} name="git-network-outline" size={23} /></View>
+              <View><Text style={styles.globalLabel}>Equipos</Text><Text style={styles.globalValue}>{teamCount || teamRanking.length}</Text></View>
             </View>
             <View style={styles.globalDivider} />
             <View style={styles.globalItemWide}>
-              <Ionicons color={colors.gold} name="trending-up-outline" size={20} />
-              <Text adjustsFontSizeToFit numberOfLines={1} style={styles.globalValue}>118.430</Text>
-              <Text style={styles.globalLabel}>UF acumuladas</Text>
+              <View style={styles.globalIcon}><Ionicons color={colors.primary} name="trending-up-outline" size={23} /></View>
+              <View style={styles.globalCopy}><Text numberOfLines={1} style={styles.globalLabel}>UF acumuladas</Text><Text adjustsFontSizeToFit numberOfLines={1} style={styles.globalValue}>{formatUF(totalUf)}</Text></View>
             </View>
           </View>
 
@@ -87,19 +90,17 @@ export default function RankingScreen() {
           </View>
 
           <View style={styles.positionCard}>
-            <View style={styles.positionContent}>
-              <Text style={styles.positionLabel}>{mode === 'sellers' ? 'TU POSICIÓN' : mode === 'teams' ? 'POSICIÓN DE TU EQUIPO' : 'POSICIÓN DE TU JEFATURA'}</Text>
-              <View style={styles.positionMain}>
-                <Text style={styles.positionNumber}>#{currentEntry.position}</Text>
-                <View style={styles.positionLine} />
-                <Text style={styles.positionUF}>{formatUF(currentEntry.value)} <Text style={styles.positionUnit}>UF</Text></Text>
-              </View>
-              <View style={styles.insightRow}>
-                <Ionicons color={colors.gold} name="arrow-up-circle-outline" size={18} />
-                <Text style={styles.insight}>{gap > 0 ? `Te faltan ${formatUF(gap)} UF para subir 1 puesto` : 'Estás liderando este ranking'}</Text>
-              </View>
+            <View style={styles.positionBadge}><Ionicons color={colors.goldOnDark} name="diamond-outline" size={32} /></View>
+            <View style={styles.positionRank}>
+              <Text style={styles.positionLabel}>{mode === 'sellers' ? 'Tu posición' : mode === 'teams' ? 'Tu equipo' : 'Tu jefatura'}</Text>
+              <Text style={styles.positionNumber}>#{currentEntry.position}</Text>
             </View>
-            <Ionicons color="rgba(255,255,255,0.08)" name="trophy-outline" size={104} style={styles.trophy} />
+            <View style={styles.positionLine} />
+            <View style={styles.positionContent}>
+              <Text adjustsFontSizeToFit numberOfLines={1} style={styles.positionUF}>{formatUF(currentEntry.value)} <Text style={styles.positionUnit}>UF</Text></Text>
+              <Text numberOfLines={2} style={styles.insight}>{gap > 0 ? `Te faltan ${formatUF(gap)} UF para subir 1 puesto` : 'Estás liderando este ranking'}</Text>
+            </View>
+            <Ionicons color="rgba(255,255,255,0.07)" name="leaf-outline" size={108} style={styles.trophy} />
           </View>
 
           <View style={styles.rankingSection}>
@@ -118,31 +119,33 @@ export default function RankingScreen() {
 }
 
 const styles = StyleSheet.create({
-  page: { alignItems: 'center', paddingBottom: 30 },
+  page: { alignItems: 'center', backgroundColor: colors.background, paddingBottom: 30 },
   mobileFrame: { maxWidth: 620, width: '100%' },
-  header: { paddingHorizontal: spacing.xl, paddingTop: spacing.sm },
-  title: { color: colors.primary, fontFamily: typography.serif, fontSize: 34, fontWeight: '600', marginTop: spacing.xxl },
+  hero: { height: 292, overflow: 'hidden' },
+  header: { flex: 1, paddingHorizontal: spacing.xl, paddingTop: spacing.sm },
+  title: { color: colors.primary, fontFamily: typography.serif, fontSize: 36, fontWeight: '600', marginTop: 30 },
   subtitle: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 13, marginTop: 3 },
-  content: { gap: spacing.lg, marginTop: spacing.xl, paddingHorizontal: spacing.xl },
-  globalCard: { ...shadows.card, alignItems: 'center', backgroundColor: colors.primary, borderRadius: radii.xl, flexDirection: 'row', minHeight: 138, overflow: 'hidden', paddingHorizontal: spacing.md },
-  globalPattern: { bottom: -25, position: 'absolute', right: -15 },
-  globalItem: { alignItems: 'center', flex: 0.9, gap: 5 },
-  globalItemWide: { alignItems: 'center', flex: 1.25, gap: 5 },
-  globalValue: { color: colors.surface, fontFamily: typography.serif, fontSize: 22, fontWeight: '600' },
-  globalLabel: { color: 'rgba(255,255,255,0.62)', fontFamily: typography.sans, fontSize: 9, fontWeight: '600', textAlign: 'center' },
-  globalDivider: { backgroundColor: 'rgba(255,255,255,0.17)', height: 58, width: 1 },
+  content: { gap: spacing.lg, marginTop: -48, paddingHorizontal: spacing.xl },
+  globalCard: { ...shadows.floating, alignItems: 'center', backgroundColor: colors.surface, borderRadius: radii.xl, flexDirection: 'row', minHeight: 116, paddingHorizontal: spacing.md },
+  globalItem: { alignItems: 'center', flex: 0.95, flexDirection: 'row', gap: 8, justifyContent: 'center' },
+  globalItemWide: { alignItems: 'center', flex: 1.3, flexDirection: 'row', gap: 8, justifyContent: 'center' },
+  globalCopy: { flexShrink: 1, minWidth: 0 },
+  globalIcon: { alignItems: 'center', backgroundColor: colors.softGreen, borderRadius: radii.pill, height: 43, justifyContent: 'center', width: 43 },
+  globalValue: { color: colors.primary, fontFamily: typography.sans, fontSize: 21, fontWeight: '700', marginTop: 2 },
+  globalLabel: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 8.5 },
+  globalDivider: { backgroundColor: colors.border, height: 54, width: 1 },
   filters: { gap: spacing.sm, paddingRight: spacing.xl },
   period: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 10, marginTop: spacing.sm },
-  positionCard: { ...shadows.floating, backgroundColor: colors.primary, borderRadius: radii.xl, minHeight: 154, overflow: 'hidden', padding: spacing.xl },
-  positionContent: { zIndex: 1 },
-  positionLabel: { color: 'rgba(255,255,255,0.64)', fontFamily: typography.sans, fontSize: 10, fontWeight: '800', letterSpacing: 1.2 },
-  positionMain: { alignItems: 'center', flexDirection: 'row', gap: spacing.md, marginTop: 8 },
-  positionNumber: { color: colors.surface, fontFamily: typography.serif, fontSize: 42, fontWeight: '600' },
-  positionLine: { backgroundColor: colors.gold, height: 35, width: 1 },
-  positionUF: { color: colors.surface, fontFamily: typography.sans, fontSize: 19, fontWeight: '800' },
-  positionUnit: { color: colors.goldOnDark, fontSize: 12 },
-  insightRow: { alignItems: 'center', flexDirection: 'row', gap: 7, marginTop: 11 },
-  insight: { color: 'rgba(255,255,255,0.78)', fontFamily: typography.sans, fontSize: 11, fontWeight: '600' },
+  positionCard: { ...shadows.floating, alignItems: 'center', backgroundColor: colors.primary, borderRadius: radii.lg, flexDirection: 'row', minHeight: 124, overflow: 'hidden', padding: spacing.lg },
+  positionBadge: { alignItems: 'center', borderColor: 'rgba(224,197,111,0.62)', borderRadius: radii.pill, borderWidth: 1, height: 59, justifyContent: 'center', width: 59, zIndex: 1 },
+  positionRank: { marginLeft: spacing.md, zIndex: 1 },
+  positionContent: { flex: 1, minWidth: 0, zIndex: 1 },
+  positionLabel: { color: 'rgba(255,255,255,0.74)', fontFamily: typography.sans, fontSize: 10 },
+  positionNumber: { color: colors.surface, fontFamily: typography.sans, fontSize: 31, fontWeight: '700', marginTop: 2 },
+  positionLine: { backgroundColor: 'rgba(255,255,255,0.55)', height: 66, marginHorizontal: spacing.lg, width: 1 },
+  positionUF: { color: colors.surface, fontFamily: typography.sans, fontSize: 25, fontWeight: '400' },
+  positionUnit: { fontSize: 15 },
+  insight: { color: 'rgba(255,255,255,0.8)', fontFamily: typography.sans, fontSize: 9.5, lineHeight: 14, marginTop: 6 },
   trophy: { bottom: -13, position: 'absolute', right: -6 },
   rankingSection: { gap: spacing.md },
   rankingHeading: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },

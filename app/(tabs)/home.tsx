@@ -7,6 +7,7 @@ import { ActivityIndicator, ImageBackground, Pressable, StyleSheet, Text, View }
 import { AppHeader } from '@/components/AppHeader';
 import { MetricCard } from '@/components/MetricCard';
 import { ScreenContainer } from '@/components/ScreenContainer';
+import { SellerHomeDashboard } from '@/components/seller/SellerHomeDashboard';
 import { images } from '@/data/assets';
 import { useAuth } from '@/hooks/useAuth';
 import { snapshotService } from '@/services/snapshotService';
@@ -52,6 +53,10 @@ export default function HomeScreen() {
   const totalMora = isSeller ? ownMetric?.delinquentClientsCount ?? 0 : sumMetric(sellerRows, data?.latestByUser ?? {}, 'delinquentClientsCount');
   const totalSalesforce = isSeller ? ownMetric?.salesforceRecords ?? 0 : sumMetric(sellerRows, data?.latestByUser ?? {}, 'salesforceRecords');
   const totalBusinesses = isSeller ? ownMetric?.businessCount ?? 0 : sumMetric(sellerRows, data?.latestByUser ?? {}, 'businessCount');
+
+  if (isSeller && user) {
+    return <SellerHomeDashboard data={data} error={error} metric={ownMetric} user={user} />;
+  }
 
   return (
     <ScreenContainer contentContainerStyle={styles.page} edges={['top', 'left', 'right']}>

@@ -30,9 +30,9 @@ export function RankingTabs({ value, onChange }: RankingTabsProps) {
 }
 
 const styles = StyleSheet.create({
-  container: { backgroundColor: colors.softGreen, borderRadius: radii.pill, flexDirection: 'row', padding: 4 },
+  container: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.pill, borderWidth: 1, flexDirection: 'row', padding: 4 },
   tab: { alignItems: 'center', borderRadius: radii.pill, flex: 1, justifyContent: 'center', minHeight: 43, paddingHorizontal: spacing.sm },
   tabActive: { backgroundColor: colors.primary },
-  label: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 12, fontWeight: '700' },
+  label: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 12, fontWeight: '600' },
   labelActive: { color: colors.surface },
 });

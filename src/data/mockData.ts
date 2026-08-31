@@ -29,7 +29,7 @@ export const currentUser: User = {
   id: 'user-erika',
   name: 'Erika Sepúlveda',
   email: 'erika.sepulveda@parquedelrecuerdo.cl',
-  rut: '15.842.761-8',
+  rut: '15.842.761-3',
   role: 'seller',
   avatar: 'ES',
   teamId: 'team-cristian',

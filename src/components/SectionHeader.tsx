@@ -24,5 +24,5 @@ export function SectionHeader({ title, actionLabel, onAction }: SectionHeaderPro
 const styles = StyleSheet.create({
   container: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   title: { color: colors.text, fontFamily: typography.serif, fontSize: 23, fontWeight: '600' },
-  action: { color: colors.primary, fontFamily: typography.sans, fontSize: 13, fontWeight: '800' },
+  action: { color: colors.goldText, fontFamily: typography.sans, fontSize: 12, fontWeight: '700' },
 });
