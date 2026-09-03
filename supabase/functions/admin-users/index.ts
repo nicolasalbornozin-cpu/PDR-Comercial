@@ -5,6 +5,7 @@ import { corsHeaders, jsonResponse } from '../_shared/cors.ts';
 import { internalEmail, isValidRut, normalizeRut } from '../_shared/rut.ts';
 
 const allowedRoles = new Set(['seller', 'coordinator', 'sales_manager', 'admin']);
+const allowedEmploymentStatuses = new Set(['active', 'detached', 'medical_leave', 'vacation']);
 
 function hasStrongPassword(password: unknown): password is string {
   return typeof password === 'string'
@@ -63,7 +64,7 @@ Deno.serve(async (request) => {
   try {
     if (body.action === 'list') {
       const [usersResult, resetsResult] = await Promise.all([
-        admin.from('profiles').select('id,full_name,rut,role,active,team_id,supervisor_id,sales_manager_id,created_at').order('full_name'),
+        admin.from('profiles').select('id,full_name,rut,role,employment_status,active,team_id,supervisor_id,sales_manager_id,created_at').order('full_name'),
         admin.from('password_reset_requests').select('id,user_id,status,request_count,requested_at,last_requested_at').eq('status', 'pending').order('last_requested_at', { ascending: false }),
       ]);
       if (usersResult.error) throw usersResult.error;
@@ -74,6 +75,7 @@ Deno.serve(async (request) => {
           name: user.full_name,
           rut: user.rut ?? '',
           role: user.role,
+          employmentStatus: user.employment_status ?? 'active',
           active: user.active,
           teamId: user.team_id?.toString() ?? '',
           supervisorId: user.supervisor_id ?? '',
@@ -138,6 +140,7 @@ Deno.serve(async (request) => {
         supervisor_id: supervisorId,
         sales_manager_id: salesManagerId,
         active: true,
+        employment_status: 'active',
       }).eq('id', created.user.id);
       if (profileError) {
         await admin.auth.admin.deleteUser(created.user.id);
@@ -180,6 +183,17 @@ Deno.serve(async (request) => {
       const { error } = await admin.from('profiles').update({ active }).eq('id', userId);
       if (error) throw error;
       await admin.from('admin_audit_logs').insert({ admin_id: callerProfile.id, action: active ? 'user_activated' : 'user_deactivated', target_user_id: userId });
+      return jsonResponse({ ok: true });
+    }
+
+    if (body.action === 'setEmploymentStatus') {
+      const userId = String(body.userId ?? '');
+      const employmentStatus = String(body.employmentStatus ?? '');
+      if (!allowedEmploymentStatuses.has(employmentStatus)) return jsonResponse({ error: 'El estado de dotación no es válido.' }, 400);
+      if (userId === callerProfile.id && employmentStatus !== 'active') return jsonResponse({ error: 'No puedes bloquear tu propia cuenta.' }, 400);
+      const { error } = await admin.from('profiles').update({ employment_status: employmentStatus }).eq('id', userId);
+      if (error) throw error;
+      await admin.from('admin_audit_logs').insert({ admin_id: callerProfile.id, action: 'employment_status_changed', target_user_id: userId, details: { employmentStatus } });
       return jsonResponse({ ok: true });
     }
 
