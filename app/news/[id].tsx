@@ -1,7 +1,6 @@
-import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ImageBackground, Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { ImageBackground, StyleSheet, Text, View } from 'react-native';
 
 import { DetailHeader } from '@/components/DetailHeader';
 import { NewsCard } from '@/components/NewsCard';
@@ -16,10 +15,6 @@ export default function NewsDetailScreen() {
   const router = useRouter();
   const article = newsArticles.find((item) => item.id === id) ?? newsArticles[0];
   const related = newsArticles.find((item) => item.id !== article.id && item.category === article.category) ?? newsArticles.find((item) => item.id !== article.id)!;
-
-  async function handleShare() {
-    await Share.share({ message: `${article.title}\n\n${article.summary}` });
-  }
 
   return (
     <ScreenContainer contentContainerStyle={styles.page} edges={['top', 'left', 'right', 'bottom']}>
@@ -42,10 +37,6 @@ export default function NewsDetailScreen() {
             <View style={styles.goldLine} />
             <Text style={styles.body}>{article.body}</Text>
             <Text style={styles.body}>En Parque del Recuerdo creemos que cada avance merece ser reconocido. Sigue revisando la aplicación para conocer nuevas actividades, resultados y oportunidades para crecer junto a tu equipo.</Text>
-            <Pressable accessibilityRole="button" onPress={handleShare} style={styles.shareButton}>
-              <Ionicons color={colors.primary} name="share-social-outline" size={19} />
-              <Text style={styles.shareText}>Compartir noticia</Text>
-            </Pressable>
           </View>
 
           <View style={styles.relatedSection}>
@@ -73,8 +64,6 @@ const styles = StyleSheet.create({
   summary: { color: colors.primary, fontFamily: typography.serif, fontSize: 20, fontWeight: '600', lineHeight: 28 },
   goldLine: { backgroundColor: colors.gold, height: 2, width: 42 },
   body: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 14, lineHeight: 23 },
-  shareButton: { alignItems: 'center', alignSelf: 'flex-start', backgroundColor: colors.softGreen, borderRadius: radii.pill, flexDirection: 'row', gap: 8, marginTop: 3, paddingHorizontal: 15, paddingVertical: 11 },
-  shareText: { color: colors.primary, fontFamily: typography.sans, fontSize: 12, fontWeight: '800' },
   relatedSection: { gap: spacing.md },
   relatedTitle: { color: colors.text, fontFamily: typography.serif, fontSize: 22, fontWeight: '600' },
 });
