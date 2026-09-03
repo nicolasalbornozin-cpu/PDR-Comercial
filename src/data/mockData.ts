@@ -21,6 +21,8 @@ export const demoAdminUser: User = {
   supervisorId: '',
   salesManagerId: '',
   joinDate: '2018-01-15',
+  birthDate: '1985-04-12',
+  employmentStatus: 'active',
   active: true,
   mustChangePassword: false,
 };
@@ -29,13 +31,15 @@ export const currentUser: User = {
   id: 'user-erika',
   name: 'Erika Sepúlveda',
   email: 'erika.sepulveda@parquedelrecuerdo.cl',
-  rut: '15.842.761-3',
+  rut: '15.842.761-8',
   role: 'seller',
   avatar: 'ES',
   teamId: 'team-cristian',
   supervisorId: 'cristian-hernandez',
   salesManagerId: 'karin-etcheverry',
   joinDate: '2022-03-14',
+  birthDate: '1990-09-03',
+  employmentStatus: 'active',
   active: true,
   mustChangePassword: false,
 };
@@ -46,6 +50,7 @@ export const demoManagedUsers: AdminUser[] = [
     name: demoAdminUser.name,
     rut: demoAdminUser.rut,
     role: demoAdminUser.role,
+    employmentStatus: 'active',
     active: true,
     teamId: '',
     supervisorId: '',
@@ -57,6 +62,7 @@ export const demoManagedUsers: AdminUser[] = [
     name: 'Karin Etcheverry',
     rut: '146789012',
     role: 'sales_manager',
+    employmentStatus: 'active',
     active: true,
     teamId: '',
     supervisorId: '',
@@ -68,6 +74,7 @@ export const demoManagedUsers: AdminUser[] = [
     name: 'Cristian Hernández',
     rut: '132456789',
     role: 'coordinator',
+    employmentStatus: 'active',
     active: true,
     teamId: 'demo-team-cristian',
     supervisorId: '',
@@ -79,6 +86,7 @@ export const demoManagedUsers: AdminUser[] = [
     name: currentUser.name,
     rut: currentUser.rut,
     role: currentUser.role,
+    employmentStatus: 'active',
     active: true,
     teamId: currentUser.teamId,
     supervisorId: 'demo-coordinator',
@@ -90,6 +98,7 @@ export const demoManagedUsers: AdminUser[] = [
     name: 'Andrea Contreras',
     rut: '163334440',
     role: 'seller',
+    employmentStatus: 'active',
     active: true,
     teamId: 'demo-team-cristian',
     supervisorId: 'demo-coordinator',
@@ -142,8 +151,8 @@ export const goals: Goal[] = [
     startDate: '2026-08-01',
     endDate: '2026-08-31',
     metric: 'businesses',
-    currentValue: 6,
-    targetValue: 8,
+    currentValue: 0.94,
+    targetValue: 1,
     unit: 'negocios',
     level: 'Objetivo mensual',
     status: 'in_progress',
@@ -176,6 +185,11 @@ export const sellerRanking: RankingEntry[] = [
   { userId: 'juan', name: 'Juan Ramírez', avatar: 'JR', value: 1910, position: 4, teamId: 'team-cristian', subtitle: 'Equipo Cristian Hernández' },
   { userId: currentUser.id, name: 'Erika Sepúlveda', avatar: 'ES', value: 1833, position: 7, teamId: 'team-cristian', subtitle: 'Equipo Cristian Hernández', isCurrentUser: true },
 ];
+
+export const monthlySellerRanking: RankingEntry[] = sellerRanking
+  .map((entry, index) => ({ ...entry, value: Math.round(entry.value * (0.105 + index * 0.004)) }))
+  .sort((left, right) => right.value - left.value)
+  .map((entry, index) => ({ ...entry, position: index + 1 }));
 
 export const teams: Team[] = [
   { id: 'team-rodolfo', name: 'Equipo Rodolfo Bravo', salesManagerId: 'manager-north', totalUF: 14960 },
