@@ -16,9 +16,11 @@ export interface SnapshotWorkbook {
 
 const MAX_WORKBOOK_BYTES = 20 * 1024 * 1024;
 let spreadsheetUtils: typeof import('xlsx')['utils'] | null = null;
-const textColumns = new Set<SnapshotDatabaseColumn>(['category', 'senior_level']);
+const textColumns = new Set<SnapshotDatabaseColumn>(['category', 'senior_level', 'last_sale_date', 'senior_status']);
 const nonNegativeColumns = new Set<SnapshotDatabaseColumn>([
   'business_count',
+  'productivity',
+  'cancellation_count',
   'smad_count',
   'rest_count',
   'ssff_count',
@@ -28,6 +30,9 @@ const nonNegativeColumns = new Set<SnapshotDatabaseColumn>([
   'tenure_months',
   'ranking_position',
   'estimated_prize_clp',
+  'debt_installments_count',
+  'debt_uf_0',
+  'debt_uf_8',
 ]);
 const forbiddenHeaderTokens = [
   'rut_cliente',
@@ -47,9 +52,12 @@ const forbiddenHeaderTokens = [
 
 const preferredSheetNames: Record<SnapshotKind, string[]> = {
   commercial: ['avance comercial', 'resumen', 'ranking ddp'],
+  sales: ['ventas emitidas', 'venta diaria', 'resumen ventas'],
+  emission: ['emision', 'emitidas', 'resumen emision'],
   senior: ['resumen senior'],
   category: ['categorizacion'],
   delinquency: ['sauce riesgo', '% riesgo', 'sauce'],
+  sauce: ['sauce', 'resumen sauce'],
   salesforce: ['salesforce', 'resumen salesforce'],
   ranking: ['ranking ddp', 'ranking'],
 };
@@ -121,6 +129,14 @@ function mapHeader(header: unknown, kind: SnapshotKind): MappedColumn | undefine
     no_subido_uf: 'not_uploaded_uf',
     cantidad_negocios: 'business_count',
     negocios: 'business_count',
+    productividad: 'productivity',
+    anulaciones: 'cancellation_count',
+    cantidad_anulaciones: 'cancellation_count',
+    anulacion_uf: 'cancellation_uf',
+    canto_uf: 'sung_uf',
+    cantadas_uf: 'sung_uf',
+    fecha_ultima_venta: 'last_sale_date',
+    ultima_venta: 'last_sale_date',
     q_smad: 'smad_count',
     cantidad_smad: 'smad_count',
     smad: 'smad_count',
@@ -131,7 +147,7 @@ function mapHeader(header: unknown, kind: SnapshotKind): MappedColumn | undefine
     datos_salesforce: 'salesforce_records',
   };
 
-  if (kind === 'delinquency') {
+  if (kind === 'delinquency' || kind === 'sauce') {
     const delinquency: Record<string, SnapshotDatabaseColumn> = {
       clientes_mora: 'delinquent_clients_count',
       mora_clientes: 'delinquent_clients_count',
@@ -142,6 +158,10 @@ function mapHeader(header: unknown, kind: SnapshotKind): MappedColumn | undefine
       porc_riesgo: 'delinquency_rate',
       riesgo: 'delinquency_rate',
       '%_riesgo': 'delinquency_rate',
+      cuotas_en_deuda: 'debt_installments_count',
+      cuotas_deuda: 'debt_installments_count',
+      uf_0: 'debt_uf_0',
+      uf_8: 'debt_uf_8',
     };
     return delinquency[normalized];
   }
@@ -162,6 +182,7 @@ function mapHeader(header: unknown, kind: SnapshotKind): MappedColumn | undefine
       premio_estimado_clp: 'estimated_prize_clp',
       categoria: 'senior_level',
       nivel_senior: 'senior_level',
+      estado_senior: 'senior_status',
     };
     return senior[normalized] ?? common[normalized];
   }
@@ -267,7 +288,7 @@ function parseRankingSheet(workbook: WorkBook, sheetName: string): CsvParseResul
     rows: candidates.map((entry) => ({
       rowNumber: entry.rowNumber,
       name: entry.name,
-      values: { production_uf: entry.production, ranking_position: positionByName.get(entry.name) },
+      values: { emitted_uf: entry.production, ranking_position: positionByName.get(entry.name) },
     })),
     errors: [],
     unknownHeaders: [],
@@ -405,7 +426,15 @@ function parseGenericSheet(workbook: WorkBook, sheetName: string, kind: Snapshot
       const raw = row[columnIndex];
       if (raw === null || raw === undefined || raw === '') return;
       if (textColumns.has(databaseColumn)) {
-        const text = String(raw).trim();
+        let text = raw instanceof Date
+          ? `${raw.getFullYear()}-${String(raw.getMonth() + 1).padStart(2, '0')}-${String(raw.getDate()).padStart(2, '0')}`
+          : String(raw).trim();
+        if (databaseColumn === 'senior_status') text = normalizeText(text).includes('cerr') ? 'closed' : 'open';
+        if (databaseColumn === 'last_sale_date' && !/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+          errors.push(`Fila ${index + 1}: fecha inválida en ${String(originalHeaders[columnIndex] ?? 'columna')}.`);
+          invalid = true;
+          return;
+        }
         if (text && text !== '$-') values[databaseColumn] = text.slice(0, 80);
         return;
       }
@@ -451,5 +480,5 @@ export function parseSnapshotWorkbookSheet(source: SnapshotWorkbook, sheetName: 
     if (ranking) return ranking;
   }
   const parsed = parseGenericSheet(source.workbook, sheetName, kind);
-  return kind === 'delinquency' ? addDelinquencyCounts(source.workbook, parsed) : parsed;
+  return kind === 'delinquency' || kind === 'sauce' ? addDelinquencyCounts(source.workbook, parsed) : parsed;
 }

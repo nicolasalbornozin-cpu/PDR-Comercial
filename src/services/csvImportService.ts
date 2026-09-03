@@ -12,9 +12,12 @@ export type SnapshotDatabaseColumn =
   | 'not_emitted_uf'
   | 'not_uploaded_uf'
   | 'cancellation_uf'
+  | 'cancellation_count'
+  | 'sung_uf'
   | 'quarter_total_uf'
   | 'eligible_total_uf'
   | 'business_count'
+  | 'productivity'
   | 'smad_count'
   | 'rest_count'
   | 'ssff_count'
@@ -25,7 +28,12 @@ export type SnapshotDatabaseColumn =
   | 'ranking_position'
   | 'category'
   | 'senior_level'
-  | 'estimated_prize_clp';
+  | 'estimated_prize_clp'
+  | 'last_sale_date'
+  | 'debt_installments_count'
+  | 'debt_uf_0'
+  | 'debt_uf_8'
+  | 'senior_status';
 
 export interface ParsedSnapshotRow {
   rowNumber: number;
@@ -64,11 +72,16 @@ const headerAliases: Record<string, 'rut' | 'name' | SnapshotDatabaseColumn> = {
   caida_uf: 'cancellation_uf',
   caidas_uf: 'cancellation_uf',
   anulacion_uf: 'cancellation_uf',
+  anulaciones: 'cancellation_count',
+  cantidad_anulaciones: 'cancellation_count',
+  canto_uf: 'sung_uf',
+  cantadas_uf: 'sung_uf',
   total_trimestre_uf: 'quarter_total_uf',
   total_valido_uf: 'eligible_total_uf',
   total_computable_uf: 'eligible_total_uf',
   negocios: 'business_count',
   cantidad_negocios: 'business_count',
+  productividad: 'productivity',
   smad: 'smad_count',
   cantidad_smad: 'smad_count',
   resto: 'rest_count',
@@ -90,20 +103,32 @@ const headerAliases: Record<string, 'rut' | 'name' | SnapshotDatabaseColumn> = {
   senior: 'senior_level',
   premio_estimado_clp: 'estimated_prize_clp',
   premio_clp: 'estimated_prize_clp',
+  fecha_ultima_venta: 'last_sale_date',
+  ultima_venta: 'last_sale_date',
+  cuotas_en_deuda: 'debt_installments_count',
+  cuotas_deuda: 'debt_installments_count',
+  uf_0: 'debt_uf_0',
+  uf_8: 'debt_uf_8',
+  estado_senior: 'senior_status',
 };
 
 const allowedByKind: Record<SnapshotKind, Set<SnapshotDatabaseColumn>> = {
-  commercial: new Set(['production_uf', 'gross_uf', 'sepultura_uf', 'ssff_uf', 'cinerario_uf', 'ssaa_uf', 'emitted_uf', 'not_emitted_uf', 'not_uploaded_uf', 'business_count']),
-  senior: new Set(['quarter_total_uf', 'cancellation_uf', 'eligible_total_uf', 'smad_count', 'rest_count', 'ssff_count', 'tenure_months', 'senior_level', 'estimated_prize_clp']),
+  commercial: new Set(['production_uf', 'gross_uf', 'sepultura_uf', 'ssff_uf', 'cinerario_uf', 'ssaa_uf', 'emitted_uf', 'not_emitted_uf', 'not_uploaded_uf', 'business_count', 'productivity', 'cancellation_uf', 'cancellation_count', 'last_sale_date']),
+  sales: new Set(['emitted_uf', 'business_count', 'productivity', 'cancellation_uf', 'cancellation_count', 'last_sale_date']),
+  emission: new Set(['emitted_uf', 'business_count', 'productivity', 'last_sale_date']),
+  senior: new Set(['quarter_total_uf', 'cancellation_uf', 'cancellation_count', 'eligible_total_uf', 'sung_uf', 'emitted_uf', 'smad_count', 'rest_count', 'ssff_count', 'tenure_months', 'senior_level', 'senior_status', 'estimated_prize_clp']),
   category: new Set(['production_uf', 'smad_count', 'category', 'estimated_prize_clp']),
-  delinquency: new Set(['delinquent_clients_count', 'delinquency_rate']),
+  delinquency: new Set(['delinquent_clients_count', 'delinquency_rate', 'debt_installments_count', 'debt_uf_0', 'debt_uf_8']),
+  sauce: new Set(['delinquent_clients_count', 'delinquency_rate', 'debt_installments_count', 'debt_uf_0', 'debt_uf_8']),
   salesforce: new Set(['salesforce_records']),
-  ranking: new Set(['ranking_position', 'production_uf']),
+  ranking: new Set(['ranking_position', 'emitted_uf']),
 };
 
-const textColumns = new Set<SnapshotDatabaseColumn>(['category', 'senior_level']);
+const textColumns = new Set<SnapshotDatabaseColumn>(['category', 'senior_level', 'last_sale_date', 'senior_status']);
 const nonNegativeColumns = new Set<SnapshotDatabaseColumn>([
   'business_count',
+  'productivity',
+  'cancellation_count',
   'smad_count',
   'rest_count',
   'ssff_count',
@@ -113,6 +138,9 @@ const nonNegativeColumns = new Set<SnapshotDatabaseColumn>([
   'tenure_months',
   'ranking_position',
   'estimated_prize_clp',
+  'debt_installments_count',
+  'debt_uf_0',
+  'debt_uf_8',
 ]);
 
 function normalizeHeader(value: string): string {
@@ -200,7 +228,15 @@ export function parseSnapshotCsv(text: string, kind: SnapshotKind): CsvParseResu
       const raw = fields[fieldIndex]?.trim() ?? '';
       if (!raw) return;
       if (textColumns.has(mapped)) {
-        values[mapped] = raw.slice(0, 80);
+        const normalizedValue = mapped === 'senior_status'
+          ? (normalizeHeader(raw).includes('cerr') ? 'closed' : 'open')
+          : raw.slice(0, 80);
+        if (mapped === 'last_sale_date' && !/^\d{4}-\d{2}-\d{2}$/.test(normalizedValue)) {
+          errors.push(`Fila ${lineIndex + 1}: fecha inválida en ${originalHeaders[fieldIndex]}; usa AAAA-MM-DD.`);
+          invalidValue = true;
+          return;
+        }
+        values[mapped] = normalizedValue;
         return;
       }
       const numeric = parseNumber(raw);
