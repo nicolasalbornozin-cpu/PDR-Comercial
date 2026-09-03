@@ -48,6 +48,7 @@ function accountToPreviewUser(account: AdminUser): User {
     supervisorId: account.supervisorId,
     salesManagerId: account.salesManagerId,
     joinDate: account.createdAt.slice(0, 10),
+    employmentStatus: account.employmentStatus ?? 'active',
     active: account.active,
     mustChangePassword: false,
   };
@@ -70,6 +71,8 @@ function demoPreviewUser(role: PreviewRole): User {
     supervisorId: profile.supervisorId,
     salesManagerId: profile.salesManagerId,
     joinDate: profile.joinDate,
+    birthDate: role === 'seller' ? '1990-09-03' : undefined,
+    employmentStatus: 'active',
     active: true,
     mustChangePassword: false,
   };
@@ -224,7 +227,7 @@ export default function ProfileScreen() {
           </View>
 
           <AppButton icon="log-out-outline" label="Cerrar sesión" loading={isLoading} onPress={handleSignOut} variant="secondary" />
-          <Text style={styles.version}>PDR Comercial · Versión 1.0.0</Text>
+          <Text style={styles.version}>PDR Comercial · Versión 1.1.0</Text>
         </View>
       </View>
     </ScreenContainer>
