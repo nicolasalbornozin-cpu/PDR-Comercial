@@ -39,17 +39,29 @@ Columnas permitidas:
 rut;produccion_uf;produccion_bruta_uf;sepultura_uf;ssff_uf;cinerario_uf;ssaa_uf;emitido_uf;no_emitido_uf;no_subido_uf;cantidad_negocios
 ```
 
-Solo `rut` y al menos un total son obligatorios.
+`rut` y `emitido_uf` son obligatorios para publicar métricas comerciales. La producción bruta puede conservarse como referencia administrativa, pero no se usa en inicio, acumulados ni rankings.
+
+### Venta emitida y emisión
+
+Columnas permitidas:
+
+```text
+rut;emitido_uf;cantidad_negocios;productividad;cantidad_anulaciones;anulacion_uf;fecha_ultima_venta
+```
+
+`fecha_ultima_venta` usa `AAAA-MM-DD`. La aplicación conserva la última carga autoritativa de cada mes: emisión prevalece sobre venta diaria y panel comercial.
 
 ### Senior
 
 Columnas permitidas:
 
 ```text
-rut;total_trimestre_uf;caidas_uf;total_valido_uf;cantidad_smad;cantidad_resto;cantidad_ssff;antiguedad_meses;nivel_senior;premio_estimado_clp
+rut;canto_uf;emitido_uf;estado_senior;total_trimestre_uf;caidas_uf;total_valido_uf;cantidad_smad;cantidad_resto;cantidad_ssff;antiguedad_meses;nivel_senior;premio_estimado_clp
 ```
 
 `nivel_senior` y `premio_estimado_clp` pueden venir calculados desde la planilla oficial. Las reglas de tramos también quedan versionadas en Supabase para auditoría.
+
+Mientras `estado_senior` esté `abierto`, Senior usa `canto_uf`. Al publicar `estado_senior` como `cerrado`, cambia automáticamente a `emitido_uf`. Ningún otro panel usa ventas cantadas.
 
 ### Categorización
 
@@ -64,7 +76,7 @@ rut;produccion_uf;cantidad_smad;categoria;premio_estimado_clp
 Columnas permitidas:
 
 ```text
-rut;clientes_mora;porcentaje_mora
+rut;clientes_mora;porcentaje_mora;cuotas_en_deuda;uf_0;uf_8
 ```
 
 `clientes_mora` es la cantidad agregada de clientes caídos asociada al trabajador. No se carga ningún cliente individual. `porcentaje_mora` es opcional.
@@ -79,15 +91,15 @@ Columnas permitidas:
 rut;registros_salesforce
 ```
 
-### Ranking
+### Frecuencia de actualización
 
-Columnas permitidas:
+- Venta emitida: diaria o cada dos días.
+- Emisión y mora: una vez por semana.
+- Sauce: dos veces al mes.
+- Panel anual y mes comercial: según el cierre comercial acordado.
+- Ranking: se calcula automáticamente desde las UF emitidas; no requiere una carga paralela.
 
-```text
-rut;posicion_ranking;produccion_uf
-```
-
-El ranking compartido expone únicamente nombre del trabajador, equipo, posición y UF. Nunca expone RUT ni correo a otros vendedores.
+El ranking expone únicamente nombre del trabajador o equipo, posición y UF emitidas. Nunca expone RUT ni correo. Los vendedores comparan con vendedores; los coordinadores comparan su equipo con los demás equipos; los jefes ven solo sus coordinaciones.
 
 ## Orden recomendado para crear cuentas
 
@@ -104,5 +116,5 @@ Así, cada vendedor ve sus datos; el coordinador ve sus vendedores; el jefe de v
 - Verificar que la hoja sugerida corresponda al resumen esperado antes de publicar.
 - Revisar el número de filas válidas antes de publicar.
 - No reutilizar contraseñas entre trabajadores.
-- Desactivar una cuenta apenas una persona deje de requerir acceso.
+- Marcar en dotación `desvinculado`, `licencia` o `vacaciones` apenas corresponda. Esos estados bloquean el acceso y excluyen a la persona de paneles y rankings.
 - Registrar como incidencia cualquier carga rechazada por columnas desconocidas en vez de intentar renombrar datos sensibles.
