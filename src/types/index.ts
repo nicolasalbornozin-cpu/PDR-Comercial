@@ -1,4 +1,12 @@
 export type UserRole = 'seller' | 'coordinator' | 'sales_manager' | 'admin';
+export type EmploymentStatus = 'active' | 'detached' | 'medical_leave' | 'vacation';
+
+export const employmentStatusLabels: Record<EmploymentStatus, string> = {
+  active: 'Activo/a',
+  detached: 'Desvinculado/a',
+  medical_leave: 'Licencia',
+  vacation: 'Vacaciones',
+};
 
 export const roleLabels: Record<UserRole, string> = {
   seller: 'Vendedor/a',
@@ -18,25 +26,45 @@ export interface User {
   supervisorId: string;
   salesManagerId: string;
   joinDate: string;
+  birthDate?: string;
+  employmentStatus: EmploymentStatus;
   active: boolean;
   mustChangePassword: boolean;
 }
 
 export type SnapshotKind =
   | 'commercial'
+  | 'sales'
+  | 'emission'
   | 'senior'
   | 'category'
   | 'delinquency'
+  | 'sauce'
   | 'salesforce'
   | 'ranking';
 
 export const snapshotKindLabels: Record<SnapshotKind, string> = {
   commercial: 'Avance comercial',
+  sales: 'Venta emitida',
+  emission: 'Emisión',
   senior: 'Senior',
   category: 'Categorización',
-  delinquency: 'Mora / Sauce',
+  delinquency: 'Mora',
+  sauce: 'Sauce',
   salesforce: 'Salesforce',
   ranking: 'Ranking',
+};
+
+export const snapshotRefreshCadence: Record<SnapshotKind, string> = {
+  commercial: 'Panel anual y mes comercial',
+  sales: 'Diaria o cada 2 días',
+  emission: '1 vez por semana',
+  senior: 'Según vigencia de la carrera',
+  category: 'Según cierre del mes comercial',
+  delinquency: '1 vez por semana',
+  sauce: '2 veces al mes',
+  salesforce: 'Según actualización operativa',
+  ranking: 'Se calcula automáticamente',
 };
 
 export interface MetricSnapshot {
@@ -58,9 +86,12 @@ export interface MetricSnapshot {
   notEmittedUf?: number;
   notUploadedUf?: number;
   cancellationUf?: number;
+  cancellationCount?: number;
+  sungUf?: number;
   quarterTotalUf?: number;
   eligibleTotalUf?: number;
   businessCount?: number;
+  productivity?: number;
   smadCount?: number;
   restCount?: number;
   ssffCount?: number;
@@ -72,6 +103,11 @@ export interface MetricSnapshot {
   category?: string;
   seniorLevel?: string;
   estimatedPrizeClp?: number;
+  lastSaleDate?: string;
+  debtInstallmentsCount?: number;
+  debtUf0?: number;
+  debtUf8?: number;
+  seniorStatus?: 'open' | 'closed';
 }
 
 export interface VisibleProfile {
@@ -82,6 +118,8 @@ export interface VisibleProfile {
   teamId: string;
   supervisorId: string;
   salesManagerId: string;
+  birthDate?: string;
+  employmentStatus: EmploymentStatus;
   active: boolean;
 }
 
@@ -89,7 +127,10 @@ export interface DashboardData {
   profiles: VisibleProfile[];
   snapshots: MetricSnapshot[];
   latestByUser: Record<string, Partial<MetricSnapshot>>;
+  annualEmittedUfByUser: Record<string, number>;
+  monthlyEmittedUfByUser: Record<string, number>;
   periodLabel: string;
+  seniorOpen: boolean;
 }
 
 export interface AdminUser {
@@ -97,6 +138,7 @@ export interface AdminUser {
   name: string;
   rut: string;
   role: UserRole;
+  employmentStatus: EmploymentStatus;
   active: boolean;
   teamId: string;
   supervisorId: string;
@@ -189,3 +231,4 @@ export interface ActivityItem {
 }
 
 export type RankingMode = 'sellers' | 'teams' | 'management';
+export type RankingPeriod = 'annual' | 'monthly';
