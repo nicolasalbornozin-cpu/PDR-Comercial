@@ -14,13 +14,13 @@ import { adminService } from '@/services/adminService';
 import { CsvParseResult, parseSnapshotCsv } from '@/services/csvImportService';
 import { openSnapshotWorkbook, parseSnapshotWorkbookSheet, SnapshotWorkbook } from '@/services/xlsxImportService';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
-import { AdminUser, PasswordResetRequest, roleLabels, SnapshotKind, snapshotKindLabels, UserRole } from '@/types';
+import { AdminUser, employmentStatusLabels, PasswordResetRequest, roleLabels, SnapshotKind, snapshotKindLabels, snapshotRefreshCadence, UserRole } from '@/types';
 import { formatRut } from '@/utils/rut';
 
 type AdminSection = 'uploads' | 'users' | 'resets';
 
 const roles: UserRole[] = ['seller', 'coordinator', 'sales_manager', 'admin'];
-const snapshotKinds: SnapshotKind[] = ['commercial', 'senior', 'category', 'delinquency', 'salesforce', 'ranking'];
+const snapshotKinds: SnapshotKind[] = ['sales', 'emission', 'commercial', 'senior', 'category', 'delinquency', 'sauce', 'salesforce'];
 const today = new Date();
 const initialPeriodStart = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
 const initialPeriodEnd = today.toISOString().slice(0, 10);
@@ -243,6 +243,7 @@ export default function AdminScreen() {
                   </Pressable>
                 ))}
               </View>
+              <Text style={styles.cadence}>Frecuencia: {snapshotRefreshCadence[kind]}</Text>
               <View style={styles.dateRow}>
                 <View style={styles.flex}><FormField autoCapitalize="none" icon="calendar-outline" label="Desde" onChangeText={setPeriodStart} placeholder="AAAA-MM-DD" value={periodStart} /></View>
                 <View style={styles.flex}><FormField autoCapitalize="none" icon="calendar-outline" label="Hasta" onChangeText={setPeriodEnd} placeholder="AAAA-MM-DD" value={periodEnd} /></View>
@@ -305,7 +306,7 @@ export default function AdminScreen() {
                   <View key={account.id} style={[styles.accountRow, index < users.length - 1 && styles.accountBorder]}>
                     <View style={styles.flex}>
                       <Text style={styles.accountName}>{account.name}</Text>
-                      <Text style={styles.accountMeta}>{formatRut(account.rut)} · {roleLabels[account.role]}</Text>
+                      <Text style={styles.accountMeta}>{formatRut(account.rut)} · {roleLabels[account.role]} · {employmentStatusLabels[account.employmentStatus ?? 'active']}</Text>
                     </View>
                     <Pressable disabled={busy} onPress={() => toggleActive(account)} style={[styles.status, account.active ? styles.statusActive : styles.statusInactive]}>
                       <Text style={styles.statusText}>{account.active ? 'Activa' : 'Inactiva'}</Text>
@@ -362,6 +363,7 @@ const styles = StyleSheet.create({
   cardTitle: { color: colors.primary, fontFamily: typography.serif, fontSize: 23, fontWeight: '600' },
   cardText: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 11, lineHeight: 18 },
   label: { color: colors.text, fontFamily: typography.sans, fontSize: 12, fontWeight: '800' },
+  cadence: { color: colors.secondary, fontFamily: typography.sans, fontSize: 10, fontWeight: '800' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   chip: { backgroundColor: colors.softGreen, borderColor: 'transparent', borderRadius: radii.pill, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 9 },
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
