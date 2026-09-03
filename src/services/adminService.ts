@@ -1,7 +1,7 @@
 import { CsvParseResult, ParsedSnapshotRow } from '@/services/csvImportService';
 import { demoManagedUsers } from '@/data/mockData';
 import { supabase } from '@/services/supabase';
-import { AdminUser, PasswordResetRequest, SnapshotKind, UserRole } from '@/types';
+import { AdminUser, EmploymentStatus, PasswordResetRequest, SnapshotKind, UserRole } from '@/types';
 import { normalizeRut } from '@/utils/rut';
 
 export interface CreateManagedUserInput {
@@ -63,10 +63,18 @@ export const adminService = {
     await invokeAdmin({ action: 'setActive', userId, active });
   },
 
+  async setEmploymentStatus(userId: string, employmentStatus: EmploymentStatus): Promise<void> {
+    await invokeAdmin({ action: 'setEmploymentStatus', userId, employmentStatus });
+  },
+
   async importSnapshot(input: ImportSnapshotInput): Promise<number> {
     if (!supabase) throw new Error('Supabase no está configurado.');
     if (input.parsed.errors.length) throw new Error('Corrige los errores del archivo antes de publicarlo.');
     if (!input.parsed.rows.length) throw new Error('No hay filas válidas para publicar.');
+    if (['commercial', 'sales', 'emission', 'ranking'].includes(input.kind)
+      && input.parsed.rows.some((row) => row.values.emitted_uf === undefined)) {
+      throw new Error('La carga debe incluir la columna de ventas emitidas (emitido_uf). Las ventas cantadas no se publican fuera de Senior.');
+    }
 
     const ruts = [...new Set(input.parsed.rows.map((row) => row.rut).filter((rut): rut is string => Boolean(rut)))];
     const { data: profiles, error: profilesError } = await supabase

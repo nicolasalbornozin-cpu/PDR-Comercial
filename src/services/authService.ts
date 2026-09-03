@@ -1,6 +1,7 @@
 import { currentUser, demoAdminUser } from '@/data/mockData';
 import { isSupabaseConfigured, supabase } from '@/services/supabase';
-import { User, UserRole } from '@/types';
+import { EmploymentStatus, User, UserRole } from '@/types';
+import { isEmploymentBlocked } from '@/utils/commercialRules';
 import { isValidRut, normalizeRut, rutToInternalEmail } from '@/utils/rut';
 
 const authMode: 'demo' | 'supabase' = isSupabaseConfigured ? 'supabase' : 'demo';
@@ -16,6 +17,8 @@ interface ProfileRow {
   supervisor_id: string | null;
   sales_manager_id: string | null;
   join_date: string;
+  birth_date?: string | null;
+  employment_status?: EmploymentStatus | null;
   active: boolean;
   must_change_password: boolean;
 }
@@ -42,6 +45,8 @@ function mapProfile(profile: ProfileRow): User {
     supervisorId: profile.supervisor_id ?? '',
     salesManagerId: profile.sales_manager_id ?? '',
     joinDate: profile.join_date,
+    birthDate: profile.birth_date ?? undefined,
+    employmentStatus: profile.employment_status ?? 'active',
     active: profile.active,
     mustChangePassword: profile.must_change_password,
   };
@@ -50,11 +55,11 @@ function mapProfile(profile: ProfileRow): User {
 async function getProfile(userId: string): Promise<User> {
   if (!supabase) throw new Error('Supabase no está configurado.');
   const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
-  if (error) throw new Error(`No fue posible cargar tu perfil: ${error.message}`);
+  if (error) throw new Error('Error al comunicar con el servidor');
   const user = mapProfile(data as ProfileRow);
-  if (!user.active) {
+  if (isEmploymentBlocked(user.employmentStatus, user.active)) {
     await supabase.auth.signOut();
-    throw new Error('Esta cuenta está desactivada. Contacta al administrador.');
+    throw new Error('Error al comunicar con el servidor');
   }
   return user;
 }
