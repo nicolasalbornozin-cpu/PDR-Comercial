@@ -8,9 +8,12 @@ Primera versión completa de la aplicación móvil comercial de Parque del Recue
 - Cuentas administradas sin autorregistro público y recuperación resuelta por el administrador.
 - Paneles separados para vendedor, coordinador, jefe de ventas y administrador.
 - Panel administrativo para cuentas, accesos y cargas CSV exportadas desde Excel.
-- Fotos publicables de avance comercial, Senior, categorización, Mora/Sauce, Salesforce y ranking.
-- Detalle completo de Mis metas, incluyendo productividad medida en negocios y semáforo de mora.
-- Ranking Global interactivo para vendedores, equipos y jefaturas, con filtros por competencias de períodos configurables.
+- Fotos publicables de ventas emitidas, emisión, avance comercial, Senior, categorización, Mora, Sauce y Salesforce.
+- Acumulado anual y mes comercial calculados solo con ventas emitidas; Senior abierto es la única excepción y usa ventas cantadas hasta su cierre.
+- Semáforo de mora (verde bajo 20%, amarillo desde 20% y rojo desde 30%) y productividad en rojo bajo 1.
+- Rankings anual y mensual por rol: vendedores contra vendedores, coordinadores contra equipos y jefes dentro de sus coordinaciones.
+- Inicio ampliado con anulaciones, cumpleaños, días sin vender y cuotas en deuda (UF a 0% y 8%) según alcance del cargo.
+- Bloqueo genérico para estados de dotación desvinculado, licencia o vacaciones.
 - Noticias, detalle de artículos y galería fotográfica navegable.
 - Centro de notificaciones y perfil personal.
 - Datos demostrativos centralizados como respaldo cuando Supabase no está configurado.
@@ -68,7 +71,7 @@ El esquema reproducible está en `supabase/migrations/`. Incluye perfiles vincul
 - Cada vendedor solo lee sus datos; coordinadores y jefes ven únicamente su jerarquía; el administrador gestiona el conjunto.
 - Los roles nunca se aceptan desde el cliente: las cuentas se crean mediante una Edge Function que comprueba el rol administrador.
 - Las funciones de administración usan la clave de servicio únicamente en el servidor; esa clave nunca entra a la app.
-- El ranking global comparte solo nombre, equipo, posición y UF, sin RUT ni correo.
+- El ranking comparte solo nombre, equipo, posición y UF emitidas, sin RUT ni correo.
 
 El procedimiento y las columnas permitidas para las cargas están en [docs/IMPORTACION_DATOS.md](docs/IMPORTACION_DATOS.md).
 
