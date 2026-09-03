@@ -1,17 +1,16 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, radii, spacing, typography } from '@/theme';
-import { RankingMode } from '@/types';
+import { RankingPeriod } from '@/types';
 
-const options: { label: string; value: RankingMode }[] = [
-  { label: 'Vendedores', value: 'sellers' },
-  { label: 'Equipos', value: 'teams' },
-  { label: 'Jefaturas', value: 'management' },
+const options: { label: string; value: RankingPeriod }[] = [
+  { label: 'Anual', value: 'annual' },
+  { label: 'Mensual', value: 'monthly' },
 ];
 
 interface RankingTabsProps {
-  value: RankingMode;
-  onChange: (value: RankingMode) => void;
+  value: RankingPeriod;
+  onChange: (value: RankingPeriod) => void;
 }
 
 export function RankingTabs({ value, onChange }: RankingTabsProps) {
@@ -30,9 +29,9 @@ export function RankingTabs({ value, onChange }: RankingTabsProps) {
 }
 
 const styles = StyleSheet.create({
-  container: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.pill, borderWidth: 1, flexDirection: 'row', padding: 4 },
+  container: { backgroundColor: colors.softGreen, borderRadius: radii.pill, flexDirection: 'row', padding: 4 },
   tab: { alignItems: 'center', borderRadius: radii.pill, flex: 1, justifyContent: 'center', minHeight: 43, paddingHorizontal: spacing.sm },
   tabActive: { backgroundColor: colors.primary },
-  label: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 12, fontWeight: '600' },
+  label: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 12, fontWeight: '700' },
   labelActive: { color: colors.surface },
 });

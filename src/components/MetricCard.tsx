@@ -20,7 +20,7 @@ export function MetricCard({ label, value, detail, icon, tone = 'green' }: Metri
         <Ionicons color={accent} name={icon} size={18} />
       </View>
       <Text numberOfLines={1} style={styles.label}>{label}</Text>
-      <Text adjustsFontSizeToFit numberOfLines={1} style={styles.value}>{value}</Text>
+      <Text adjustsFontSizeToFit numberOfLines={1} style={[styles.value, { color: accent }]}>{value}</Text>
       {detail ? <Text numberOfLines={1} style={styles.detail}>{detail}</Text> : null}
     </View>
   );
