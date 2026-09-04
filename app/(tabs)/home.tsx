@@ -5,7 +5,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader } from '@/components/AppHeader';
+import { GoalCard } from '@/components/GoalCard';
 import { MetricCard } from '@/components/MetricCard';
+import { ProgressBar } from '@/components/ProgressBar';
 import { ScreenContainer } from '@/components/ScreenContainer';
 import { images } from '@/data/assets';
 import { useAuth } from '@/hooks/useAuth';
@@ -29,7 +31,7 @@ function sellerDays(metric?: Partial<MetricSnapshot>): string {
   return days === null ? 'Sin fecha' : `${days} día${days === 1 ? '' : 's'}`;
 }
 
-function ScopeCard({ title, subtitle, sellers, data }: { title: string; subtitle: string; sellers: VisibleProfile[]; data: DashboardData }) {
+function ScopeCard({ title, subtitle, sellers, data, monthlyTarget }: { title: string; subtitle: string; sellers: VisibleProfile[]; data: DashboardData; monthlyTarget: number }) {
   const annual = sellers.reduce((total, seller) => total + Number(data.annualEmittedUfByUser[seller.id] ?? 0), 0);
   const monthly = sellers.reduce((total, seller) => total + Number(data.monthlyEmittedUfByUser[seller.id] ?? 0), 0);
   const mora = averageMetric(sellers, data.latestByUser, 'delinquencyRate');
@@ -50,6 +52,8 @@ function ScopeCard({ title, subtitle, sellers, data }: { title: string; subtitle
         <Text style={[styles.scopeStat, productivity < 1 && styles.dangerText]}>Prod. <Text style={styles.scopeStrong}>{productivity.toFixed(2)}</Text></Text>
         <Text style={styles.scopeStat}>Anul. <Text style={styles.scopeStrong}>{cancellations}</Text></Text>
       </View>
+      <ProgressBar color={colors.secondary} height={7} progress={monthlyTarget ? monthly / monthlyTarget : 0} />
+      <Text style={styles.progressCaption}>{monthlyTarget ? `${Math.round((monthly / monthlyTarget) * 100)}% del mejor resultado visible` : 'Sin ventas emitidas este mes'}</Text>
     </View>
   );
 }
@@ -101,6 +105,12 @@ export default function HomeScreen() {
   const debtInstallments = sumMetric(sellerRows, data?.latestByUser ?? {}, 'debtInstallmentsCount');
   const debtUf0 = sumMetric(sellerRows, data?.latestByUser ?? {}, 'debtUf0');
   const debtUf8 = sumMetric(sellerRows, data?.latestByUser ?? {}, 'debtUf8');
+  const bestMonthlyUf = Math.max(...sellerRows.map((seller) => Number(data?.monthlyEmittedUfByUser[seller.id] ?? 0)), 0);
+  const rankingPosition = isSeller ? (ownMetric?.rankingPosition ?? sellerRows.findIndex((seller) => seller.id === user?.id) + 1) : sellerRows.length;
+  const salesforceRecords = isSeller ? Number(ownMetric?.salesforceRecords ?? 0) : sumMetric(sellerRows, data?.latestByUser ?? {}, 'salesforceRecords');
+  const seniorUf = seniorEligibleUf(ownMetric, data?.seniorOpen ?? true);
+  const seniorTarget = Math.max(1950, seniorUf);
+  const monthlyGoal = Math.max(1000, totalMonthlyUf);
 
   return (
     <ScreenContainer contentContainerStyle={styles.page} edges={['top', 'left', 'right']}>
@@ -117,10 +127,14 @@ export default function HomeScreen() {
         </ImageBackground>
 
         <View style={styles.content}>
+          <View style={styles.panelAccent} />
           <View style={styles.titleRow}>
-            <View style={styles.flex}>
+            <View style={styles.titleIdentity}>
+              <View style={styles.titleIcon}><Ionicons color={colors.secondary} name="leaf-outline" size={24} /></View>
+              <View style={styles.flex}>
               <Text style={styles.screenTitle}>{isSeller ? 'Mi avance' : user?.role === 'coordinator' ? 'Mi equipo' : isManager ? 'Mis coordinaciones' : 'Vista general'}</Text>
               <Text style={styles.period}>{data?.periodLabel ?? 'Cargando última actualización…'}</Text>
+              </View>
             </View>
             {user?.role === 'admin' ? (
               <Pressable onPress={() => router.push('/(tabs)/admin')} style={styles.adminShortcut}>
@@ -145,26 +159,35 @@ export default function HomeScreen() {
             <Text style={styles.updated}>Mes comercial: {formatUF(totalMonthlyUf)} UF · {data?.periodLabel ?? 'sin datos publicados'}</Text>
           </View>
 
-          <View style={styles.metricsPair}>
+          <View style={styles.metricsRow}>
             <MetricCard detail="cartera vigente" icon="alert-circle-outline" label="MORA" tone={delinquencyTone(moraRate)} value={`${moraRate.toFixed(1)}%`} />
             <MetricCard detail="emitidas" icon="briefcase-outline" label="PRODUCTIVIDAD" tone={productivityTone(productivity)} value={productivity.toFixed(2)} />
+            <MetricCard detail={isSeller ? 'posición anual' : 'personas visibles'} icon="trophy-outline" label={isSeller ? 'RANKING' : 'EQUIPO'} tone="gold" value={isSeller ? `#${Math.max(rankingPosition, 1)}` : `${sellerRows.length}`} />
+            <MetricCard detail="registros" icon="cloud-outline" label="SALESFORCE" value={`${salesforceRecords}`} />
           </View>
-          <View style={styles.metricsPair}>
-            <MetricCard detail="del período" icon="close-circle-outline" label="ANULACIONES" tone={cancellations ? 'red' : 'green'} value={`${cancellations}`} />
-            <MetricCard detail={isSeller ? 'desde última venta' : 'con 3+ días'} icon="calendar-outline" label="DÍAS SIN VENDER" tone={noSaleCount >= 3 ? 'red' : 'green'} value={`${noSaleCount}`} />
+
+          <View style={styles.secondaryMetrics}>
+            <View style={styles.secondaryMetric}>
+              <View style={[styles.secondaryIcon, { backgroundColor: cancellations ? '#FBECE9' : colors.softGreen }]}><Ionicons color={cancellations ? colors.danger : colors.success} name="close-circle-outline" size={19} /></View>
+              <View><Text style={styles.secondaryLabel}>Anulaciones</Text><Text style={[styles.secondaryValue, cancellations ? styles.dangerText : styles.successText]}>{cancellations} del período</Text></View>
+            </View>
+            <View style={styles.secondaryDivider} />
+            <View style={styles.secondaryMetric}>
+              <View style={[styles.secondaryIcon, { backgroundColor: noSaleCount >= 3 ? '#FBECE9' : colors.softGreen }]}><Ionicons color={noSaleCount >= 3 ? colors.danger : colors.success} name="calendar-outline" size={19} /></View>
+              <View><Text style={styles.secondaryLabel}>Días sin vender</Text><Text style={[styles.secondaryValue, noSaleCount >= 3 ? styles.dangerText : styles.successText]}>{noSaleCount} {isSeller ? 'días' : 'personas'}</Text></View>
+            </View>
           </View>
 
           {isSeller ? (
-            <View style={styles.detailGrid}>
-              <View style={styles.detailCard}>
-                <Text style={styles.detailLabel}>CATEGORÍA</Text>
-                <Text style={styles.detailValue}>{ownMetric?.category ?? 'Sin foto publicada'}</Text>
-                <Text style={styles.detailHint}>{ownMetric?.estimatedPrizeClp ? `$${ownMetric.estimatedPrizeClp.toLocaleString('es-CL')} estimado` : 'Solo ventas emitidas'}</Text>
+            <View style={styles.goalsSection}>
+              <View style={styles.sectionHeading}>
+                <View style={styles.sectionTitleRow}><View style={styles.sectionIcon}><Ionicons color={colors.secondary} name="locate-outline" size={20} /></View><Text style={styles.sectionTitle}>Mis metas</Text></View>
+                <Pressable onPress={() => router.push('/goals')}><Text style={styles.detailLink}>Ver detalle  ›</Text></Pressable>
               </View>
-              <View style={styles.detailCard}>
-                <Text style={styles.detailLabel}>SENIOR · {data?.seniorOpen ? 'ABIERTO' : 'CERRADO'}</Text>
-                <Text style={styles.detailValue}>{ownMetric?.seniorLevel ?? 'Sin foto publicada'}</Text>
-                <Text style={styles.detailHint}>{formatUF(seniorEligibleUf(ownMetric, data?.seniorOpen ?? true))} UF · {data?.seniorOpen ? 'cantadas' : 'emitidas'}</Text>
+              <GoalCard badge={`Senior ${data?.seniorOpen ? 'abierto · ventas cantadas' : 'cerrado · ventas emitidas'}`} icon="diamond-outline" insight={seniorUf >= 1950 ? 'Meta cumplida' : `Te faltan ${formatUF(1950 - seniorUf)} UF`} progress={seniorUf / seniorTarget} title={ownMetric?.seniorLevel ?? 'Super Senior'} value={`${formatUF(seniorUf)} / 1.950 UF`} />
+              <View style={styles.goalPair}>
+                <GoalCard badge="Solo emitidas" compact icon="ribbon-outline" insight={ownMetric?.estimatedPrizeClp ? `$${ownMetric.estimatedPrizeClp.toLocaleString('es-CL')} estimado` : 'Premio por definir'} progress={totalMonthlyUf / monthlyGoal} title={ownMetric?.category ?? 'Categoría'} tone="green" value={`${Math.round((totalMonthlyUf / monthlyGoal) * 100)}%`} />
+                <GoalCard badge="Objetivo 1,00" compact icon="briefcase-outline" insight={productivity < 1 ? 'Bajo el mínimo' : 'Dentro de objetivo'} progress={productivity} title="Productividad" tone={productivityTone(productivity)} value={productivity.toFixed(2)} />
               </View>
             </View>
           ) : null}
@@ -190,7 +213,9 @@ export default function HomeScreen() {
                 <View style={styles.workerList}>
                   {coordinators.map((coordinator) => {
                     const coordinatedSellers = sellerRows.filter((seller) => seller.supervisorId === coordinator.id);
-                    return <ScopeCard data={data} key={coordinator.id} sellers={coordinatedSellers} subtitle={`${coordinatedSellers.length} vendedores`} title={coordinator.name} />;
+                    const coordinatorMonthly = coordinatedSellers.reduce((total, seller) => total + Number(data.monthlyEmittedUfByUser[seller.id] ?? 0), 0);
+                    const bestCoordination = Math.max(...coordinators.map((item) => sellerRows.filter((seller) => seller.supervisorId === item.id).reduce((total, seller) => total + Number(data.monthlyEmittedUfByUser[seller.id] ?? 0), 0)), coordinatorMonthly);
+                    return <ScopeCard data={data} key={coordinator.id} monthlyTarget={bestCoordination} sellers={coordinatedSellers} subtitle={`${coordinatedSellers.length} vendedores`} title={coordinator.name} />;
                   })}
                   {!coordinators.length ? <Text style={styles.empty}>Aún no hay coordinadores asignados.</Text> : null}
                 </View>
@@ -207,6 +232,7 @@ export default function HomeScreen() {
                           <Text numberOfLines={1} style={styles.workerName}>{seller.name}</Text>
                           <Text style={styles.workerMeta}>Mes {formatUF(data.monthlyEmittedUfByUser[seller.id] ?? 0)} UF · Sin vender: {sellerDays(metric)}</Text>
                           <Text style={styles.workerMeta}>Anul. {metric?.cancellationCount ?? 0} · Mora <Text style={{ color: delinquencyTone(rate) === 'red' ? colors.danger : delinquencyTone(rate) === 'gold' ? colors.goldText : colors.success }}>{rate.toFixed(1)}%</Text> · Prod. <Text style={sellerProductivity < 1 ? styles.dangerText : styles.successText}>{sellerProductivity.toFixed(2)}</Text></Text>
+                          <View style={styles.workerProgress}><ProgressBar color={delinquencyTone(rate) === 'red' ? colors.danger : colors.secondary} height={5} progress={bestMonthlyUf ? Number(data.monthlyEmittedUfByUser[seller.id] ?? 0) / bestMonthlyUf : 0} /></View>
                         </View>
                         <Text style={styles.workerUf}>{formatUF(data.annualEmittedUfByUser[seller.id] ?? 0)} UF</Text>
                       </View>
@@ -236,9 +262,12 @@ const styles = StyleSheet.create({
   greeting: { marginTop: 35 },
   hello: { color: colors.primary, fontFamily: typography.serif, fontSize: 34, fontWeight: '600' },
   team: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 12, fontWeight: '700', marginTop: 3 },
-  content: { gap: spacing.lg, marginTop: -15, paddingHorizontal: spacing.xl },
+  content: { ...shadows.floating, backgroundColor: colors.surface, borderTopLeftRadius: 32, borderTopRightRadius: 32, gap: spacing.lg, marginTop: -35, overflow: 'hidden', paddingBottom: spacing.xxl, paddingHorizontal: spacing.xl, paddingTop: spacing.xl },
+  panelAccent: { backgroundColor: colors.gold, borderRadius: radii.pill, height: 3, left: spacing.xl, position: 'absolute', top: 0, width: 52 },
   flex: { flex: 1 },
   titleRow: { alignItems: 'center', flexDirection: 'row', gap: spacing.md, justifyContent: 'space-between' },
+  titleIdentity: { alignItems: 'center', flex: 1, flexDirection: 'row', gap: spacing.md },
+  titleIcon: { alignItems: 'center', backgroundColor: colors.softGreen, borderRadius: radii.pill, height: 48, justifyContent: 'center', width: 48 },
   screenTitle: { color: colors.primary, fontFamily: typography.serif, fontSize: 27, fontWeight: '600' },
   period: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 10, marginTop: 3 },
   adminShortcut: { alignItems: 'center', backgroundColor: colors.softGreen, borderRadius: radii.pill, height: 44, justifyContent: 'center', width: 44 },
@@ -252,7 +281,18 @@ const styles = StyleSheet.create({
   salesValue: { color: colors.surface, fontFamily: typography.serif, fontSize: 40, fontWeight: '600', marginTop: spacing.md },
   salesUnit: { color: colors.goldOnDark, fontFamily: typography.sans, fontSize: 15, fontWeight: '800' },
   updated: { color: 'rgba(255,255,255,0.57)', fontFamily: typography.sans, fontSize: 9, marginTop: spacing.sm },
-  metricsPair: { flexDirection: 'row', gap: spacing.sm },
+  metricsRow: { flexDirection: 'row', gap: 7 },
+  secondaryMetrics: { ...shadows.card, alignItems: 'center', backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.lg, borderWidth: 1, flexDirection: 'row', minHeight: 76, paddingHorizontal: spacing.md },
+  secondaryMetric: { alignItems: 'center', flex: 1, flexDirection: 'row', gap: spacing.sm },
+  secondaryIcon: { alignItems: 'center', borderRadius: 12, height: 38, justifyContent: 'center', width: 38 },
+  secondaryLabel: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 9 },
+  secondaryValue: { color: colors.primary, fontFamily: typography.sans, fontSize: 12, fontWeight: '800', marginTop: 2 },
+  secondaryDivider: { backgroundColor: colors.border, height: 42, marginHorizontal: spacing.sm, width: 1 },
+  goalsSection: { gap: spacing.md },
+  goalPair: { flexDirection: 'row', gap: spacing.md },
+  sectionTitleRow: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
+  sectionIcon: { alignItems: 'center', backgroundColor: colors.softGreen, borderRadius: radii.pill, height: 38, justifyContent: 'center', width: 38 },
+  detailLink: { color: colors.goldText, fontFamily: typography.sans, fontSize: 11, fontWeight: '700' },
   detailGrid: { flexDirection: 'row', gap: spacing.md },
   detailCard: { ...shadows.card, backgroundColor: colors.surface, borderRadius: radii.lg, flex: 1, minHeight: 116, padding: spacing.lg },
   detailLabel: { color: colors.goldText, fontFamily: typography.sans, fontSize: 9, fontWeight: '900', letterSpacing: 0.7 },
@@ -282,6 +322,8 @@ const styles = StyleSheet.create({
   scopeStats: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
   scopeStat: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 9 },
   scopeStrong: { fontWeight: '900' },
+  progressCaption: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 8 },
+  workerProgress: { marginTop: spacing.sm },
   dangerText: { color: colors.danger },
   successText: { color: colors.success },
   empty: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 12, lineHeight: 18, padding: spacing.xl, textAlign: 'center' },
