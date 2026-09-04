@@ -227,7 +227,7 @@ export default function ProfileScreen() {
           </View>
 
           <AppButton icon="log-out-outline" label="Cerrar sesión" loading={isLoading} onPress={handleSignOut} variant="secondary" />
-          <Text style={styles.version}>PDR Comercial · Versión 1.1.0</Text>
+          <Text style={styles.version}>PDR Comercial · Versión 1.1.1</Text>
         </View>
       </View>
     </ScreenContainer>
