@@ -18,11 +18,12 @@ interface GoalCardProps {
 
 export function GoalCard({ title, value, progress, insight, icon, badge, compact = false, tone = 'gold' }: GoalCardProps) {
   const accent = tone === 'red' ? colors.danger : tone === 'green' ? colors.success : colors.gold;
+  const iconBackground = tone === 'red' ? '#FBECE9' : colors.primary;
   return (
     <View style={[styles.card, compact && styles.compactCard]}>
       <View style={styles.top}>
         <View style={styles.titleRow}>
-          <View style={[styles.icon, compact && styles.compactIcon]}>
+          <View style={[styles.icon, compact && styles.compactIcon, { backgroundColor: iconBackground }]}>
             <Ionicons color={accent} name={icon} size={compact ? 17 : 22} />
           </View>
           <View style={styles.heading}>
@@ -32,7 +33,7 @@ export function GoalCard({ title, value, progress, insight, icon, badge, compact
         </View>
         <Text numberOfLines={2} style={[styles.value, compact && styles.compactValue, { color: accent }]}>{value}</Text>
       </View>
-      <ProgressBar height={compact ? 7 : 9} progress={progress} />
+      <ProgressBar color={accent} height={compact ? 7 : 9} progress={progress} />
       <Text style={styles.insight}>{insight}</Text>
     </View>
   );
@@ -40,11 +41,11 @@ export function GoalCard({ title, value, progress, insight, icon, badge, compact
 
 const styles = StyleSheet.create({
   card: { ...shadows.card, backgroundColor: colors.surface, borderRadius: radii.lg, gap: spacing.md, padding: spacing.xl },
-  compactCard: { gap: 10, padding: spacing.lg },
+  compactCard: { flex: 1, gap: 10, padding: spacing.lg },
   top: { alignItems: 'flex-start', flexDirection: 'row', gap: spacing.md, justifyContent: 'space-between' },
   titleRow: { alignItems: 'center', flex: 1, flexDirection: 'row', gap: 10, minWidth: 0 },
   heading: { flex: 1, minWidth: 0 },
-  icon: { alignItems: 'center', backgroundColor: colors.goldSoft, borderRadius: radii.md, height: 42, justifyContent: 'center', width: 42 },
+  icon: { alignItems: 'center', borderRadius: radii.pill, height: 50, justifyContent: 'center', width: 50 },
   compactIcon: { borderRadius: 12, height: 36, width: 36 },
   title: { color: colors.text, fontFamily: typography.serif, fontSize: 17, fontWeight: '600' },
   compactTitle: { fontSize: 16 },
