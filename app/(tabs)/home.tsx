@@ -31,6 +31,14 @@ function sellerDays(metric?: Partial<MetricSnapshot>): string {
   return days === null ? 'Sin fecha' : `${days} día${days === 1 ? '' : 's'}`;
 }
 
+function commercialMonth(metric?: Partial<MetricSnapshot>): string {
+  if (!metric?.periodStart) return 'comercial';
+  const date = new Date(`${metric.periodStart}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return 'comercial';
+  const month = new Intl.DateTimeFormat('es-CL', { month: 'short' }).format(date).replace('.', '');
+  return month.charAt(0).toUpperCase() + month.slice(1);
+}
+
 function ScopeCard({ title, subtitle, sellers, data, monthlyTarget }: { title: string; subtitle: string; sellers: VisibleProfile[]; data: DashboardData; monthlyTarget: number }) {
   const annual = sellers.reduce((total, seller) => total + Number(data.annualEmittedUfByUser[seller.id] ?? 0), 0);
   const monthly = sellers.reduce((total, seller) => total + Number(data.monthlyEmittedUfByUser[seller.id] ?? 0), 0);
@@ -184,10 +192,10 @@ export default function HomeScreen() {
                 <View style={styles.sectionTitleRow}><View style={styles.sectionIcon}><Ionicons color={colors.secondary} name="locate-outline" size={20} /></View><Text style={styles.sectionTitle}>Mis metas</Text></View>
                 <Pressable onPress={() => router.push('/goals')}><Text style={styles.detailLink}>Ver detalle  ›</Text></Pressable>
               </View>
-              <GoalCard badge={`Senior ${data?.seniorOpen ? 'abierto · ventas cantadas' : 'cerrado · ventas emitidas'}`} icon="diamond-outline" insight={seniorUf >= 1950 ? 'Meta cumplida' : `Te faltan ${formatUF(1950 - seniorUf)} UF`} progress={seniorUf / seniorTarget} title={ownMetric?.seniorLevel ?? 'Super Senior'} value={`${formatUF(seniorUf)} / 1.950 UF`} />
+              <GoalCard icon="diamond-outline" insight={seniorUf >= 1950 ? 'Meta cumplida' : `Te faltan ${formatUF(1950 - seniorUf)} UF`} progress={seniorUf / seniorTarget} title={ownMetric?.seniorLevel ?? 'Super Senior'} value={`${formatUF(seniorUf)} / 1.950 UF`} />
               <View style={styles.goalPair}>
-                <GoalCard badge="Solo emitidas" compact icon="ribbon-outline" insight={ownMetric?.estimatedPrizeClp ? `$${ownMetric.estimatedPrizeClp.toLocaleString('es-CL')} estimado` : 'Premio por definir'} progress={totalMonthlyUf / monthlyGoal} title={ownMetric?.category ?? 'Categoría'} tone="green" value={`${Math.round((totalMonthlyUf / monthlyGoal) * 100)}%`} />
-                <GoalCard badge="Objetivo 1,00" compact icon="briefcase-outline" insight={productivity < 1 ? 'Bajo el mínimo' : 'Dentro de objetivo'} progress={productivity} title="Productividad" tone={productivityTone(productivity)} value={productivity.toFixed(2)} />
+                <GoalCard badge={ownMetric?.category ?? 'Sin categoría'} compact icon="star-outline" insight="" progress={totalMonthlyUf / monthlyGoal} title={`Categoría ${commercialMonth(ownMetric)}`} tone="green" value={`${Math.round((totalMonthlyUf / monthlyGoal) * 100)}%`} />
+                <GoalCard badge={productivity < 1 ? 'Bajo el mínimo' : 'Dentro de objetivo'} compact icon="briefcase-outline" insight="" progress={productivity} title="Productividad" tone={productivityTone(productivity)} value={productivity.toFixed(2)} />
               </View>
             </View>
           ) : null}
