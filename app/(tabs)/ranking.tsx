@@ -6,7 +6,6 @@ import { AppHeader } from '@/components/AppHeader';
 import { RankingRow } from '@/components/RankingRow';
 import { RankingTabs } from '@/components/RankingTabs';
 import { ScreenContainer } from '@/components/ScreenContainer';
-import { sellerRanking } from '@/data/mockData';
 import { useAuth } from '@/hooks/useAuth';
 import { snapshotService } from '@/services/snapshotService';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
@@ -21,22 +20,23 @@ function rankingCopy(role?: string) {
 
 export default function RankingScreen() {
   const [period, setPeriod] = useState<RankingPeriod>('annual');
-  const [entries, setEntries] = useState<RankingEntry[]>(sellerRanking);
+  const [loaded, setLoaded] = useState<{userId:string;period:RankingPeriod;entries:RankingEntry[]}|null>(null);
   const [error, setError] = useState('');
   const { isPreviewing, user } = useAuth();
+  const entries = useMemo(() => loaded?.userId === user?.id && loaded?.period === period ? loaded.entries : [], [loaded, period, user?.id]);
 
   useEffect(() => {
     if (!user) return;
     let active = true;
     snapshotService.getRanking(user, period, { preview: isPreviewing })
-      .then((result) => { if (active) { setEntries(result); setError(''); } })
+      .then((result) => { if (active) { setLoaded({userId:user.id,period,entries:result}); setError(''); } })
       .catch(() => { if (active) setError('Error al comunicar con el servidor'); });
     return () => { active = false; };
   }, [isPreviewing, period, user]);
 
   const copy = rankingCopy(user?.role);
   const totalUf = useMemo(() => entries.reduce((total, entry) => total + entry.value, 0), [entries]);
-  const currentEntry = entries.find((entry) => entry.isCurrentUser) ?? entries[0];
+  const currentEntry = entries.find((entry) => entry.isCurrentUser) ?? (user?.role === 'sales_manager' ? entries[0] : undefined);
   const nextEntry = currentEntry ? entries.find((entry) => entry.position === currentEntry.position - 1) : undefined;
   const gap = currentEntry && nextEntry ? Math.max(nextEntry.value - currentEntry.value, 0) : 0;
 

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { ComponentProps, useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ComponentProps, useEffect, useState } from 'react';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { AppHeader } from '@/components/AppHeader';
 import { AppButton } from '@/components/Buttons';
@@ -9,9 +9,9 @@ import { ScreenContainer } from '@/components/ScreenContainer';
 import { UserAvatar } from '@/components/UserAvatar';
 import { currentUser } from '@/data/mockData';
 import { useAuth } from '@/hooks/useAuth';
-import { adminService } from '@/services/adminService';
+import { individualSheetService, WorkerRow, workerUser } from '@/services/individualSheetService';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
-import { AdminUser, roleLabels, User, UserRole } from '@/types';
+import { roleLabels, User, UserRole } from '@/types';
 import { formatDate } from '@/utils/format';
 import { formatRut } from '@/utils/rut';
 
@@ -32,83 +32,23 @@ const profileDetails: { icon: IconName; label: string; getValue: (profile: User)
   { icon: 'calendar-outline', label: 'Fecha de ingreso', getValue: (profile) => formatDate(profile.joinDate) },
 ];
 
-function initials(name: string): string {
-  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
-}
-
-function accountToPreviewUser(account: AdminUser): User {
-  return {
-    id: account.id,
-    name: account.name,
-    email: '',
-    rut: account.rut,
-    role: account.role,
-    avatar: initials(account.name),
-    teamId: account.teamId,
-    supervisorId: account.supervisorId,
-    salesManagerId: account.salesManagerId,
-    joinDate: account.createdAt.slice(0, 10),
-    employmentStatus: account.employmentStatus ?? 'active',
-    active: account.active,
-    mustChangePassword: false,
-  };
-}
-
-function demoPreviewUser(role: PreviewRole): User {
-  const profile = role === 'seller'
-    ? { name: 'Erika Sepúlveda', rut: '158427618', teamId: 'preview-team-cristian', supervisorId: 'preview-coordinator', salesManagerId: 'preview-sales-manager', joinDate: '2022-03-14' }
-    : role === 'coordinator'
-      ? { name: 'Cristian Hernández', rut: '132456789', teamId: 'preview-team-cristian', supervisorId: '', salesManagerId: 'preview-sales-manager', joinDate: '2020-08-10' }
-      : { name: 'Karin Etcheverry', rut: '146789012', teamId: '', supervisorId: '', salesManagerId: '', joinDate: '2018-05-21' };
-  return {
-    id: `preview-${role}`,
-    name: profile.name,
-    email: '',
-    rut: profile.rut,
-    role,
-    avatar: initials(profile.name),
-    teamId: profile.teamId,
-    supervisorId: profile.supervisorId,
-    salesManagerId: profile.salesManagerId,
-    joinDate: profile.joinDate,
-    birthDate: role === 'seller' ? '1990-09-03' : undefined,
-    employmentStatus: 'active',
-    active: true,
-    mustChangePassword: false,
-  };
-}
-
 export default function ProfileScreen() {
   const router = useRouter();
   const { authenticatedUser, isLoading, isPreviewing, signOut, startPreview, user } = useAuth();
   const profile = user ?? currentUser;
-  const [managedUsers, setManagedUsers] = useState<AdminUser[]>([]);
+  const [managedUsers, setManagedUsers] = useState<WorkerRow[]>([]);
   const [selectedPreviewRole, setSelectedPreviewRole] = useState<PreviewRole | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(authenticatedUser?.role === 'admin');
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState('');
 
+  const [query, setQuery] = useState('');
   useEffect(() => {
-    if (authenticatedUser?.role !== 'admin' || isPreviewing) return;
-    let active = true;
-    adminService.list()
-      .then((result) => {
-        if (active) setManagedUsers(result.users);
-      })
-      .catch((loadError) => {
-        if (active) setPreviewError(loadError instanceof Error ? loadError.message : 'No fue posible cargar los perfiles disponibles.');
-      })
-      .finally(() => {
-        if (active) setPreviewLoading(false);
-      });
-    return () => { active = false; };
-  }, [authenticatedUser?.role, isPreviewing]);
-
-  const previewCandidates = useMemo(
-    () => selectedPreviewRole
-      ? managedUsers.filter((account) => account.active && account.role === selectedPreviewRole).sort((left, right) => left.name.localeCompare(right.name, 'es'))
-      : [],
-    [managedUsers, selectedPreviewRole],
-  );
+    if(authenticatedUser?.role !== 'admin'||isPreviewing||!selectedPreviewRole||query.trim().length<2)return;
+    let active=true;
+    const timer=setTimeout(()=>{setPreviewLoading(true);individualSheetService.search(query,selectedPreviewRole).then(rows=>{if(active)setManagedUsers(rows);}).catch(e=>{if(active)setPreviewError(e.message);}).finally(()=>{if(active)setPreviewLoading(false);});},250);
+    return ()=>{active=false;clearTimeout(timer);};
+  },[authenticatedUser?.role,isPreviewing,selectedPreviewRole,query]);
+  const previewCandidates=managedUsers;
 
   const canPreviewRoles = authenticatedUser?.role === 'admin' && !isPreviewing;
 
@@ -167,7 +107,7 @@ export default function ProfileScreen() {
                   <Pressable
                     accessibilityRole="button"
                     key={item.role}
-                    onPress={() => { setSelectedPreviewRole(item.role); setPreviewError(''); }}
+                    onPress={() => { setSelectedPreviewRole(item.role); setQuery(''); setManagedUsers([]); setPreviewError(''); }}
                     style={({ pressed }) => [styles.previewRoleButton, selectedPreviewRole === item.role && styles.previewRoleButtonActive, pressed && styles.previewPressed]}
                   >
                     <Ionicons color={selectedPreviewRole === item.role ? colors.surface : colors.primary} name={item.icon} size={19} />
@@ -179,40 +119,30 @@ export default function ProfileScreen() {
 
               {previewLoading ? <Text style={styles.previewStatus}>Cargando cuentas disponibles…</Text> : null}
               {previewError ? <Text accessibilityRole="alert" style={styles.previewError}>{previewError}</Text> : null}
-              {selectedPreviewRole && !previewLoading ? (
+              {selectedPreviewRole ? (
                 <View style={styles.previewPicker}>
-                  <View style={styles.emptyPreview}>
-                    <Text style={styles.previewPickerLabel}>Simulación completa</Text>
-                    <Text style={styles.emptyPreviewText}>Abre esta experiencia con avance comercial, mora, productividad, Salesforce, categorías, Senior y ranking como si los documentos del período ya estuvieran publicados.</Text>
-                    <AppButton
-                      icon="sparkles-outline"
-                      label="Abrir con datos de ejemplo"
-                      onPress={() => openPreview(demoPreviewUser(selectedPreviewRole))}
-                      variant="secondary"
-                    />
-                  </View>
-
+                  <TextInput accessibilityLabel="Buscar trabajador por nombre o apellido" placeholder="Escribe un nombre o apellido…" value={query} onChangeText={value=>{setQuery(value);setManagedUsers([]);setPreviewError('');setPreviewLoading(false);}} style={{borderWidth:1,borderColor:colors.border,borderRadius:12,padding:14,color:colors.primary}} />
                   {previewCandidates.length ? (
                     <>
-                      <Text style={styles.previewPickerLabel}>O elige una cuenta activa</Text>
+                      <Text style={styles.previewPickerLabel}>Selecciona el trabajador</Text>
                       {previewCandidates.map((account) => (
                         <Pressable
                           accessibilityLabel={`Ver la aplicación como ${account.name}, ${roleLabels[account.role]}`}
                           accessibilityRole="button"
                           key={account.id}
-                          onPress={() => openPreview(accountToPreviewUser(account))}
+                          onPress={() => openPreview(workerUser(account))}
                           style={({ pressed }) => [styles.previewAccount, pressed && styles.previewPressed]}
                         >
                           <UserAvatar name={account.name} size={38} />
                           <View style={styles.previewAccountCopy}>
                             <Text numberOfLines={1} style={styles.previewAccountName}>{account.name}</Text>
-                            <Text style={styles.previewAccountRole}>{roleLabels[account.role]} · se mostrarán datos de ejemplo</Text>
+                            <Text style={styles.previewAccountRole}>{roleLabels[account.role]} · datos reales publicados</Text>
                           </View>
                           <Ionicons color={colors.primary} name="eye-outline" size={19} />
                         </Pressable>
                       ))}
                     </>
-                  ) : <Text style={styles.emptyPreviewText}>Todavía no hay cuentas activas con este perfil; la simulación superior permanece disponible.</Text>}
+                  ) : <Text style={styles.emptyPreviewText}>Escribe al menos dos letras. Se mostrarán hasta 8 coincidencias de trabajadores vigentes.</Text>}
                 </View>
               ) : null}
             </View>
