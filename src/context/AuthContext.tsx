@@ -66,6 +66,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const startPreview = useCallback((targetUser: User) => {
     if (authenticatedUser?.role !== 'admin') throw new Error('Solo el administrador puede iniciar una vista previa.');
     if (targetUser.role === 'admin') throw new Error('Selecciona un perfil operativo para la vista previa.');
+    if (!targetUser.active || targetUser.employmentStatus !== 'active') throw new Error('Error al comunicar con el servidor');
     setPreviewUser(targetUser);
   }, [authenticatedUser]);
 
