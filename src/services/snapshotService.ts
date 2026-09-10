@@ -1,75 +1,10 @@
 import { currentUser, executiveMetrics, sellerRanking, teamRanking } from '@/data/mockData';
 import { supabase } from '@/services/supabase';
-import { DashboardData, EmploymentStatus, MetricSnapshot, RankingEntry, RankingPeriod, SnapshotKind, User, UserRole, VisibleProfile } from '@/types';
-import { emittedUf } from '@/utils/commercialRules';
+import { DashboardData, MetricSnapshot, RankingEntry, RankingPeriod, User, VisibleProfile } from '@/types';
+import { individualSheetService } from './individualSheetService';
 
 interface SnapshotRequestOptions {
   preview?: boolean;
-}
-
-interface ProfileRow {
-  id: string;
-  full_name: string;
-  role: UserRole;
-  avatar_url: string | null;
-  team_id: number | null;
-  supervisor_id: string | null;
-  sales_manager_id: string | null;
-  birth_date?: string | null;
-  employment_status?: EmploymentStatus | null;
-  active: boolean;
-}
-
-interface SnapshotRow {
-  id: number;
-  batch_id: string;
-  user_id: string;
-  kind: SnapshotKind;
-  period_start: string;
-  period_end: string;
-  source_name: string;
-  published_at: string;
-  production_uf: number | null;
-  gross_uf: number | null;
-  sepultura_uf: number | null;
-  ssff_uf: number | null;
-  cinerario_uf: number | null;
-  ssaa_uf: number | null;
-  emitted_uf: number | null;
-  not_emitted_uf: number | null;
-  not_uploaded_uf: number | null;
-  cancellation_uf: number | null;
-  cancellation_count: number | null;
-  sung_uf: number | null;
-  quarter_total_uf: number | null;
-  eligible_total_uf: number | null;
-  business_count: number | null;
-  productivity: number | null;
-  smad_count: number | null;
-  rest_count: number | null;
-  ssff_count: number | null;
-  delinquent_clients_count: number | null;
-  delinquency_rate: number | null;
-  salesforce_records: number | null;
-  tenure_months: number | null;
-  ranking_position: number | null;
-  category: string | null;
-  senior_level: string | null;
-  estimated_prize_clp: number | null;
-  last_sale_date: string | null;
-  debt_installments_count: number | null;
-  debt_uf_0: number | null;
-  debt_uf_8: number | null;
-  senior_status: 'open' | 'closed' | null;
-}
-
-interface CommercialSummaryRow {
-  user_id: string;
-  annual_emitted_uf: number | null;
-  monthly_emitted_uf: number | null;
-  last_sale_date: string | null;
-  monthly_business_count: number | null;
-  monthly_cancellation_count: number | null;
 }
 
 interface PreviewMetricSeed {
@@ -117,72 +52,6 @@ function initials(name: string): string {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
 }
 
-function optionalNumber(value: number | null | undefined): number | undefined {
-  if (value === null || value === undefined) return undefined;
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : undefined;
-}
-
-function mapSnapshot(row: SnapshotRow): MetricSnapshot {
-  return {
-    id: row.id,
-    batchId: row.batch_id,
-    userId: row.user_id,
-    kind: row.kind,
-    periodStart: row.period_start,
-    periodEnd: row.period_end,
-    sourceName: row.source_name,
-    publishedAt: row.published_at,
-    productionUf: optionalNumber(row.production_uf),
-    grossUf: optionalNumber(row.gross_uf),
-    sepulturaUf: optionalNumber(row.sepultura_uf),
-    ssffUf: optionalNumber(row.ssff_uf),
-    cinerarioUf: optionalNumber(row.cinerario_uf),
-    ssaaUf: optionalNumber(row.ssaa_uf),
-    emittedUf: optionalNumber(row.emitted_uf),
-    notEmittedUf: optionalNumber(row.not_emitted_uf),
-    notUploadedUf: optionalNumber(row.not_uploaded_uf),
-    cancellationUf: optionalNumber(row.cancellation_uf),
-    cancellationCount: optionalNumber(row.cancellation_count),
-    sungUf: optionalNumber(row.sung_uf),
-    quarterTotalUf: optionalNumber(row.quarter_total_uf),
-    eligibleTotalUf: optionalNumber(row.eligible_total_uf),
-    businessCount: optionalNumber(row.business_count),
-    productivity: optionalNumber(row.productivity),
-    smadCount: optionalNumber(row.smad_count),
-    restCount: optionalNumber(row.rest_count),
-    ssffCount: optionalNumber(row.ssff_count),
-    delinquentClientsCount: optionalNumber(row.delinquent_clients_count),
-    delinquencyRate: optionalNumber(row.delinquency_rate),
-    salesforceRecords: optionalNumber(row.salesforce_records),
-    tenureMonths: optionalNumber(row.tenure_months),
-    rankingPosition: optionalNumber(row.ranking_position),
-    category: row.category ?? undefined,
-    seniorLevel: row.senior_level ?? undefined,
-    estimatedPrizeClp: optionalNumber(row.estimated_prize_clp),
-    lastSaleDate: row.last_sale_date ?? undefined,
-    debtInstallmentsCount: optionalNumber(row.debt_installments_count),
-    debtUf0: optionalNumber(row.debt_uf_0),
-    debtUf8: optionalNumber(row.debt_uf_8),
-    seniorStatus: row.senior_status ?? undefined,
-  };
-}
-
-function mapProfile(row: ProfileRow): VisibleProfile {
-  return {
-    id: row.id,
-    name: row.full_name,
-    role: row.role,
-    avatar: row.avatar_url ?? initials(row.full_name),
-    teamId: row.team_id?.toString() ?? '',
-    supervisorId: row.supervisor_id ?? '',
-    salesManagerId: row.sales_manager_id ?? '',
-    birthDate: row.birth_date ?? undefined,
-    employmentStatus: row.employment_status ?? 'active',
-    active: row.active,
-  };
-}
-
 function latestByUser(snapshots: MetricSnapshot[]): Record<string, Partial<MetricSnapshot>> {
   return [...snapshots]
     .sort((left, right) => left.publishedAt.localeCompare(right.publishedAt))
@@ -193,23 +62,6 @@ function latestByUser(snapshots: MetricSnapshot[]): Record<string, Partial<Metri
       result[snapshot.userId] = { ...result[snapshot.userId], ...definedValues };
       return result;
     }, {});
-}
-
-function profileIsVisibleTo(user: User, profile: VisibleProfile): boolean {
-  if (user.role === 'admin') return true;
-  if (profile.id === user.id) return true;
-  if (user.role === 'coordinator') return profile.supervisorId === user.id;
-  if (user.role === 'sales_manager') return profile.salesManagerId === user.id;
-  return false;
-}
-
-function scopeDashboard(user: User, profiles: VisibleProfile[], snapshots: MetricSnapshot[]) {
-  const visibleProfiles = profiles.filter((profile) => profile.active && profile.employmentStatus === 'active' && profileIsVisibleTo(user, profile));
-  const visibleIds = new Set(visibleProfiles.map((profile) => profile.id));
-  return {
-    profiles: visibleProfiles,
-    snapshots: snapshots.filter((snapshot) => visibleIds.has(snapshot.userId)),
-  };
 }
 
 function userToVisibleProfile(user: User): VisibleProfile {
@@ -478,109 +330,18 @@ function demoDashboard(): DashboardData {
 
 export const snapshotService = {
   async getDashboard(user: User, options: SnapshotRequestOptions = {}): Promise<DashboardData> {
-    if (options.preview) return previewDashboard(user);
+    if (options.preview && user.id.startsWith('preview-')) return previewDashboard(user);
     if (!supabase) return demoDashboard();
+    return individualSheetService.dashboard(user);
 
-    const [profilesResult, snapshotsResult, summaryResult] = await Promise.all([
-      supabase
-        .from('profiles')
-        .select('*')
-        .eq('active', true),
-      supabase.from('latest_metric_snapshots').select('*'),
-      supabase.rpc('commercial_dashboard_summary'),
-    ]);
-
-    if (profilesResult.error) throw new Error(`No fue posible cargar el equipo: ${profilesResult.error.message}`);
-    if (snapshotsResult.error) throw new Error(`No fue posible cargar los indicadores: ${snapshotsResult.error.message}`);
-
-    const allProfiles = (profilesResult.data as ProfileRow[]).map(mapProfile);
-    const allSnapshots = (snapshotsResult.data as SnapshotRow[]).map(mapSnapshot);
-    const { profiles, snapshots } = scopeDashboard(user, allProfiles, allSnapshots);
-    const visibleIds = new Set(profiles.map((profile) => profile.id));
-    const summaryRows = summaryResult.error ? [] : (summaryResult.data ?? []) as CommercialSummaryRow[];
-    const annualEmittedUfByUser = Object.fromEntries(summaryRows
-      .filter((row) => visibleIds.has(row.user_id))
-      .map((row) => [row.user_id, Number(row.annual_emitted_uf ?? 0)]));
-    const monthlyEmittedUfByUser = Object.fromEntries(summaryRows
-      .filter((row) => visibleIds.has(row.user_id))
-      .map((row) => [row.user_id, Number(row.monthly_emitted_uf ?? 0)]));
-    const latestByUserResult = latestByUser(snapshots);
-    profiles.forEach((profile) => {
-      const summary = summaryRows.find((row) => row.user_id === profile.id);
-      if (summary) {
-        latestByUserResult[profile.id] = {
-          ...latestByUserResult[profile.id],
-          lastSaleDate: summary.last_sale_date ?? latestByUserResult[profile.id]?.lastSaleDate,
-          businessCount: Number(summary.monthly_business_count ?? latestByUserResult[profile.id]?.businessCount ?? 0),
-          cancellationCount: Number(summary.monthly_cancellation_count ?? latestByUserResult[profile.id]?.cancellationCount ?? 0),
-        };
-      }
-      if (!(profile.id in annualEmittedUfByUser)) annualEmittedUfByUser[profile.id] = emittedUf(latestByUserResult[profile.id]);
-      if (!(profile.id in monthlyEmittedUfByUser)) monthlyEmittedUfByUser[profile.id] = emittedUf(latestByUserResult[profile.id]);
-    });
-    const latest = snapshots.reduce<MetricSnapshot | null>((found, row) => {
-      if (!found || row.publishedAt > found.publishedAt) return row;
-      return found;
-    }, null);
-
-    return {
-      profiles,
-      snapshots,
-      latestByUser: latestByUserResult,
-      annualEmittedUfByUser,
-      monthlyEmittedUfByUser,
-      periodLabel: latest ? `${latest.periodStart} — ${latest.periodEnd}` : 'Sin carga publicada',
-      seniorOpen: !snapshots.some((snapshot) => snapshot.kind === 'senior' && snapshot.seniorStatus === 'closed'),
-    };
   },
 
   async getRanking(user: User, period: RankingPeriod, options: SnapshotRequestOptions = {}): Promise<RankingEntry[]> {
-    if (options.preview) return previewRanking(user, period);
+    if (options.preview && user.id.startsWith('preview-')) return previewRanking(user, period);
     if (!supabase) return [];
-    const result = await supabase.rpc('commercial_ranking', { period_scope: period });
-    if (result.error) {
-      if (!['seller', 'admin'].includes(user.role)) throw new Error('La función de ranking por rol aún no está publicada.');
-      const legacy = await supabase.rpc('ranking_leaderboard');
-      if (legacy.error) throw new Error(`No fue posible cargar el ranking: ${legacy.error.message}`);
-      return ((legacy.data ?? []) as {
-        user_id: string;
-        display_name: string;
-        avatar_url: string | null;
-        team_id: number | null;
-        team_name: string | null;
-        value: number;
-        ranking_position: number | null;
-      }[]).map((row, index) => ({
-        userId: row.user_id,
-        name: row.display_name,
-        avatar: row.avatar_url ?? initials(row.display_name),
-        value: Number(row.value),
-        position: row.ranking_position ?? index + 1,
-        teamId: row.team_id?.toString() ?? '',
-        subtitle: row.team_name ?? 'Sin equipo asignado',
-        isCurrentUser: row.user_id === user.id,
-      }));
-    }
-    const data = result.data;
-    return ((data ?? []) as {
-      entity_id: string;
-      display_name: string;
-      avatar_url: string | null;
-      team_id: number | null;
-      team_name: string | null;
-      value: number;
-      ranking_position: number | null;
-      is_current: boolean;
-    }[]).map((row, index) => ({
-      userId: row.entity_id,
-      name: row.display_name,
-      avatar: row.avatar_url ?? initials(row.display_name),
-      value: Number(row.value),
-      position: row.ranking_position ?? index + 1,
-      teamId: row.team_id?.toString() ?? '',
-      subtitle: row.team_name ?? 'Sin equipo asignado',
-      isCurrentUser: row.is_current,
-    }));
+    const independent = await supabase.rpc('individual_sheet_ranking', {p_period:period,p_target:options.preview?user.id:null});
+    if(independent.error)throw Error(independent.error.message);
+    return independent.data??[];
   },
 
   async getSellerRanking(user: User, options: SnapshotRequestOptions = {}): Promise<RankingEntry[]> {

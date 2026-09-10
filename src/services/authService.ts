@@ -3,6 +3,7 @@ import { isSupabaseConfigured, supabase } from '@/services/supabase';
 import { EmploymentStatus, User, UserRole } from '@/types';
 import { isEmploymentBlocked } from '@/utils/commercialRules';
 import { isValidRut, normalizeRut, rutToInternalEmail } from '@/utils/rut';
+import { WorkerRow, workerUser } from './individualSheetService';
 
 const authMode: 'demo' | 'supabase' = isSupabaseConfigured ? 'supabase' : 'demo';
 
@@ -60,6 +61,18 @@ async function getProfile(userId: string): Promise<User> {
   if (isEmploymentBlocked(user.employmentStatus, user.active)) {
     await supabase.auth.signOut();
     throw new Error('Error al comunicar con el servidor');
+  }
+  if (user.role !== 'admin') {
+    const roster = await supabase.from('commercial_workers').select('*').eq('rut', normalizeRut(user.rut)).maybeSingle();
+    if (roster.error || !roster.data || !roster.data.active || roster.data.status !== 'active') {
+      await supabase.auth.signOut();
+      throw new Error('Error al comunicar con el servidor');
+    }
+    // Login UUID and account settings remain intact; role/status come from the authoritative roster.
+    const worker = workerUser(roster.data as WorkerRow);
+    return {...user, name:worker.name, role:worker.role, employmentStatus:worker.employmentStatus, active:worker.active,
+      supervisorId:worker.supervisorId, salesManagerId:worker.salesManagerId, teamId:worker.teamId,
+      joinDate:worker.joinDate, birthDate:worker.birthDate};
   }
   return user;
 }
