@@ -22,7 +22,7 @@ export function emittedUf(metric?: Partial<MetricSnapshot>): number {
 
 export function seniorEligibleUf(metric: Partial<MetricSnapshot> | undefined, seniorOpen: boolean): number {
   if (!metric) return 0;
-  if (seniorOpen) return Number(metric.sungUf ?? metric.quarterTotalUf ?? 0);
+  if (seniorOpen) return Number(metric.eligibleTotalUf ?? metric.sungUf ?? metric.quarterTotalUf ?? 0);
   return Number(metric.emittedUf ?? metric.eligibleTotalUf ?? 0);
 }
 
