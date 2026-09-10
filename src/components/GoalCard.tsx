@@ -19,12 +19,13 @@ interface GoalCardProps {
 export function GoalCard({ title, value, progress, insight, icon, badge, compact = false, tone = 'gold' }: GoalCardProps) {
   const accent = tone === 'red' ? colors.danger : tone === 'green' ? colors.success : colors.gold;
   const iconBackground = tone === 'red' ? '#FBECE9' : colors.primary;
+  const iconColor = tone === 'red' ? colors.danger : colors.goldOnDark;
 
   if (compact) {
     return (
       <View style={styles.compactCard}>
         <View style={[styles.compactIcon, { backgroundColor: iconBackground }]}>
-          <Ionicons color={accent} name={icon} size={20} />
+          <Ionicons color={iconColor} name={icon} size={23} />
         </View>
         <View style={styles.compactBody}>
           <View style={styles.compactHeading}>
@@ -41,7 +42,7 @@ export function GoalCard({ title, value, progress, insight, icon, badge, compact
   return (
     <View style={styles.card}>
       <View style={[styles.icon, { backgroundColor: iconBackground }]}>
-        <Ionicons color={accent} name={icon} size={28} />
+        <Ionicons color={iconColor} name={icon} size={32} />
       </View>
       <View style={styles.body}>
         <View style={styles.top}>
