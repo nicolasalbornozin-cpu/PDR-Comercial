@@ -68,6 +68,15 @@ export const snapshotRefreshCadence: Record<SnapshotKind, string> = {
 };
 
 export interface MetricSnapshot {
+  categoryUf?: number;
+  categoryTargetUf?: number;
+  categoryRemaining?: string;
+  categoryLabel?: string;
+    seniorRemaining?: string;
+    seniorTargetUf?: number;
+  debtUf08?: number;
+  debtSalesCount?: number;
+  sauceRisk?: number;
   id: number;
   batchId: string;
   userId: string;
