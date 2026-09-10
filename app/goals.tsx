@@ -16,20 +16,25 @@ import { delinquencyTone, productivityTone, seniorEligibleUf } from '@/utils/com
 
 export default function GoalsScreen() {
   const { isPreviewing, user } = useAuth();
-  const [data, setData] = useState<DashboardData | null>(null);
+  const [loaded, setLoaded] = useState<{userId:string;data:DashboardData}|null>(null);
+  const data = loaded?.userId === user?.id ? loaded?.data ?? null : null;
 
   useEffect(() => {
     if (!user) return;
     let active = true;
     snapshotService.getDashboard(user, { preview: isPreviewing }).then((result) => {
-      if (active) setData(result);
+      if (active) setLoaded({userId:user.id,data:result});
     }).catch(() => undefined);
     return () => { active = false; };
   }, [isPreviewing, user]);
 
   const metric = user && data ? data.latestByUser[user.id] : undefined;
   const seniorValue = seniorEligibleUf(metric, data?.seniorOpen ?? true);
-  const categoryValue = user && data ? Number(data.monthlyEmittedUfByUser[user.id] ?? 0) : 0;
+  const categoryValue = Number(metric?.categoryUf ?? 0);
+  const categoryTarget = metric?.categoryTargetUf ?? 0;
+  const validLevel = (level?:string) => Boolean(level && !/^(no|sin|pendiente|en carrera)/i.test(level));
+  const completed = Number(validLevel(metric?.category)) + Number(validLevel(metric?.seniorLevel)) + Number(metric?.productivity !== undefined && metric.productivity >= 1) + Number(metric?.delinquencyRate !== undefined && metric.delinquencyRate < 20);
+  const available = Number(metric?.categoryUf !== undefined) + Number(metric?.eligibleTotalUf !== undefined) + Number(metric?.productivity !== undefined) + Number(metric?.delinquencyRate !== undefined);
   const productivityValue = Number(metric?.productivity ?? 0);
   const delinquencyValue = Number(metric?.delinquencyRate ?? 0);
   const moraTone = delinquencyTone(delinquencyValue);
@@ -55,7 +60,7 @@ export default function GoalsScreen() {
             <View style={styles.summaryItem}>
               <View style={styles.summaryIcon}><Ionicons color={colors.secondary} name="checkmark-circle" size={21} /></View>
               <View>
-                <Text style={styles.summaryValue}>3</Text>
+                <Text style={styles.summaryValue}>{completed}</Text>
                 <Text style={styles.summaryLabel}>metas cumplidas</Text>
               </View>
             </View>
@@ -63,16 +68,16 @@ export default function GoalsScreen() {
             <View style={styles.summaryItem}>
               <View style={[styles.summaryIcon, styles.summaryIconGold]}><Ionicons color={colors.gold} name="hourglass-outline" size={20} /></View>
               <View>
-                <Text style={styles.summaryValue}>1</Text>
+                <Text style={styles.summaryValue}>{Math.max(available-completed,0)}</Text>
                 <Text style={styles.summaryLabel}>en progreso</Text>
               </View>
             </View>
           </View>
 
           {!data ? <ActivityIndicator color={colors.gold} style={styles.loader} /> : null}
-          <GoalCard badge={`Senior ${data?.seniorOpen ? 'abierto · ventas cantadas' : 'cerrado · ventas emitidas'}`} icon="diamond-outline" insight={seniorValue >= 1950 ? 'Meta cumplida' : `Te faltan ${formatUF(1950 - seniorValue)} UF`} progress={getProgress(seniorValue, 1950)} title={metric?.seniorLevel ?? 'Super Senior'} value={`${formatUF(seniorValue)} / 1.950 UF`} />
-          <GoalCard badge="Solo ventas emitidas" icon="ribbon-outline" insight={categoryValue >= 1000 ? 'Meta mensual cumplida' : `Faltan ${formatUF(1000 - categoryValue)} UF emitidas para Diamante`} progress={getProgress(categoryValue, 1000)} title={metric?.category ?? 'Categoría comercial'} tone="green" value={`${Math.round(getProgress(categoryValue, 1000) * 100)}%`} />
-          <GoalCard badge="Índice de productividad" icon="briefcase-outline" insight={productivityValue < 1 ? 'Bajo el mínimo de 1,00' : 'Dentro del objetivo'} progress={getProgress(productivityValue, 1)} title="Productividad" tone={productivityTone(productivityValue)} value={`${productivityValue.toFixed(2)} / 1,00`} />
+          <GoalCard badge={`Senior ${data?.seniorOpen ? 'abierto' : 'cerrado'} · ${metric?.smadCount ?? '—'} SMAD`} icon="diamond-outline" insight={metric?.seniorRemaining ? `${metric.seniorRemaining} · Revisa también SMAD y multiproductos` : 'Sin carga Senior publicada'} progress={getProgress(seniorValue,metric?.seniorTargetUf??0)} title={metric?.seniorLevel ?? 'Senior'} value={metric?.eligibleTotalUf !== undefined ? `${formatUF(seniorValue)} UF` : 'Sin datos'} />
+          <GoalCard badge={metric?.categoryLabel ?? 'Catego'} icon="ribbon-outline" insight={metric?.categoryRemaining ?? 'Sin carga Catego publicada'} progress={getProgress(categoryValue,categoryTarget)} title={metric?.category ?? 'Categoría comercial'} tone="green" value={metric?.categoryUf !== undefined ? `${formatUF(categoryValue)} UF` : 'Sin datos'} />
+          <GoalCard badge="Índice de productividad" icon="briefcase-outline" insight={metric?.productivity === undefined ? 'Sin datos publicados' : productivityValue < 1 ? 'Bajo el mínimo de 1,00' : 'Dentro del objetivo'} progress={getProgress(productivityValue, 1)} title="Productividad" tone={metric?.productivity === undefined ? 'gold' : productivityTone(productivityValue)} value={metric?.productivity === undefined ? '—' : `${productivityValue.toFixed(2)} / 1,00`} />
 
           <View style={styles.moraCard}>
             <View style={styles.moraTop}>
@@ -83,7 +88,7 @@ export default function GoalsScreen() {
                   <Text style={styles.moraSub}>Calidad de cartera</Text>
                 </View>
               </View>
-              <Text style={[styles.moraValue, { color: moraTone === 'red' ? colors.danger : moraTone === 'gold' ? colors.goldText : colors.success }]}>{delinquencyValue.toFixed(1)}%</Text>
+              <Text style={[styles.moraValue, { color: moraTone === 'red' ? colors.danger : moraTone === 'gold' ? colors.goldText : colors.success }]}>{metric?.delinquencyRate === undefined ? '—' : `${delinquencyValue.toFixed(1)}%`}</Text>
             </View>
             <View style={styles.meterWrap}>
               <View style={styles.meter}>
@@ -97,7 +102,7 @@ export default function GoalsScreen() {
             </View>
             <View style={styles.objectiveRow}>
               <Ionicons color={moraTone === 'red' ? colors.danger : moraTone === 'gold' ? colors.warning : colors.secondary} name={moraTone === 'red' ? 'alert-circle' : 'checkmark-circle'} size={18} />
-              <Text style={[styles.objectiveText, { color: moraTone === 'red' ? colors.danger : moraTone === 'gold' ? colors.goldText : colors.secondary }]}>{moraCopy}</Text>
+              <Text style={[styles.objectiveText, { color: moraTone === 'red' ? colors.danger : moraTone === 'gold' ? colors.goldText : colors.secondary }]}>{metric?.delinquencyRate === undefined ? 'Sin porcentaje de mora publicado' : moraCopy}</Text>
             </View>
           </View>
 
