@@ -16,7 +16,7 @@ export function remainingUfTarget(uf:number|undefined,remaining:unknown):number|
  return match?Math.max(uf,0)+Number(match[1].replace(',','.')):undefined;
 }
 export function workerUser(w:WorkerRow):User {
- return {id:w.id,rut:w.rut??'',name:w.name,role:w.role,active:w.active,employmentStatus:w.status,teamId:w.coordinator_id??'',supervisorId:w.coordinator_id??'',salesManagerId:w.manager_id??'',avatar:'',email:'',joinDate:w.join_date??'',birthDate:w.birth_date??undefined,mustChangePassword:false};
+ return {id:String(w.id??''),rut:String(w.rut??''),name:String(w.name??''),role:w.role,active:w.active,employmentStatus:w.status,teamId:String(w.coordinator_id??''),supervisorId:String(w.coordinator_id??''),salesManagerId:String(w.manager_id??''),avatar:'',email:'',joinDate:String(w.join_date??''),birthDate:w.birth_date?String(w.birth_date):undefined,mustChangePassword:false};
 }
 async function allRows<T>(table:string):Promise<T[]> {
  if(!supabase)throw Error('Supabase no está configurado.');
