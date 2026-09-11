@@ -35,7 +35,10 @@ const profileDetails: { icon: IconName; label: string; getValue: (profile: User)
 export default function ProfileScreen() {
   const router = useRouter();
   const { authenticatedUser, isLoading, isPreviewing, signOut, startPreview, user } = useAuth();
-  const profile = user ?? currentUser;
+  // Keep rendering the administrator while the route changes into preview
+  // mode. Some roster-only profiles intentionally lack optional profile data.
+  const profile = (isPreviewing ? authenticatedUser : user) ?? currentUser;
+  const profileStartYear = profile.joinDate ? new Date(`${profile.joinDate}T12:00:00`).getFullYear() : null;
   const [managedUsers, setManagedUsers] = useState<WorkerRow[]>([]);
   const [selectedPreviewRole, setSelectedPreviewRole] = useState<PreviewRole | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -77,7 +80,7 @@ export default function ProfileScreen() {
             <UserAvatar highlighted name={profile.name} size={88} />
             <Text style={styles.name}>{profile.name}</Text>
             <View style={styles.roleBadge}><Ionicons color={colors.gold} name="ribbon-outline" size={15} /><Text style={styles.roleText}>{roleLabels[profile.role]}</Text></View>
-            <Text style={styles.employee}>En la plataforma desde {new Date(`${profile.joinDate}T12:00:00`).getFullYear()}</Text>
+            <Text style={styles.employee}>En la plataforma desde {profileStartYear && !Number.isNaN(profileStartYear) ? profileStartYear : '—'}</Text>
           </View>
 
           <View style={styles.infoCard}>
