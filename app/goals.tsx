@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, ImageBackground, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { DetailHeader } from '@/components/DetailHeader';
 import { GoalCard } from '@/components/GoalCard';
@@ -12,11 +13,13 @@ import { snapshotService } from '@/services/snapshotService';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
 import { DashboardData } from '@/types';
 import { formatUF, getProgress } from '@/utils/format';
-import { delinquencyTone, productivityTone, seniorEligibleUf } from '@/utils/commercialRules';
+import { seniorEligibleUf } from '@/utils/commercialRules';
 
 export default function GoalsScreen() {
+  const { focus } = useLocalSearchParams<{ focus?: string }>();
   const { isPreviewing, user } = useAuth();
   const [loaded, setLoaded] = useState<{userId:string;data:DashboardData}|null>(null);
+  const [categoryOpen, setCategoryOpen] = useState(focus === 'category');
   const data = loaded?.userId === user?.id ? loaded?.data ?? null : null;
 
   useEffect(() => {
@@ -33,13 +36,8 @@ export default function GoalsScreen() {
   const categoryValue = Number(metric?.categoryUf ?? 0);
   const categoryTarget = metric?.categoryTargetUf ?? 0;
   const validLevel = (level?:string) => Boolean(level && !/^(no|sin|pendiente|en carrera)/i.test(level));
-  const completed = Number(validLevel(metric?.category)) + Number(validLevel(metric?.seniorLevel)) + Number(metric?.productivity !== undefined && metric.productivity >= 1) + Number(metric?.delinquencyRate !== undefined && metric.delinquencyRate < 20);
-  const available = Number(metric?.categoryUf !== undefined) + Number(metric?.eligibleTotalUf !== undefined) + Number(metric?.productivity !== undefined) + Number(metric?.delinquencyRate !== undefined);
-  const productivityValue = Number(metric?.productivity ?? 0);
-  const delinquencyValue = Number(metric?.delinquencyRate ?? 0);
-  const moraTone = delinquencyTone(delinquencyValue);
-  const moraCopy = moraTone === 'red' ? 'Sobre 30% · requiere atención' : moraTone === 'gold' ? 'Cerca del límite' : 'Dentro de objetivo';
-  const markerPosition = `${Math.min(Math.max(delinquencyValue / 40, 0), 1) * 100}%` as `${number}%`;
+  const completed = Number(validLevel(metric?.category)) + Number(validLevel(metric?.seniorLevel));
+  const available = Number(metric?.categoryUf !== undefined) + Number(metric?.eligibleTotalUf !== undefined);
   const firstName = user?.name.split(' ')[0] ?? 'Erika';
   return (
     <ScreenContainer contentContainerStyle={styles.page} edges={['top', 'left', 'right', 'bottom']}>
@@ -76,35 +74,20 @@ export default function GoalsScreen() {
 
           {!data ? <ActivityIndicator color={colors.gold} style={styles.loader} /> : null}
           <GoalCard badge={`Senior ${data?.seniorOpen ? 'abierto' : 'cerrado'} · ${metric?.smadCount ?? '—'} SMAD`} icon="diamond-outline" insight={metric?.seniorRemaining ? `${metric.seniorRemaining} · Revisa también SMAD y multiproductos` : 'Sin carga Senior publicada'} progress={getProgress(seniorValue,metric?.seniorTargetUf??0)} title={metric?.seniorLevel ?? 'Senior'} value={metric?.eligibleTotalUf !== undefined ? `${formatUF(seniorValue)} UF` : 'Sin datos'} />
-          <GoalCard badge={metric?.categoryLabel ?? 'Catego'} icon="ribbon-outline" insight={metric?.categoryRemaining ?? 'Sin carga Catego publicada'} progress={getProgress(categoryValue,categoryTarget)} title={metric?.category ?? 'Categoría comercial'} tone="green" value={metric?.categoryUf !== undefined ? `${formatUF(categoryValue)} UF` : 'Sin datos'} />
-          <GoalCard badge="Índice de productividad" icon="briefcase-outline" insight={metric?.productivity === undefined ? 'Sin datos publicados' : productivityValue < 1 ? 'Bajo el mínimo de 1,00' : 'Dentro del objetivo'} progress={getProgress(productivityValue, 1)} title="Productividad" tone={metric?.productivity === undefined ? 'gold' : productivityTone(productivityValue)} value={metric?.productivity === undefined ? '—' : `${productivityValue.toFixed(2)} / 1,00`} />
-
-          <View style={styles.moraCard}>
-            <View style={styles.moraTop}>
-              <View style={styles.moraTitleRow}>
-                <View style={styles.moraIcon}><Ionicons color={colors.secondary} name="shield-checkmark-outline" size={22} /></View>
-                <View>
-                  <Text style={styles.moraTitle}>Mora objetivo</Text>
-                  <Text style={styles.moraSub}>Calidad de cartera</Text>
-                </View>
+          <Pressable onPress={() => setCategoryOpen((open) => !open)} style={({ pressed }) => pressed && styles.pressed}>
+            <GoalCard badge={metric?.categoryLabel ?? 'Catego'} icon="ribbon-outline" insight={categoryOpen ? 'Toca para ocultar el detalle' : 'Toca para ver período y emisión'} progress={getProgress(categoryValue,categoryTarget)} title={metric?.category ?? 'Categoría comercial'} tone="green" value={metric?.categoryUf !== undefined ? `${formatUF(categoryValue)} UF` : 'Sin datos'} />
+          </Pressable>
+          {categoryOpen ? (
+            <View style={styles.categoryDetail}>
+              <View style={styles.categoryDetailTitle}><Ionicons color={colors.goldText} name="calendar-outline" size={20} /><Text style={styles.categoryPeriod}>{metric?.categoryLabel ?? 'Período de Catego sin publicar'}</Text></View>
+              <View style={styles.emissionRow}>
+                <View style={styles.emissionItem}><Text style={styles.emissionLabel}>Emitido</Text><Text style={styles.emissionValue}>{metric?.emittedUf === undefined ? 'Sin dato' : `${formatUF(metric.emittedUf)} UF`}</Text></View>
+                <View style={styles.emissionDivider} />
+                <View style={styles.emissionItem}><Text style={styles.emissionLabel}>Sin emitir</Text><Text style={[styles.emissionValue, metric?.notEmittedUf ? styles.pendingValue : undefined]}>{metric?.notEmittedUf === undefined ? 'Sin dato' : `${formatUF(metric.notEmittedUf)} UF`}</Text></View>
               </View>
-              <Text style={[styles.moraValue, { color: moraTone === 'red' ? colors.danger : moraTone === 'gold' ? colors.goldText : colors.success }]}>{metric?.delinquencyRate === undefined ? '—' : `${delinquencyValue.toFixed(1)}%`}</Text>
+              {metric?.emittedUf === undefined || metric?.notEmittedUf === undefined ? <Text style={styles.emissionNote}>Este desglose aparecerá después de volver a publicar Carga Catego con CANTO y Base TRIO dentro del mismo archivo.</Text> : null}
             </View>
-            <View style={styles.meterWrap}>
-              <View style={styles.meter}>
-                <View style={[styles.meterSegment, styles.meterGreen]} />
-                <View style={[styles.meterSegment, styles.meterYellow]} />
-                <View style={[styles.meterSegment, styles.meterRed]} />
-              </View>
-              <View style={[styles.marker, { left: markerPosition }]}>
-                <View style={styles.markerDot} />
-              </View>
-            </View>
-            <View style={styles.objectiveRow}>
-              <Ionicons color={moraTone === 'red' ? colors.danger : moraTone === 'gold' ? colors.warning : colors.secondary} name={moraTone === 'red' ? 'alert-circle' : 'checkmark-circle'} size={18} />
-              <Text style={[styles.objectiveText, { color: moraTone === 'red' ? colors.danger : moraTone === 'gold' ? colors.goldText : colors.secondary }]}>{metric?.delinquencyRate === undefined ? 'Sin porcentaje de mora publicado' : moraCopy}</Text>
-            </View>
-          </View>
+          ) : null}
 
           <View style={styles.motivation}>
             <View style={styles.leaf}><Ionicons color="rgba(39,114,80,0.13)" name="leaf-outline" size={92} /></View>
@@ -135,6 +118,17 @@ const styles = StyleSheet.create({
   summaryValue: { color: colors.primary, fontFamily: typography.serif, fontSize: 23, fontWeight: '700' },
   summaryLabel: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 10 },
   divider: { backgroundColor: colors.border, height: 42, width: 1 },
+  pressed: { opacity: 0.8, transform: [{ scale: 0.992 }] },
+  categoryDetail: { ...shadows.card, backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.lg, borderWidth: 1, gap: spacing.md, padding: spacing.lg },
+  categoryDetailTitle: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
+  categoryPeriod: { color: colors.primary, flex: 1, fontFamily: typography.sans, fontSize: 12, fontWeight: '800' },
+  emissionRow: { alignItems: 'center', flexDirection: 'row' },
+  emissionItem: { flex: 1, gap: 4 },
+  emissionDivider: { backgroundColor: colors.border, height: 42, marginHorizontal: spacing.md, width: 1 },
+  emissionLabel: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 10 },
+  emissionValue: { color: colors.success, fontFamily: typography.serif, fontSize: 20, fontWeight: '700' },
+  pendingValue: { color: colors.warning },
+  emissionNote: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 10, lineHeight: 15 },
   moraCard: { ...shadows.card, backgroundColor: colors.surface, borderRadius: radii.lg, gap: spacing.lg, padding: spacing.xl },
   moraTop: { alignItems: 'flex-start', flexDirection: 'row', justifyContent: 'space-between' },
   moraTitleRow: { alignItems: 'center', flexDirection: 'row', gap: spacing.md },
