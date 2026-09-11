@@ -225,9 +225,21 @@ export interface NewsArticle {
   summary: string;
   body: string;
   image: string;
+  imageUrl?: string;
   date: string;
   featured: boolean;
   category: string;
+  eventMonth?: string;
+  sortOrder?: number;
+}
+
+export interface GalleryPhoto {
+  id: string;
+  title: string;
+  image?: string;
+  imageUrl?: string;
+  newsArticleId?: string;
+  sortOrder: number;
 }
 
 export interface ActivityItem {
