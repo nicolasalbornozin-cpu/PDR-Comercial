@@ -35,7 +35,8 @@ function date(value: unknown): string | undefined {
   return undefined;
 }
 
-// Only the explicitly selected sheet is inspected. No formulas are evaluated or other sheets uploaded.
+// Only aggregate seller results are published. Category may also derive an emitted/pending
+// split from the workbook's CANTO + TRIO companions; no operation or client rows are uploaded.
 export function parseIndividualSheet(book: WorkBook, source: SheetSource): SheetImport {
   const sheet = book.SheetNames.find(n => searchName(n) === searchName(sheetSources[source].sheet));
   const result: SheetImport = { source, sheet: sheet ?? sheetSources[source].sheet, records: [], errors: [], warnings: [], rules: [] };
@@ -65,6 +66,35 @@ export function parseIndividualSheet(book: WorkBook, source: SheetSource): Sheet
     : debt ? header('L', ['rut']) : source === 'sauce' ? header('A', ['rut agente']) : header('A', ['puesto']);
   if (first < 0) return result;
   const seen = new Set<string>(); const aggregated = new Map<string, SheetRecord>(); const contracts = new Map<string, string>();
+  const categoryEmission = new Map<string, { emittedUf: number; notEmittedUf: number }>();
+  if (source === 'category') {
+    const cantoName = book.SheetNames.find(n => searchName(n) === 'canto');
+    const trioName = book.SheetNames.find(n => ['base trio', 'trio'].includes(searchName(n)));
+    const canto = cantoName ? book.Sheets[cantoName] : undefined;
+    const trio = trioName ? book.Sheets[trioName] : undefined;
+    if (canto && trio) {
+      const trioLast = Object.keys(trio).filter(a => /^[A-Z]+\d+$/.test(a)).reduce((max, a) => Math.max(max, Number(a.replace(/\D/g, ''))), 1);
+      const cantoLast = Object.keys(canto).filter(a => /^[A-Z]+\d+$/.test(a)).reduce((max, a) => Math.max(max, Number(a.replace(/\D/g, ''))), 1);
+      const emittedByOperation = new Map<string, boolean>();
+      for (let r = 2; r <= trioLast; r++) {
+        const operation = text(trio[`B${r}`]?.v);
+        if (operation) emittedByOperation.set(operation, searchName(trio[`P${r}`]?.v) === 'emitida');
+      }
+      for (let r = 2; r <= cantoLast; r++) {
+        const seller = searchName(canto[`E${r}`]?.v);
+        const uf = number(canto[`F${r}`]?.v);
+        const operation = text(canto[`I${r}`]?.v);
+        if (!seller || uf === undefined || uf < 0 || !operation) continue;
+        const current = categoryEmission.get(seller) ?? { emittedUf: 0, notEmittedUf: 0 };
+        if (emittedByOperation.get(operation)) current.emittedUf += uf;
+        else current.notEmittedUf += uf;
+        categoryEmission.set(seller, current);
+      }
+      result.warnings.push('Catego: emitido y sin emitir se agregan por vendedor cruzando Nº operación de CANTO con ESTADO de Base TRIO. No se suben filas de clientes ni contratos.');
+    } else {
+      result.warnings.push('Catego no incluye CANTO y Base TRIO; el desglose emitido/sin emitir quedará sin dato.');
+    }
+  }
   for (let r = first + 1; r <= maxRow; r++) {
     const nameCol = source === 'category' ? 'G' : source === 'senior' ? 'C' : source === 'production_coordinators' ? 'A' : debt ? 'M' : source.startsWith('ranking_') ? 'C' : 'B';
     const name = text(get(nameCol, r, true));
@@ -76,6 +106,8 @@ export function parseIndividualSheet(book: WorkBook, source: SheetSource): Sheet
     if (source === 'category') {
       numeric(values, 'smad', 'H', r); numeric(values, 'uf', 'I', r); numeric(values, 'prize', 'K', r);
       values.level = text(get('J', r)); values.remaining = text(get('L', r));
+      const emission = categoryEmission.get(searchName(name));
+      if (emission) { values.emittedUf = emission.emittedUf; values.notEmittedUf = emission.notEmittedUf; }
     } else if (source === 'senior') {
       const reference = /Resumen Senior'?!\$?([A-Z]+)\$?(\d+)/i.exec(ws[`M${r}`]?.f ?? '');
       const summary = book.Sheets['Resumen Senior'];

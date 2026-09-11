@@ -57,7 +57,7 @@ export const individualSheetService={
    const id=uiId(row.worker_id),v=row.metrics;
    const m:Partial<MetricSnapshot>={};
    const num=(k:string)=>typeof v[k]==='number'?v[k] as number:undefined;
-   if(row.source==='category'){m.category=String(v.level);m.categoryUf=num('uf');m.categoryRemaining=String(v.remaining);m.categoryTargetUf=remainingUfTarget(num('uf'),v.remaining);m.estimatedPrizeClp=num('prize');m.categoryLabel=row.label;}
+   if(row.source==='category'){m.category=String(v.level);m.categoryUf=num('uf');m.categoryRemaining=String(v.remaining);m.categoryTargetUf=remainingUfTarget(num('uf'),v.remaining);m.estimatedPrizeClp=num('prize');m.categoryLabel=row.label;m.emittedUf=num('emittedUf');m.notEmittedUf=num('notEmittedUf');}
    if(row.source==='senior'){
     m.cancellationUf=num('cancellationUf');m.smadCount=num('smad');m.restCount=num('rest');m.ssffCount=num('ssff');m.tenureMonths=num('tenureMonths');m.seniorStatus=seniorOpen?'open':'closed';
     // An open-canto file cannot silently become an emitted-only final result after closing.
@@ -65,7 +65,7 @@ export const individualSheetService={
     else{m.seniorRemaining='Pendiente de carga de cierre con ventas emitidas';}
    }
    if(row.source.startsWith('production_')){m.productivity=num('productivity');m.productionUf=num('uf');m.lastSaleDate=typeof v.lastSaleDate==='string'?v.lastSaleDate:undefined;}
-   if(['titanes','rbh','msc'].includes(row.source)){m.debtInstallmentsCount=num('debtInstallments');m.debtUf08=num('debtUf08');m.debtSalesCount=num('debtSales');}
+   if(['titanes','rbh','msc'].includes(row.source)){m.debtInstallmentsCount=num('debtInstallments');m.debtUf08=num('debtUf08');m.debtSalesCount=num('debtSales');m.delinquentClientsCount=num('debtSales');}
    if(row.source==='sauce')m.sauceRisk=num('risk');
    if(row.source==='ranking_annual'){annual[id]=num('emittedUf')??0;m.rankingPosition=num('position');}
    if(row.source==='ranking_monthly'){monthly[id]=num('emittedUf')??0;m.businessCount=num('businesses');}
