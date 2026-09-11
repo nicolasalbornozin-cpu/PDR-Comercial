@@ -1,5 +1,5 @@
-export function normalizeRut(value: string): string {
-  return value.replace(/[^0-9kK]/g, '').toLowerCase();
+export function normalizeRut(value: unknown): string {
+  return String(value ?? '').replace(/[^0-9kK]/g, '').toLowerCase();
 }
 
 export function isValidRut(value: string): boolean {
@@ -21,7 +21,7 @@ export function isValidRut(value: string): boolean {
   return suppliedDigit === expectedDigit;
 }
 
-export function formatRut(value: string): string {
+export function formatRut(value: unknown): string {
   const rut = normalizeRut(value);
   if (rut.length < 2) return rut;
   const body = rut.slice(0, -1).replace(/\B(?=(\d{3})+(?!\d))/g, '.');

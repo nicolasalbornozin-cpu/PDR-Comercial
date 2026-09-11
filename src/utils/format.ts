@@ -2,12 +2,15 @@ export function formatUF(value: number): string {
   return new Intl.NumberFormat('es-CL', { maximumFractionDigits: 0 }).format(value);
 }
 
-export function formatDate(value: string): string {
+export function formatDate(value?: string): string {
+  if (!value) return 'Sin fecha registrada';
+  const date = new Date(`${value}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return 'Sin fecha registrada';
   return new Intl.DateTimeFormat('es-CL', {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
-  }).format(new Date(`${value}T12:00:00`));
+  }).format(date);
 }
 
 export function getProgress(current: number, target: number): number {
