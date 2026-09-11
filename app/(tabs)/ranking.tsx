@@ -21,6 +21,7 @@ function rankingCopy(role?: string) {
 export default function RankingScreen() {
   const [period, setPeriod] = useState<RankingPeriod>('annual');
   const [loaded, setLoaded] = useState<{userId:string;period:RankingPeriod;entries:RankingEntry[]}|null>(null);
+  const [periodLabel, setPeriodLabel] = useState('Mes comercial vigente');
   const [error, setError] = useState('');
   const { isPreviewing, user } = useAuth();
   const entries = useMemo(() => loaded?.userId === user?.id && loaded?.period === period ? loaded.entries : [], [loaded, period, user?.id]);
@@ -28,8 +29,11 @@ export default function RankingScreen() {
   useEffect(() => {
     if (!user) return;
     let active = true;
-    snapshotService.getRanking(user, period, { preview: isPreviewing })
-      .then((result) => { if (active) { setLoaded({userId:user.id,period,entries:result}); setError(''); } })
+    Promise.all([
+      snapshotService.getRanking(user, period, { preview: isPreviewing }),
+      snapshotService.getDashboard(user, { preview: isPreviewing }),
+    ])
+      .then(([result, dashboard]) => { if (active) { setLoaded({userId:user.id,period,entries:result}); setPeriodLabel(dashboard.periodLabel); setError(''); } })
       .catch(() => { if (active) setError('Error al comunicar con el servidor'); });
     return () => { active = false; };
   }, [isPreviewing, period, user]);
@@ -66,7 +70,7 @@ export default function RankingScreen() {
           </View>
 
           <RankingTabs onChange={setPeriod} value={period} />
-          <Text style={styles.period}>{period === 'annual' ? 'Acumulado del año calendario' : 'Mes comercial vigente'} · solo ventas emitidas</Text>
+          <Text style={styles.period}>{period === 'annual' ? 'Acumulado del año calendario 2026' : periodLabel} · solo ventas emitidas</Text>
           {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
 
           {currentEntry ? (
@@ -89,7 +93,7 @@ export default function RankingScreen() {
 
           <View style={styles.rankingSection}>
             <View style={styles.rankingHeading}>
-              <Text style={styles.rankingTitle}>{period === 'annual' ? 'Ranking anual' : 'Ranking mensual'}</Text>
+              <Text style={styles.rankingTitle}>{period === 'annual' ? 'Ranking anual 2026' : `Ranking mensual · ${periodLabel}`}</Text>
               <View style={styles.liveBadge}><View style={styles.liveDot} /><Text style={styles.liveText}>EMITIDAS</Text></View>
             </View>
             <View style={styles.list}>
