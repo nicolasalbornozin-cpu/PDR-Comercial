@@ -13,6 +13,7 @@ interface NewsCardProps {
 const iconByCategory: Record<string, ComponentProps<typeof Ionicons>['name']> = {
   Carreras: 'trending-up-outline',
   Reconocimientos: 'trophy-outline',
+  'Eventos recientes': 'images-outline',
   'Información comercial': 'calendar-outline',
 };
 
