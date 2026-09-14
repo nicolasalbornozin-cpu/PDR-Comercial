@@ -11,15 +11,32 @@ import { images } from '@/data/assets';
 import { useAuth } from '@/hooks/useAuth';
 import { snapshotService } from '@/services/snapshotService';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
-import { DashboardData } from '@/types';
-import { formatUF, getProgress } from '@/utils/format';
-import { seniorEligibleUf } from '@/utils/commercialRules';
+import { DashboardData, MetricSnapshot } from '@/types';
+import { formatDate, formatUF, getProgress } from '@/utils/format';
+
+type GoalKind = 'senior' | 'category';
+type GoalVersion = 'current' | 'previous';
+
+function missingSmad(snapshot: Partial<MetricSnapshot> | undefined, kind: GoalKind): number | undefined {
+  if (snapshot?.smadRemaining !== undefined) return snapshot.smadRemaining;
+  const remaining = kind === 'category' ? snapshot?.categoryRemaining : snapshot?.seniorRemaining;
+  const parsed = /(?:Y\s+)?(\d+)\s*SMAD\b/i.exec(remaining ?? '');
+  if (parsed) return Number(parsed[1]);
+  if (kind === 'senior' && snapshot?.smadCount !== undefined) return /tramo m[aá]ximo/i.test(remaining ?? '') ? 0 : Math.max(10 - snapshot.smadCount, 0);
+  return undefined;
+}
+
+function pendingUf(snapshot: Partial<MetricSnapshot> | undefined, total: number | undefined): number | undefined {
+  if (snapshot?.notEmittedUf !== undefined) return snapshot.notEmittedUf;
+  return total !== undefined && snapshot?.emittedUf !== undefined ? Math.max(total - snapshot.emittedUf, 0) : undefined;
+}
 
 export default function GoalsScreen() {
   const { focus } = useLocalSearchParams<{ focus?: string }>();
   const { isPreviewing, user } = useAuth();
   const [loaded, setLoaded] = useState<{userId:string;data:DashboardData}|null>(null);
-  const [categoryOpen, setCategoryOpen] = useState(focus === 'category');
+  const [openGoal, setOpenGoal] = useState<GoalKind | null>(focus === 'category' || focus === 'senior' ? focus : null);
+  const [periodView, setPeriodView] = useState<Record<GoalKind, GoalVersion>>({ senior: 'current', category: 'current' });
   const data = loaded?.userId === user?.id ? loaded?.data ?? null : null;
 
   useEffect(() => {
@@ -32,7 +49,12 @@ export default function GoalsScreen() {
   }, [isPreviewing, user]);
 
   const metric = user && data ? data.latestByUser[user.id] : undefined;
-  const seniorValue = seniorEligibleUf(metric, data?.seniorOpen ?? true);
+  const snapshotsFor = (kind: GoalKind) => user ? (data?.snapshots.filter((snapshot) => snapshot.userId === user.id && snapshot.kind === kind).sort((left, right) => right.publishedAt.localeCompare(left.publishedAt)) ?? []) : [];
+  const seniorSnapshots = snapshotsFor('senior');
+  const categorySnapshots = snapshotsFor('category');
+  const seniorSnapshot = periodView.senior === 'previous' && seniorSnapshots[1] ? seniorSnapshots[1] : seniorSnapshots[0];
+  const categorySnapshot = periodView.category === 'previous' && categorySnapshots[1] ? categorySnapshots[1] : categorySnapshots[0];
+  const seniorValue = Number(metric?.eligibleTotalUf ?? metric?.quarterTotalUf ?? 0);
   const categoryValue = Number(metric?.categoryUf ?? 0);
   const categoryTarget = metric?.categoryTargetUf ?? 0;
   const validLevel = (level?:string) => Boolean(level && !/^(no|sin|pendiente|en carrera)/i.test(level));
@@ -73,19 +95,65 @@ export default function GoalsScreen() {
           </View>
 
           {!data ? <ActivityIndicator color={colors.gold} style={styles.loader} /> : null}
-          <GoalCard badge={`Senior ${data?.seniorOpen ? 'abierto' : 'cerrado'} · ${metric?.smadCount ?? '—'} SMAD`} icon="diamond-outline" insight={metric?.seniorRemaining ? `${metric.seniorRemaining} · Revisa también SMAD y multiproductos` : 'Sin carga Senior publicada'} progress={getProgress(seniorValue,metric?.seniorTargetUf??0)} title={metric?.seniorLevel ?? 'Senior'} value={metric?.eligibleTotalUf !== undefined ? `${formatUF(seniorValue)} UF` : 'Sin datos'} />
-          <Pressable onPress={() => setCategoryOpen((open) => !open)} style={({ pressed }) => pressed && styles.pressed}>
-            <GoalCard badge={metric?.categoryLabel ?? 'Catego'} icon="ribbon-outline" insight={categoryOpen ? 'Toca para ocultar el detalle' : 'Toca para ver período y emisión'} progress={getProgress(categoryValue,categoryTarget)} title={metric?.category ?? 'Categoría comercial'} tone="green" value={metric?.categoryUf !== undefined ? `${formatUF(categoryValue)} UF` : 'Sin datos'} />
+          <Pressable accessibilityRole="button" accessibilityState={{ expanded: openGoal === 'senior' }} onPress={() => setOpenGoal((current) => current === 'senior' ? null : 'senior')} style={({ pressed }) => [styles.goalButton, pressed && styles.pressed]}>
+            <GoalCard badge={`Senior ${data?.seniorOpen ? 'abierto' : 'cerrado'} · ${metric?.smadCount ?? '—'} SMAD`} icon="diamond-outline" insight={openGoal === 'senior' ? 'Toca para ocultar el detalle' : metric?.seniorRemaining ? `${metric.seniorRemaining} · Toca para ver detalle` : 'Sin carga Senior publicada'} progress={getProgress(seniorValue,metric?.seniorTargetUf??0)} title={metric?.seniorLevel ?? 'Senior'} value={metric?.eligibleTotalUf !== undefined ? `${formatUF(seniorValue)} UF` : 'Sin datos'} />
           </Pressable>
-          {categoryOpen ? (
-            <View style={styles.categoryDetail}>
-              <View style={styles.categoryDetailTitle}><Ionicons color={colors.goldText} name="calendar-outline" size={20} /><Text style={styles.categoryPeriod}>{metric?.categoryLabel ?? 'Período de Catego sin publicar'}</Text></View>
-              <View style={styles.emissionRow}>
-                <View style={styles.emissionItem}><Text style={styles.emissionLabel}>Emitido</Text><Text style={styles.emissionValue}>{metric?.emittedUf === undefined ? 'Sin dato' : `${formatUF(metric.emittedUf)} UF`}</Text></View>
-                <View style={styles.emissionDivider} />
-                <View style={styles.emissionItem}><Text style={styles.emissionLabel}>Sin emitir</Text><Text style={[styles.emissionValue, metric?.notEmittedUf ? styles.pendingValue : undefined]}>{metric?.notEmittedUf === undefined ? 'Sin dato' : `${formatUF(metric.notEmittedUf)} UF`}</Text></View>
+          {openGoal === 'senior' ? (
+            <View style={[styles.goalDetail, styles.seniorDetail]}>
+              <View style={styles.periodTabs}>
+                <Pressable onPress={() => setPeriodView((current) => ({ ...current, senior: 'current' }))} style={[styles.periodTab, periodView.senior === 'current' && styles.periodTabActive]}><Text style={[styles.periodTabText, periodView.senior === 'current' && styles.periodTabTextActive]}>Vigente</Text></Pressable>
+                <Pressable disabled={!seniorSnapshots[1]} onPress={() => setPeriodView((current) => ({ ...current, senior: 'previous' }))} style={[styles.periodTab, periodView.senior === 'previous' && styles.periodTabActive, !seniorSnapshots[1] && styles.periodTabDisabled]}><Text style={[styles.periodTabText, periodView.senior === 'previous' && styles.periodTabTextActive]}>Pasada</Text></Pressable>
               </View>
-              {metric?.emittedUf === undefined || metric?.notEmittedUf === undefined ? <Text style={styles.emissionNote}>Este desglose aparecerá después de volver a publicar Carga Catego con CANTO y Base TRIO dentro del mismo archivo.</Text> : null}
+              <View style={styles.detailHeader}>
+                <View style={styles.detailIconGold}><Ionicons color={colors.goldText} name="diamond-outline" size={22} /></View>
+                <View style={styles.detailHeading}>
+                  <Text style={styles.detailEyebrow}>PERÍODO SENIOR</Text>
+                  <Text style={styles.detailTitle}>{seniorSnapshot ? `${formatDate(seniorSnapshot.periodStart)} al ${formatDate(seniorSnapshot.periodEnd)}` : 'Sin período publicado'}</Text>
+                </View>
+              </View>
+              <View style={styles.ufComparison}>
+                <View style={styles.ufMetric}><Text style={styles.detailMetricLabel}>UF brutas totales</Text><Text style={styles.ufMetricValue}>{seniorSnapshot?.eligibleTotalUf === undefined ? 'Sin dato' : `${formatUF(seniorSnapshot.eligibleTotalUf)} UF`}</Text></View>
+                <View style={styles.ufMetric}><Text style={styles.detailMetricLabel}>UF emitidas</Text><Text style={styles.ufMetricValue}>{seniorSnapshot?.emittedUf === undefined ? 'Sin dato' : `${formatUF(seniorSnapshot.emittedUf)} UF`}</Text></View>
+                <View style={styles.ufMetric}><Text style={styles.detailMetricLabel}>Sin emitir</Text><Text style={[styles.ufMetricValue, styles.pendingValue]}>{pendingUf(seniorSnapshot, seniorSnapshot?.eligibleTotalUf) === undefined ? 'Sin dato' : `${formatUF(pendingUf(seniorSnapshot, seniorSnapshot?.eligibleTotalUf)!)} UF`}</Text></View>
+              </View>
+              <View style={styles.smadPanel}>
+                <View><Text style={styles.detailMetricLabel}>SMAD actuales</Text><Text style={styles.smadValue}>{seniorSnapshot?.smadCount ?? 'Sin dato'}</Text></View>
+                <Ionicons color={colors.goldText} name="arrow-forward" size={19} />
+                <View><Text style={styles.detailMetricLabel}>SMAD que faltan</Text><Text style={styles.smadValue}>{missingSmad(seniorSnapshot, 'senior') ?? 'Sin dato'}</Text></View>
+              </View>
+              <Text style={styles.detailNote}>{seniorSnapshot?.seniorRemaining ?? 'Sin detalle de tramo publicado.'}</Text>
+            </View>
+          ) : null}
+
+          <Pressable accessibilityRole="button" accessibilityState={{ expanded: openGoal === 'category' }} onPress={() => setOpenGoal((current) => current === 'category' ? null : 'category')} style={({ pressed }) => [styles.goalButton, pressed && styles.pressed]}>
+            <GoalCard badge={metric?.categoryLabel ?? 'Catego'} icon="star" insight={openGoal === 'category' ? 'Toca para ocultar el detalle' : 'Toca para ver período y emisión'} progress={getProgress(categoryValue,categoryTarget)} title={metric?.category ?? 'Categoría comercial'} tone="green" value={metric?.categoryUf !== undefined ? `${formatUF(categoryValue)} UF` : 'Sin datos'} />
+          </Pressable>
+          {openGoal === 'category' ? (
+            <View style={[styles.goalDetail, styles.categoryDetail]}>
+              <View style={styles.periodTabs}>
+                <Pressable onPress={() => setPeriodView((current) => ({ ...current, category: 'current' }))} style={[styles.periodTab, periodView.category === 'current' && styles.periodTabActive]}><Text style={[styles.periodTabText, periodView.category === 'current' && styles.periodTabTextActive]}>Vigente</Text></Pressable>
+                <Pressable disabled={!categorySnapshots[1]} onPress={() => setPeriodView((current) => ({ ...current, category: 'previous' }))} style={[styles.periodTab, periodView.category === 'previous' && styles.periodTabActive, !categorySnapshots[1] && styles.periodTabDisabled]}><Text style={[styles.periodTabText, periodView.category === 'previous' && styles.periodTabTextActive]}>Pasada</Text></Pressable>
+              </View>
+              <View style={styles.detailHeader}>
+                <View style={styles.detailIconGreen}><Ionicons color={colors.success} name="calendar-outline" size={22} /></View>
+                <View style={styles.detailHeading}>
+                  <Text style={styles.detailEyebrow}>PERÍODO DE CATEGO</Text>
+                  <Text style={styles.detailTitle}>{categorySnapshot?.categoryLabel ?? 'Período de Catego sin publicar'}</Text>
+                  {categorySnapshot ? <Text style={styles.detailDates}>{formatDate(categorySnapshot.periodStart)} al {formatDate(categorySnapshot.periodEnd)}</Text> : null}
+                </View>
+              </View>
+              <View style={styles.ufComparison}>
+                <View style={styles.ufMetric}><Text style={styles.detailMetricLabel}>UF brutas totales</Text><Text style={styles.ufMetricValue}>{categorySnapshot?.categoryUf === undefined ? 'Sin dato' : `${formatUF(categorySnapshot.categoryUf)} UF`}</Text></View>
+                <View style={styles.ufMetric}><Text style={styles.detailMetricLabel}>UF emitidas</Text><Text style={styles.ufMetricValue}>{categorySnapshot?.emittedUf === undefined ? 'Sin dato' : `${formatUF(categorySnapshot.emittedUf)} UF`}</Text></View>
+                <View style={styles.ufMetric}><Text style={styles.detailMetricLabel}>Sin emitir</Text><Text style={[styles.ufMetricValue, styles.pendingValue]}>{pendingUf(categorySnapshot, categorySnapshot?.categoryUf) === undefined ? 'Sin dato' : `${formatUF(pendingUf(categorySnapshot, categorySnapshot?.categoryUf)!)} UF`}</Text></View>
+              </View>
+              <View style={styles.smadPanel}>
+                <View><Text style={styles.detailMetricLabel}>SMAD actuales</Text><Text style={styles.smadValue}>{categorySnapshot?.smadCount ?? 'Sin dato'}</Text></View>
+                <Ionicons color={colors.goldText} name="arrow-forward" size={19} />
+                <View><Text style={styles.detailMetricLabel}>SMAD que faltan</Text><Text style={styles.smadValue}>{missingSmad(categorySnapshot, 'category') ?? 'Sin dato'}</Text></View>
+              </View>
+              <Text style={styles.detailNote}>{categorySnapshot?.categoryRemaining ?? 'Sin detalle de tramo publicado.'}</Text>
+              {categorySnapshot?.emittedUf === undefined ? <Text style={styles.emissionNote}>El desglose aparecerá al publicar Carga Catego con CANTO y Base TRIO dentro del mismo archivo.</Text> : null}
             </View>
           ) : null}
 
@@ -118,10 +186,34 @@ const styles = StyleSheet.create({
   summaryValue: { color: colors.primary, fontFamily: typography.serif, fontSize: 23, fontWeight: '700' },
   summaryLabel: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 10 },
   divider: { backgroundColor: colors.border, height: 42, width: 1 },
+  goalButton: { borderRadius: radii.lg },
   pressed: { opacity: 0.8, transform: [{ scale: 0.992 }] },
-  categoryDetail: { ...shadows.card, backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.lg, borderWidth: 1, gap: spacing.md, padding: spacing.lg },
-  categoryDetailTitle: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
-  categoryPeriod: { color: colors.primary, flex: 1, fontFamily: typography.sans, fontSize: 12, fontWeight: '800' },
+  goalDetail: { ...shadows.card, backgroundColor: colors.surface, borderRadius: radii.lg, borderWidth: 1, gap: spacing.lg, padding: spacing.lg },
+  seniorDetail: { borderColor: '#E8D39D' },
+  categoryDetail: { borderColor: '#BCD9C9' },
+  periodTabs: { alignSelf: 'stretch', backgroundColor: colors.paleGreen, borderRadius: radii.pill, flexDirection: 'row', padding: 4 },
+  periodTab: { alignItems: 'center', borderRadius: radii.pill, flex: 1, minHeight: 34, justifyContent: 'center' },
+  periodTabActive: { backgroundColor: colors.primary },
+  periodTabDisabled: { opacity: 0.4 },
+  periodTabText: { color: colors.primary, fontFamily: typography.sans, fontSize: 10, fontWeight: '800' },
+  periodTabTextActive: { color: colors.surface },
+  detailHeader: { alignItems: 'center', flexDirection: 'row', gap: spacing.md },
+  detailHeading: { flex: 1 },
+  detailIconGold: { alignItems: 'center', backgroundColor: colors.goldSoft, borderRadius: radii.pill, height: 46, justifyContent: 'center', width: 46 },
+  detailIconGreen: { alignItems: 'center', backgroundColor: colors.softGreen, borderRadius: radii.pill, height: 46, justifyContent: 'center', width: 46 },
+  detailEyebrow: { color: colors.goldText, fontFamily: typography.sans, fontSize: 9, fontWeight: '900', letterSpacing: 0.8 },
+  detailTitle: { color: colors.primary, fontFamily: typography.serif, fontSize: 18, fontWeight: '600', marginTop: 2 },
+  detailDates: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 10, marginTop: 3 },
+  detailGrid: { flexDirection: 'row', gap: spacing.sm },
+  detailMetric: { backgroundColor: colors.paleGreen, borderRadius: radii.md, flex: 1, minWidth: 0, padding: spacing.md },
+  detailMetricLabel: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 8 },
+  detailMetricValue: { color: colors.primary, fontFamily: typography.sans, fontSize: 12, fontWeight: '900', marginTop: 4 },
+  detailNote: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 10, lineHeight: 15 },
+  ufComparison: { flexDirection: 'row', gap: spacing.sm },
+  ufMetric: { backgroundColor: colors.paleGreen, borderRadius: radii.md, flex: 1, gap: 4, minWidth: 0, padding: spacing.md },
+  ufMetricValue: { color: colors.primary, fontFamily: typography.sans, fontSize: 12, fontWeight: '900' },
+  smadPanel: { alignItems: 'center', backgroundColor: colors.goldSoft, borderRadius: radii.md, flexDirection: 'row', justifyContent: 'space-around', padding: spacing.md },
+  smadValue: { color: colors.primary, fontFamily: typography.serif, fontSize: 22, fontWeight: '700', marginTop: 2 },
   emissionRow: { alignItems: 'center', flexDirection: 'row' },
   emissionItem: { flex: 1, gap: 4 },
   emissionDivider: { backgroundColor: colors.border, height: 42, marginHorizontal: spacing.md, width: 1 },

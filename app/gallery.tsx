@@ -21,6 +21,7 @@ export default function GalleryScreen() {
   const { content, loading, refresh } = useNewsContent();
   const [selected, setSelected] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string>();
   const isAdmin = authenticatedUser?.role === 'admin' && !isPreviewing;
   const photos = content.gallery.filter((photo) => !photo.newsArticleId);
 
@@ -33,6 +34,22 @@ export default function GalleryScreen() {
     } finally {
       setUploading(false);
     }
+  };
+
+  const deletePhoto = (photo: GalleryPhoto) => {
+    Alert.alert('Eliminar fotografía', 'La fotografía dejará de aparecer para todos.', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Eliminar',
+        style: 'destructive',
+        onPress: () => {
+          setDeletingId(photo.id);
+          newsService.deleteGalleryPhoto(photo).then(refresh).catch((cause) => {
+            Alert.alert('No se pudo eliminar', cause instanceof Error ? cause.message : 'Intenta nuevamente.');
+          }).finally(() => setDeletingId(undefined));
+        },
+      },
+    ]);
   };
 
   return (
@@ -55,11 +72,19 @@ export default function GalleryScreen() {
         {loading ? <ActivityIndicator color={colors.gold} style={styles.loader} /> : null}
         <View style={styles.grid}>
           {photos.map((photo, index) => (
-            <Pressable accessibilityLabel={`Abrir fotografía ${index + 1}`} key={photo.id} onPress={() => setSelected(index)} style={({ pressed }) => [styles.imageButton, pressed && styles.pressed]}>
-              <Image source={photoSource(photo)} style={styles.image} />
-              <View style={styles.imageNumber}><Text style={styles.imageNumberText}>{String(index + 1).padStart(2, '0')}</Text></View>
-            </Pressable>
+            <View key={photo.id} style={styles.photoTile}>
+              <Pressable accessibilityLabel={`Abrir fotografía ${index + 1}`} onPress={() => setSelected(index)} style={({ pressed }) => [styles.imageButton, pressed && styles.pressed]}>
+                <Image source={photoSource(photo)} style={styles.image} />
+                <View style={styles.imageNumber}><Text style={styles.imageNumberText}>{String(index + 1).padStart(2, '0')}</Text></View>
+              </Pressable>
+              {isAdmin ? (
+                <Pressable accessibilityLabel={`Eliminar fotografía ${index + 1}`} disabled={deletingId === photo.id} onPress={() => deletePhoto(photo)} style={styles.deleteButton}>
+                  {deletingId === photo.id ? <ActivityIndicator color={colors.surface} size="small" /> : <Ionicons color={colors.surface} name="trash-outline" size={17} />}
+                </Pressable>
+              ) : null}
+            </View>
           ))}
+          {!photos.length && !loading ? <Text style={styles.empty}>Aún no hay fotos publicadas. Usa + para agregar la primera.</Text> : null}
         </View>
       </View>
 
@@ -87,10 +112,13 @@ const styles = StyleSheet.create({
   addButton: { alignItems: 'center', backgroundColor: colors.primary, borderRadius: radii.pill, height: 46, justifyContent: 'center', width: 46 },
   loader: { paddingTop: spacing.xxl },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, paddingHorizontal: spacing.xl, paddingTop: spacing.xxl },
-  imageButton: { ...shadows.card, aspectRatio: 0.86, borderRadius: radii.lg, overflow: 'hidden', position: 'relative', width: '47.8%' },
+  photoTile: { aspectRatio: 0.86, position: 'relative', width: '47.8%' },
+  imageButton: { ...shadows.card, borderRadius: radii.lg, height: '100%', overflow: 'hidden', position: 'relative', width: '100%' },
   image: { height: '100%', width: '100%' },
   imageNumber: { backgroundColor: 'rgba(9,61,42,0.72)', borderRadius: radii.pill, bottom: 10, paddingHorizontal: 8, paddingVertical: 5, position: 'absolute', right: 10 },
   imageNumberText: { color: colors.surface, fontFamily: typography.sans, fontSize: 9, fontWeight: '800' },
+  deleteButton: { alignItems: 'center', backgroundColor: 'rgba(171,54,48,0.92)', borderRadius: radii.pill, height: 36, justifyContent: 'center', position: 'absolute', right: 9, top: 9, width: 36, zIndex: 2 },
+  empty: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 12, lineHeight: 18, paddingVertical: spacing.xxl, textAlign: 'center', width: '100%' },
   pressed: { opacity: 0.78, transform: [{ scale: 0.985 }] },
   disabled: { opacity: 0.58 },
   modal: { alignItems: 'center', backgroundColor: 'rgba(5,23,16,0.96)', flex: 1, justifyContent: 'center' },
