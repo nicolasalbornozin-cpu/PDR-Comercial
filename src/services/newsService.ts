@@ -108,12 +108,9 @@ export const newsService = {
       articleRows = legacy.data.map((row) => ({ ...row, event_month: null, sort_order: 0 })) as NewsRow[];
     } else articleRows = articlesResult.data as NewsRow[];
     if (galleryResult.error) throw Error(galleryResult.error.message);
-    const fallback = fallbackContent();
     return {
-      articles: articleRows.length ? articleRows.map(rowToArticle) : fallback.articles,
-      gallery: galleryResult.data.length
-        ? (galleryResult.data as GalleryRow[]).map((row) => ({ id: String(row.id), title: row.title, imageUrl: row.image_url, newsArticleId: row.news_article_id ? String(row.news_article_id) : undefined, sortOrder: row.sort_order }))
-        : fallback.gallery,
+      articles: articleRows.length ? articleRows.map(rowToArticle) : fallbackContent().articles,
+      gallery: (galleryResult.data as GalleryRow[]).map((row) => ({ id: String(row.id), title: row.title, imageUrl: row.image_url, newsArticleId: row.news_article_id ? String(row.news_article_id) : undefined, sortOrder: row.sort_order })),
     };
   },
 
@@ -157,10 +154,24 @@ export const newsService = {
       title: title.trim() || 'Paseo Senior',
       image_url: imageUrl,
       news_article_id: newsArticleId && /^\d+$/.test(newsArticleId) ? Number(newsArticleId) : null,
+      // Milliseconds preserve upload order and require the bigint column added in the news migration.
       sort_order: Date.now(),
       active: true,
     });
     if (result.error) throw Error(result.error.message);
     return true;
+  },
+
+  async deleteGalleryPhoto(photo: GalleryPhoto): Promise<void> {
+    if (!supabase || !/^\d+$/.test(photo.id)) throw Error('Esta fotografía no está publicada en Supabase.');
+    const result = await supabase.from('gallery_images').delete().eq('id', Number(photo.id));
+    if (result.error) throw Error(result.error.message);
+    const marker = '/storage/v1/object/public/news-media/';
+    const markerIndex = photo.imageUrl?.indexOf(marker) ?? -1;
+    if (markerIndex >= 0 && photo.imageUrl) {
+      const path = decodeURIComponent(photo.imageUrl.slice(markerIndex + marker.length).split('?')[0]);
+      const removed = await supabase.storage.from('news-media').remove([path]);
+      if (removed.error) throw Error(`Se quitó la foto de la galería, pero no el archivo: ${removed.error.message}`);
+    }
   },
 };

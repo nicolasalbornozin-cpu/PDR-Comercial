@@ -67,6 +67,7 @@ export function parseIndividualSheet(book: WorkBook, source: SheetSource): Sheet
   if (first < 0) return result;
   const seen = new Set<string>(); const aggregated = new Map<string, SheetRecord>(); const contracts = new Map<string, string>();
   const categoryEmission = new Map<string, { emittedUf: number; notEmittedUf: number }>();
+  const seniorEmission = new Map<string, number>();
   if (source === 'category') {
     const cantoName = book.SheetNames.find(n => searchName(n) === 'canto');
     const trioName = book.SheetNames.find(n => ['base trio', 'trio'].includes(searchName(n)));
@@ -95,6 +96,21 @@ export function parseIndividualSheet(book: WorkBook, source: SheetSource): Sheet
       result.warnings.push('Catego no incluye CANTO y Base TRIO; el desglose emitido/sin emitir quedará sin dato.');
     }
   }
+  if (source === 'senior') {
+    const summaryName = book.SheetNames.find(n => searchName(n) === 'resumen senior');
+    const summary = summaryName ? book.Sheets[summaryName] : undefined;
+    if (summary) {
+      const summaryLast = Object.keys(summary).filter(a => /^[A-Z]+\d+$/.test(a)).reduce((max, a) => Math.max(max, Number(a.replace(/\D/g, ''))), 1);
+      for (let r = 4; r <= summaryLast; r++) {
+        const rut = normalizeRut(summary[`E${r}`]?.v);
+        const emitted = number(summary[`K${r}`]?.v);
+        if (rut && emitted !== undefined && emitted >= 0) seniorEmission.set(rut, emitted);
+      }
+      result.warnings.push('Senior: UF emitida se toma de Resumen Senior y se cruza por RUT; UF sin emitir es Total menos Emisión.');
+    } else {
+      result.warnings.push('Senior no incluye Resumen Senior; el desglose emitido/sin emitir quedará sin dato.');
+    }
+  }
   for (let r = first + 1; r <= maxRow; r++) {
     const nameCol = source === 'category' ? 'G' : source === 'senior' ? 'C' : source === 'production_coordinators' ? 'A' : debt ? 'M' : source.startsWith('ranking_') ? 'C' : 'B';
     const name = text(get(nameCol, r, true));
@@ -106,6 +122,8 @@ export function parseIndividualSheet(book: WorkBook, source: SheetSource): Sheet
     if (source === 'category') {
       numeric(values, 'smad', 'H', r); numeric(values, 'uf', 'I', r); numeric(values, 'prize', 'K', r);
       values.level = text(get('J', r)); values.remaining = text(get('L', r));
+      const smadRemaining = /(?:Y\s+)?(\d+)\s*SMAD\b/i.exec(String(values.remaining));
+      values.smadRemaining = smadRemaining ? Number(smadRemaining[1]) : 0;
       const emission = categoryEmission.get(searchName(name));
       if (emission) { values.emittedUf = emission.emittedUf; values.notEmittedUf = emission.notEmittedUf; }
     } else if (source === 'senior') {
@@ -115,6 +133,12 @@ export function parseIndividualSheet(book: WorkBook, source: SheetSource): Sheet
       numeric(values, 'smad', 'E', r); numeric(values, 'rest', 'F', r); numeric(values, 'ssff', 'G', r);
       numeric(values, 'tenureMonths', 'H', r, false); numeric(values, 'uf', 'I', r); numeric(values, 'cancellationUf', 'M', r);
       values.level = text(get('J', r, true)) || 'Pendiente de corregir en Excel'; values.potentialLevel = text(get('K', r)); values.remaining = text(get('L', r));
+      values.smadRemaining = /tramo m[aá]ximo/i.test(String(values.remaining)) ? 0 : Math.max(10 - Number(values.smad ?? 0), 0);
+      const emitted = rut ? seniorEmission.get(rut) : undefined;
+      if (emitted !== undefined) {
+        values.emittedUf = emitted;
+        values.notEmittedUf = Math.max(Number(values.uf ?? 0) - emitted, 0);
+      }
     } else if (source === 'production_sellers' || source === 'production_coordinators') {
       const coord = source === 'production_coordinators';
       numeric(values, 'uf', coord ? 'C' : 'J', r); numeric(values, 'businesses', coord ? 'D' : 'K', r);
