@@ -262,6 +262,18 @@ export const newsArticles: NewsArticle[] = [
     featured: false,
     category: 'Información comercial',
   },
+  {
+    id: 'ultimos-eventos',
+    title: 'Últimos eventos',
+    summary: 'Revisa las actividades más recientes de nuestros equipos.',
+    body: 'En este espacio compartiremos fotografías y una breve descripción de los últimos eventos de Parque del Recuerdo.',
+    image: 'seniorEvent',
+    date: '2026-09-12',
+    featured: false,
+    category: 'Eventos recientes',
+    eventMonth: '2026-09-01',
+    sortOrder: 35,
+  },
 ];
 
 export const galleryImages = ['seniorEvent', 'gardenTable', 'park', 'gardenTable', 'seniorEvent', 'park'] as const;
