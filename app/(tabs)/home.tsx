@@ -15,7 +15,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { snapshotService } from '@/services/snapshotService';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
 import { DashboardData, MetricSnapshot, roleLabels, VisibleProfile } from '@/types';
-import { daysWithoutSale, isBirthdayToday, productivityTone, seniorEligibleUf } from '@/utils/commercialRules';
+import { daysWithoutSale, isBirthdayToday, productivityTone } from '@/utils/commercialRules';
 import { formatUF } from '@/utils/format';
 
 function sumMetric(workers: VisibleProfile[], latest: DashboardData['latestByUser'], key: keyof MetricSnapshot): number {
@@ -119,7 +119,7 @@ export default function HomeScreen() {
   const bestMonthlyUf = Math.max(...sellerRows.map((seller) => Number(data?.monthlyEmittedUfByUser[seller.id] ?? 0)), 0);
   const rankingPosition = ownMetric?.rankingPosition;
   const salesforceRecords = isSeller ? Number(ownMetric?.salesforceRecords ?? 0) : sumMetric(sellerRows, data?.latestByUser ?? {}, 'salesforceRecords');
-  const seniorUf = seniorEligibleUf(ownMetric, data?.seniorOpen ?? true);
+  const seniorUf = Number(ownMetric?.eligibleTotalUf ?? ownMetric?.quarterTotalUf ?? 0);
   const seniorTarget = ownMetric?.seniorTargetUf;
 
   return (
@@ -195,9 +195,11 @@ export default function HomeScreen() {
                 <View style={styles.sectionTitleRow}><View style={styles.sectionIcon}><Ionicons color={colors.secondary} name="locate-outline" size={20} /></View><Text style={styles.sectionTitle}>Mis metas</Text></View>
                 <Pressable onPress={() => router.push('/goals')}><Text style={styles.detailLink}>Ver detalle  ›</Text></Pressable>
               </View>
-              <GoalCard icon="diamond-outline" badge={`${ownMetric?.smadCount ?? '—'} SMAD`} insight={ownMetric?.seniorRemaining ?? 'Sin carga Senior publicada'} progress={seniorTarget ? seniorUf / seniorTarget : 0} title={ownMetric?.seniorLevel ?? 'Senior'} value={ownMetric?.eligibleTotalUf !== undefined ? `${formatUF(seniorUf)} UF` : 'Sin datos'} />
+              <Pressable onPress={() => router.push({ pathname: '/goals', params: { focus: 'senior' } })} style={({ pressed }) => pressed && styles.pressed}>
+                <GoalCard icon="diamond-outline" badge={`${ownMetric?.smadCount ?? '—'} SMAD`} insight={ownMetric?.seniorRemaining ?? 'Toca para ver UF brutas y emitidas'} progress={seniorTarget ? seniorUf / seniorTarget : 0} title={ownMetric?.seniorLevel ?? 'Senior'} value={ownMetric?.eligibleTotalUf !== undefined ? `${formatUF(seniorUf)} UF` : 'Sin datos'} />
+              </Pressable>
               <Pressable onPress={() => router.push({ pathname: '/goals', params: { focus: 'category' } })} style={({ pressed }) => pressed && styles.pressed}>
-                <GoalCard badge={ownMetric?.category ?? 'Sin categoría'} icon="star-outline" insight="Toca para ver el período y el estado de emisión" progress={ownMetric?.categoryTargetUf ? (ownMetric.categoryUf??0)/ownMetric.categoryTargetUf : 0} title={ownMetric?.categoryLabel??'Catego'} tone="green" value={ownMetric?.categoryUf!==undefined?`${formatUF(ownMetric.categoryUf)} UF`:'Sin datos'} />
+                <GoalCard badge={ownMetric?.category ?? 'Sin categoría'} icon="star" insight="Toca para ver el período y el estado de emisión" progress={ownMetric?.categoryTargetUf ? (ownMetric.categoryUf??0)/ownMetric.categoryTargetUf : 0} title={ownMetric?.categoryLabel??'Catego'} tone="green" value={ownMetric?.categoryUf!==undefined?`${formatUF(ownMetric.categoryUf)} UF`:'Sin datos'} />
               </Pressable>
             </View>
           ) : null}
