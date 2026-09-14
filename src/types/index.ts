@@ -102,6 +102,7 @@ export interface MetricSnapshot {
   businessCount?: number;
   productivity?: number;
   smadCount?: number;
+  smadRemaining?: number;
   restCount?: number;
   ssffCount?: number;
   delinquentClientsCount?: number;
