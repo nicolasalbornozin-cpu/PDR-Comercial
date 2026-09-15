@@ -11,13 +11,15 @@ En Administración → Cargas, selecciona el origen, escribe el período y sus f
 | TITANES · Manuel Olmedo | Carga Titanes |
 | RBH · Rodolfo | Carga RBH |
 | MSC · Mauricio | Carga MSC |
-| Riesgo Sauce | Ranking Sauce Riesgo |
+| Riesgo Sauce | Carga Sauce (también reconoce «Carga sause») |
 | Ranking mensual emitido | Ranking mensual |
 | Ranking anual emitido | Ranking anual |
 
 Guarda el Excel después de recalcularlo: la app importa sus resultados, no ejecuta fórmulas. Conserva encabezados y columnas. Un error numérico obligatorio bloquea la carga; datos opcionales con errores se muestran como pendientes, nunca como cero. Los nombres sin RUT deben coincidir de forma única con la nómina.
 
-Senior abierto utiliza el resultado neto de CARGA Senior. Para cerrar, recalcula el Excel con ventas emitidas y marca la confirmación de cierre antes de elegir el archivo. Al vencer el período, una carga abierta no se convierte automáticamente en emisión certificada: queda pendiente de cargar el cierre. Anulaciones se toma del encabezado Anulaciones de CARGA Senior; no del Excel separado.
+Senior abierto utiliza el resultado neto de CARGA Senior. Para cerrar, recalcula el Excel con ventas emitidas y marca la confirmación de cierre antes de elegir el archivo. Al vencer el período, una carga abierta no se convierte automáticamente en emisión certificada: queda pendiente de cargar el cierre. Anulaciones se toma del encabezado Anulaciones de CARGA Senior; no del Excel separado. Los requisitos pendientes se leen desde Cumplimiento y el tramo desde Cumplimiento por UF.
+
+En Catego, las UF emitidas se leen directamente desde UF BRUTA EMITIDA de Carga Catego y las UF sin emitir se calculan como UF BRUTA menos emitidas, sin mostrar valores negativos. Publica primero el período anterior y después el vigente para mantener ambos disponibles en Mis metas.
 
 Los rankings y UF anuales/mensuales proceden de las hojas de ranking emitido. Productividad conserva el cálculo del Excel de Producción. Riesgo Sauce y mora no son intercambiables. El grupo 0–8% es un único total. La nómina determina las personas vigentes y su jerarquía; no crea cuentas de acceso ni contraseñas.
 
