@@ -9,7 +9,7 @@ export const sheetSources = {
   titanes: { label: 'Mora TITANES · Manuel Olmedo', sheet: 'Carga Titanes' },
   rbh: { label: 'Mora RBH · Rodolfo', sheet: 'Carga RBH' },
   msc: { label: 'Mora MSC · Mauricio', sheet: 'Carga MSC' },
-  sauce: { label: 'Riesgo Sauce', sheet: 'Ranking Sauce Riesgo' },
+  sauce: { label: 'Riesgo Sauce', sheet: 'Carga Sauce' },
   ranking_monthly: { label: 'Ranking mensual · emitidas', sheet: 'Ranking mensual' },
   ranking_annual: { label: 'Ranking anual · emitidas', sheet: 'Ranking anual' },
 } as const;
@@ -35,10 +35,14 @@ function date(value: unknown): string | undefined {
   return undefined;
 }
 
-// Only aggregate seller results are published. Category may also derive an emitted/pending
-// split from the workbook's CANTO + TRIO companions; no operation or client rows are uploaded.
+const sheetAliases: Partial<Record<SheetSource, string[]>> = {
+  sauce: ['Carga Sauce', 'Carga sause', 'Ranking Sauce Riesgo'],
+};
+
+// Only aggregate worker results are published; no operation or client rows are uploaded.
 export function parseIndividualSheet(book: WorkBook, source: SheetSource): SheetImport {
-  const sheet = book.SheetNames.find(n => searchName(n) === searchName(sheetSources[source].sheet));
+  const expectedSheets = sheetAliases[source] ?? [sheetSources[source].sheet];
+  const sheet = expectedSheets.map(expected => book.SheetNames.find(n => searchName(n) === searchName(expected))).find(Boolean);
   const result: SheetImport = { source, sheet: sheet ?? sheetSources[source].sheet, records: [], errors: [], warnings: [], rules: [] };
   if (!sheet) { result.errors.push(`Falta la hoja «${result.sheet}».`); return result; }
   const ws = book.Sheets[sheet];
@@ -61,41 +65,14 @@ export function parseIndividualSheet(book: WorkBook, source: SheetSource): Sheet
     result.errors.push(`No se reconoce el encabezado ${col} de «${sheet}». Conserva las columnas originales.`); return -1;
   };
   const debt = ['titanes', 'rbh', 'msc'].includes(source);
+  const sauceLoad = source === 'sauce' && searchName(sheet).startsWith('carga sau');
   const first = source === 'category' ? header('G', ['ejecutivo']) : source === 'senior' ? header('D', ['rut vendedor'])
     : source === 'production_sellers' ? header('A', ['rut vendedor']) : source === 'production_coordinators' ? header('A', ['coordinador'])
-    : debt ? header('L', ['rut']) : source === 'sauce' ? header('A', ['rut agente']) : header('A', ['puesto']);
+    : debt ? header('L', ['rut']) : source === 'sauce' ? header(sauceLoad ? 'B' : 'A', ['rut agente']) : header('A', ['puesto']);
   if (first < 0) return result;
   const seen = new Set<string>(); const aggregated = new Map<string, SheetRecord>(); const contracts = new Map<string, string>();
-  const categoryEmission = new Map<string, { emittedUf: number; notEmittedUf: number }>();
   const seniorEmission = new Map<string, number>();
-  if (source === 'category') {
-    const cantoName = book.SheetNames.find(n => searchName(n) === 'canto');
-    const trioName = book.SheetNames.find(n => ['base trio', 'trio'].includes(searchName(n)));
-    const canto = cantoName ? book.Sheets[cantoName] : undefined;
-    const trio = trioName ? book.Sheets[trioName] : undefined;
-    if (canto && trio) {
-      const trioLast = Object.keys(trio).filter(a => /^[A-Z]+\d+$/.test(a)).reduce((max, a) => Math.max(max, Number(a.replace(/\D/g, ''))), 1);
-      const cantoLast = Object.keys(canto).filter(a => /^[A-Z]+\d+$/.test(a)).reduce((max, a) => Math.max(max, Number(a.replace(/\D/g, ''))), 1);
-      const emittedByOperation = new Map<string, boolean>();
-      for (let r = 2; r <= trioLast; r++) {
-        const operation = text(trio[`B${r}`]?.v);
-        if (operation) emittedByOperation.set(operation, searchName(trio[`P${r}`]?.v) === 'emitida');
-      }
-      for (let r = 2; r <= cantoLast; r++) {
-        const seller = searchName(canto[`E${r}`]?.v);
-        const uf = number(canto[`F${r}`]?.v);
-        const operation = text(canto[`I${r}`]?.v);
-        if (!seller || uf === undefined || uf < 0 || !operation) continue;
-        const current = categoryEmission.get(seller) ?? { emittedUf: 0, notEmittedUf: 0 };
-        if (emittedByOperation.get(operation)) current.emittedUf += uf;
-        else current.notEmittedUf += uf;
-        categoryEmission.set(seller, current);
-      }
-      result.warnings.push('Catego: emitido y sin emitir se agregan por vendedor cruzando Nº operación de CANTO con ESTADO de Base TRIO. No se suben filas de clientes ni contratos.');
-    } else {
-      result.warnings.push('Catego no incluye CANTO y Base TRIO; el desglose emitido/sin emitir quedará sin dato.');
-    }
-  }
+  const seniorCancellation = new Map<string, number>();
   if (source === 'senior') {
     const summaryName = book.SheetNames.find(n => searchName(n) === 'resumen senior');
     const summary = summaryName ? book.Sheets[summaryName] : undefined;
@@ -105,6 +82,8 @@ export function parseIndividualSheet(book: WorkBook, source: SheetSource): Sheet
         const rut = normalizeRut(summary[`E${r}`]?.v);
         const emitted = number(summary[`K${r}`]?.v);
         if (rut && emitted !== undefined && emitted >= 0) seniorEmission.set(rut, emitted);
+        const cancellation = number(summary[`O${r}`]?.v);
+        if (rut && cancellation !== undefined && cancellation >= 0) seniorCancellation.set(rut, cancellation);
       }
       result.warnings.push('Senior: UF emitida se toma de Resumen Senior y se cruza por RUT; UF sin emitir es Total menos Emisión.');
     } else {
@@ -112,28 +91,40 @@ export function parseIndividualSheet(book: WorkBook, source: SheetSource): Sheet
     }
   }
   for (let r = first + 1; r <= maxRow; r++) {
-    const nameCol = source === 'category' ? 'G' : source === 'senior' ? 'C' : source === 'production_coordinators' ? 'A' : debt ? 'M' : source.startsWith('ranking_') ? 'C' : 'B';
+    const nameCol = source === 'category' ? 'G' : source === 'senior' ? 'C' : source === 'production_coordinators' ? 'A' : debt ? 'M' : source === 'sauce' && sauceLoad ? 'C' : source.startsWith('ranking_') ? 'C' : 'B';
     const name = text(get(nameCol, r, true));
     if (!name || /^(total|no vigente|\*|0$)/i.test(name)) continue;
-    const rutCol = source === 'category' || source === 'production_coordinators' ? null : source === 'senior' ? 'D' : debt ? 'L' : source.startsWith('ranking_') ? 'B' : 'A';
+    const rutCol = source === 'category' || source === 'production_coordinators' ? null : source === 'senior' ? 'D' : debt ? 'L' : source === 'sauce' && sauceLoad ? 'B' : source.startsWith('ranking_') ? 'B' : 'A';
     const rut = rutCol ? normalizeRut(text(get(rutCol, r))) : undefined;
     if (rutCol && (!rut || !isValidRut(rut))) { result.errors.push(`${sheet}, fila ${r}: RUT inválido de ${name}.`); continue; }
     const values: SheetMetrics = {};
     if (source === 'category') {
-      numeric(values, 'smad', 'H', r); numeric(values, 'uf', 'I', r); numeric(values, 'prize', 'K', r);
+      numeric(values, 'smad', 'H', r); numeric(values, 'uf', 'I', r); numeric(values, 'prize', 'K', r, false);
       values.level = text(get('J', r)); values.remaining = text(get('L', r));
       const smadRemaining = /(?:Y\s+)?(\d+)\s*SMAD\b/i.exec(String(values.remaining));
       values.smadRemaining = smadRemaining ? Number(smadRemaining[1]) : 0;
-      const emission = categoryEmission.get(searchName(name));
-      if (emission) { values.emittedUf = emission.emittedUf; values.notEmittedUf = emission.notEmittedUf; }
+      const emitted = number(get('M', r, true));
+      if (emitted === undefined) result.errors.push(`${sheet}!M${r}: falta UF bruta emitida válida.`);
+      else {
+        values.emittedUf = emitted;
+        values.notEmittedUf = Math.max(Number(values.uf ?? 0) - emitted, 0);
+      }
     } else if (source === 'senior') {
       const reference = /Resumen Senior'?!\$?([A-Z]+)\$?(\d+)/i.exec(ws[`M${r}`]?.f ?? '');
       const summary = book.Sheets['Resumen Senior'];
       if (reference && summary && searchName(summary[`${reference[1]}3`]?.v) !== 'anulacion') result.errors.push(`${sheet}!M${r}: Anulaciones no apunta a la columna titulada Anulación de Resumen Senior.`);
       numeric(values, 'smad', 'E', r); numeric(values, 'rest', 'F', r); numeric(values, 'ssff', 'G', r);
-      numeric(values, 'tenureMonths', 'H', r, false); numeric(values, 'uf', 'I', r); numeric(values, 'cancellationUf', 'M', r);
-      values.level = text(get('J', r, true)) || 'Pendiente de corregir en Excel'; values.potentialLevel = text(get('K', r)); values.remaining = text(get('L', r));
-      values.smadRemaining = /tramo m[aá]ximo/i.test(String(values.remaining)) ? 0 : Math.max(10 - Number(values.smad ?? 0), 0);
+      numeric(values, 'tenureMonths', 'H', r, false); numeric(values, 'uf', 'I', r);
+      const cancellation = number(get('M', r, true));
+      if (cancellation !== undefined) values.cancellationUf = cancellation;
+      else if (rut && seniorCancellation.has(rut)) {
+        values.cancellationUf = seniorCancellation.get(rut)!;
+        result.warnings.push(`${sheet}!M${r}: enlace inválido; Anulación se recuperó de Resumen Senior por RUT.`);
+      } else result.errors.push(`${sheet}!M${r}: falta Anulación válida y no se pudo recuperar por RUT.`);
+      const requirements = text(get('J', r, true));
+      values.level = text(get('K', r, true)) || 'Pendiente de corregir en Excel'; values.potentialLevel = requirements; values.remaining = text(get('L', r));
+      const missing = (label: string) => Number(new RegExp(`FALTA(?:N)?\\s+(\\d+)\\s+${label}\\b`, 'i').exec(requirements)?.[1] ?? 0);
+      values.smadRemaining = missing('SMAD');
       const emitted = rut ? seniorEmission.get(rut) : undefined;
       if (emitted !== undefined) {
         values.emittedUf = emitted;
@@ -168,7 +159,7 @@ export function parseIndividualSheet(book: WorkBook, source: SheetSource): Sheet
       }
       aggregated.set(rut!, a); continue;
     } else if (source === 'sauce') {
-      const column = searchName(ws[`G${first}`]?.v).startsWith('actualizado') ? 'G' : 'D';
+      const column = sauceLoad ? 'E' : searchName(ws[`G${first}`]?.v).startsWith('actualizado') ? 'G' : 'D';
       numeric(values, 'risk', column, r, column === 'D');
       if (typeof values.risk === 'number' && /%/.test(ws[`${column}${r}`]?.z ?? '') && values.risk <= 1) values.risk *= 100;
       if (Number(values.risk) < 0 || Number(values.risk) > 100) result.errors.push(`${sheet}!${column}${r}: riesgo fuera de 0–100%.`);
@@ -184,13 +175,14 @@ export function parseIndividualSheet(book: WorkBook, source: SheetSource): Sheet
     result.warnings.push('Se agrupa por RUT. No se suben contratos, compromisos ni fechas de clientes. UF 0–8% es un único total; no se inventan cuotas para ese grupo.');
   }
   if (source === 'category') {
+    result.warnings.push('Catego: UF bruta emitida se toma directamente de la columna M de Carga Catego; sin emitir es UF bruta menos UF emitida, con mínimo cero.');
     for (let r = 1; r < first; r++) {
       const uf = number(get('C',r)), smad = number(get('E',r)), prize = number(get('F',r));
       if (uf !== undefined && smad !== undefined && prize !== undefined) result.rules.push({ label: text(get('B',r)).replace(/^[^A-Za-zÁÉÍÓÚÑ]+/u,''), uf, smad, prize });
     }
   }
   if (!result.records.length) result.errors.push('No hay trabajadores válidos en la hoja seleccionada.');
-  if (source === 'sauce' && searchName(ws[`G${first}`]?.v).startsWith('actualizado')) result.warnings.push(`Riesgo tomado de G: ${text(ws[`G${first}`]?.v)}. Los errores quedan pendientes; no se reemplazan por el porcentaje antiguo de D.`);
+  if (source === 'sauce') result.warnings.push(sauceLoad ? 'Riesgo Sauce tomado de PORC RIESGO (columna E) de Carga Sauce.' : `Riesgo tomado de ${searchName(ws[`G${first}`]?.v).startsWith('actualizado') ? 'G' : 'D'} del formato anterior.`);
   if (source.startsWith('production_')) result.warnings.push('Se conserva la productividad calculada en el Excel. Sus UF históricas no se convierten en ventas emitidas anuales.');
   return result;
 }
