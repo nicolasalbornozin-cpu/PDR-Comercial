@@ -180,7 +180,7 @@ export default function HomeScreen() {
           <View style={styles.secondaryMetrics}>
             <View style={styles.secondaryMetric}>
               <View style={[styles.secondaryIcon, { backgroundColor: cancellations ? '#FBECE9' : colors.softGreen }]}><Ionicons color={cancellations ? colors.danger : colors.success} name="close-circle-outline" size={19} /></View>
-              <View><Text style={styles.secondaryLabel}>Anulaciones Senior</Text><Text style={[styles.secondaryValue, cancellations ? styles.dangerText : styles.successText]}>{formatUF(cancellations)} UF</Text></View>
+              <View><Text style={styles.secondaryLabel}>Anulaciones del período</Text><Text style={[styles.secondaryValue, cancellations ? styles.dangerText : styles.successText]}>{formatUF(cancellations)} UF</Text></View>
             </View>
             <View style={styles.secondaryDivider} />
             <View style={styles.secondaryMetric}>
@@ -199,7 +199,7 @@ export default function HomeScreen() {
                 <GoalCard icon="diamond-outline" badge={`${ownMetric?.smadCount ?? '—'} SMAD`} insight={ownMetric?.seniorRemaining ?? 'Toca para ver UF brutas y emitidas'} progress={seniorTarget ? seniorUf / seniorTarget : 0} title={ownMetric?.seniorLevel ?? 'Senior'} value={ownMetric?.eligibleTotalUf !== undefined ? `${formatUF(seniorUf)} UF` : 'Sin datos'} />
               </Pressable>
               <Pressable onPress={() => router.push({ pathname: '/goals', params: { focus: 'category' } })} style={({ pressed }) => pressed && styles.pressed}>
-                <GoalCard badge={ownMetric?.category ?? 'Sin categoría'} icon="star" insight="Toca para ver el período y el estado de emisión" progress={ownMetric?.categoryTargetUf ? (ownMetric.categoryUf??0)/ownMetric.categoryTargetUf : 0} title={ownMetric?.categoryLabel??'Catego'} tone="green" value={ownMetric?.categoryUf!==undefined?`${formatUF(ownMetric.categoryUf)} UF`:'Sin datos'} />
+                <GoalCard badge={ownMetric?.category ?? 'Sin categoría'} icon="star" insight="UF pendientes de emisión · toca para ver ambos períodos" progress={ownMetric?.categoryTargetUf ? (ownMetric.categoryUf??0)/ownMetric.categoryTargetUf : 0} title={ownMetric?.categoryLabel??'Catego'} tone="green" value={ownMetric?.categoryNotEmittedUf!==undefined?`${formatUF(ownMetric.categoryNotEmittedUf)} UF`:'Sin datos'} />
               </Pressable>
             </View>
           ) : null}
