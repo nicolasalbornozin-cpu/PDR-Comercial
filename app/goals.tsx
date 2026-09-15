@@ -22,13 +22,17 @@ function missingSmad(snapshot: Partial<MetricSnapshot> | undefined, kind: GoalKi
   const remaining = kind === 'category' ? snapshot?.categoryRemaining : snapshot?.seniorRemaining;
   const parsed = /(?:Y\s+)?(\d+)\s*SMAD\b/i.exec(remaining ?? '');
   if (parsed) return Number(parsed[1]);
-  if (kind === 'senior' && snapshot?.smadCount !== undefined) return /tramo m[aá]ximo/i.test(remaining ?? '') ? 0 : Math.max(10 - snapshot.smadCount, 0);
   return undefined;
 }
 
 function pendingUf(snapshot: Partial<MetricSnapshot> | undefined, total: number | undefined): number | undefined {
   if (snapshot?.notEmittedUf !== undefined) return snapshot.notEmittedUf;
   return total !== undefined && snapshot?.emittedUf !== undefined ? Math.max(total - snapshot.emittedUf, 0) : undefined;
+}
+
+function categoryPeriodName(snapshot: Partial<MetricSnapshot> | undefined, fallback: string): string {
+  const label = snapshot?.categoryLabel?.replace(/^catego\s*[·:-]?\s*/i, '').trim();
+  return label || fallback;
 }
 
 export default function GoalsScreen() {
@@ -57,6 +61,11 @@ export default function GoalsScreen() {
   const seniorValue = Number(metric?.eligibleTotalUf ?? metric?.quarterTotalUf ?? 0);
   const categoryValue = Number(metric?.categoryUf ?? 0);
   const categoryTarget = metric?.categoryTargetUf ?? 0;
+  const categoryPending = metric?.categoryNotEmittedUf !== undefined
+    ? metric.categoryNotEmittedUf
+    : metric?.categoryUf !== undefined && metric?.categoryEmittedUf !== undefined
+      ? Math.max(metric.categoryUf - metric.categoryEmittedUf, 0)
+      : undefined;
   const validLevel = (level?:string) => Boolean(level && !/^(no|sin|pendiente|en carrera)/i.test(level));
   const completed = Number(validLevel(metric?.category)) + Number(validLevel(metric?.seniorLevel));
   const available = Number(metric?.categoryUf !== undefined) + Number(metric?.eligibleTotalUf !== undefined);
@@ -116,23 +125,37 @@ export default function GoalsScreen() {
                 <View style={styles.ufMetric}><Text style={styles.detailMetricLabel}>UF emitidas</Text><Text style={styles.ufMetricValue}>{seniorSnapshot?.emittedUf === undefined ? 'Sin dato' : `${formatUF(seniorSnapshot.emittedUf)} UF`}</Text></View>
                 <View style={styles.ufMetric}><Text style={styles.detailMetricLabel}>Sin emitir</Text><Text style={[styles.ufMetricValue, styles.pendingValue]}>{pendingUf(seniorSnapshot, seniorSnapshot?.eligibleTotalUf) === undefined ? 'Sin dato' : `${formatUF(pendingUf(seniorSnapshot, seniorSnapshot?.eligibleTotalUf)!)} UF`}</Text></View>
               </View>
-              <View style={styles.smadPanel}>
-                <View><Text style={styles.detailMetricLabel}>SMAD actuales</Text><Text style={styles.smadValue}>{seniorSnapshot?.smadCount ?? 'Sin dato'}</Text></View>
-                <Ionicons color={colors.goldText} name="arrow-forward" size={19} />
-                <View><Text style={styles.detailMetricLabel}>SMAD que faltan</Text><Text style={styles.smadValue}>{missingSmad(seniorSnapshot, 'senior') ?? 'Sin dato'}</Text></View>
+              <View style={styles.requirementsSection}>
+                <Text style={styles.requirementsTitle}>Solo falta para cumplir</Text>
+                <View style={styles.requirementsGrid}>
+                  {([
+                    { icon: 'ribbon-outline' as const, label: 'SMAD', value: missingSmad(seniorSnapshot, 'senior') },
+                    { icon: 'bed-outline' as const, label: 'Descansos', value: seniorSnapshot?.restRemaining },
+                    { icon: 'layers-outline' as const, label: 'SSFF', value: seniorSnapshot?.ssffRemaining },
+                  ]).filter((item) => (item.value ?? 0) > 0).map((item) => (
+                    <View key={item.label} style={styles.requirementCard}>
+                      <View style={styles.requirementIcon}><Ionicons color={colors.goldText} name={item.icon} size={18} /></View>
+                      <Text style={styles.requirementValue}>{item.value}</Text>
+                      <Text style={styles.requirementLabel}>{item.label}</Text>
+                    </View>
+                  ))}
+                  {![missingSmad(seniorSnapshot, 'senior'), seniorSnapshot?.restRemaining, seniorSnapshot?.ssffRemaining].some((value) => (value ?? 0) > 0) ? (
+                    <View style={styles.requirementsComplete}><Ionicons color={colors.success} name="checkmark-circle" size={20} /><Text style={styles.requirementsCompleteText}>Requisitos complementarios cumplidos</Text></View>
+                  ) : null}
+                </View>
               </View>
               <Text style={styles.detailNote}>{seniorSnapshot?.seniorRemaining ?? 'Sin detalle de tramo publicado.'}</Text>
             </View>
           ) : null}
 
           <Pressable accessibilityRole="button" accessibilityState={{ expanded: openGoal === 'category' }} onPress={() => setOpenGoal((current) => current === 'category' ? null : 'category')} style={({ pressed }) => [styles.goalButton, pressed && styles.pressed]}>
-            <GoalCard badge={metric?.categoryLabel ?? 'Catego'} icon="star" insight={openGoal === 'category' ? 'Toca para ocultar el detalle' : 'Toca para ver período y emisión'} progress={getProgress(categoryValue,categoryTarget)} title={metric?.category ?? 'Categoría comercial'} tone="green" value={metric?.categoryUf !== undefined ? `${formatUF(categoryValue)} UF` : 'Sin datos'} />
+            <GoalCard badge={`${metric?.category ?? 'Sin categoría'} · sin emitir`} icon="star" insight={openGoal === 'category' ? 'Toca para ocultar el detalle' : 'Toca para ver el período y la emisión'} progress={getProgress(categoryValue,categoryTarget)} title={metric?.categoryLabel ?? 'Catego'} tone="green" value={categoryPending !== undefined ? `${formatUF(categoryPending)} UF` : 'Sin datos'} />
           </Pressable>
           {openGoal === 'category' ? (
             <View style={[styles.goalDetail, styles.categoryDetail]}>
               <View style={styles.periodTabs}>
-                <Pressable onPress={() => setPeriodView((current) => ({ ...current, category: 'current' }))} style={[styles.periodTab, periodView.category === 'current' && styles.periodTabActive]}><Text style={[styles.periodTabText, periodView.category === 'current' && styles.periodTabTextActive]}>Vigente</Text></Pressable>
-                <Pressable disabled={!categorySnapshots[1]} onPress={() => setPeriodView((current) => ({ ...current, category: 'previous' }))} style={[styles.periodTab, periodView.category === 'previous' && styles.periodTabActive, !categorySnapshots[1] && styles.periodTabDisabled]}><Text style={[styles.periodTabText, periodView.category === 'previous' && styles.periodTabTextActive]}>Pasada</Text></Pressable>
+                <Pressable onPress={() => setPeriodView((current) => ({ ...current, category: 'current' }))} style={[styles.periodTab, periodView.category === 'current' && styles.periodTabActive]}><Text style={[styles.periodTabText, periodView.category === 'current' && styles.periodTabTextActive]}>Vigente</Text><Text numberOfLines={1} style={[styles.periodTabLabel, periodView.category === 'current' && styles.periodTabTextActive]}>{categoryPeriodName(categorySnapshots[0], 'Actual')}</Text></Pressable>
+                <Pressable disabled={!categorySnapshots[1]} onPress={() => setPeriodView((current) => ({ ...current, category: 'previous' }))} style={[styles.periodTab, periodView.category === 'previous' && styles.periodTabActive, !categorySnapshots[1] && styles.periodTabDisabled]}><Text style={[styles.periodTabText, periodView.category === 'previous' && styles.periodTabTextActive]}>Anterior</Text><Text numberOfLines={1} style={[styles.periodTabLabel, periodView.category === 'previous' && styles.periodTabTextActive]}>{categoryPeriodName(categorySnapshots[1], 'Sin carga anterior')}</Text></Pressable>
               </View>
               <View style={styles.detailHeader}>
                 <View style={styles.detailIconGreen}><Ionicons color={colors.success} name="calendar-outline" size={22} /></View>
@@ -196,6 +219,7 @@ const styles = StyleSheet.create({
   periodTabActive: { backgroundColor: colors.primary },
   periodTabDisabled: { opacity: 0.4 },
   periodTabText: { color: colors.primary, fontFamily: typography.sans, fontSize: 10, fontWeight: '800' },
+  periodTabLabel: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 8, marginTop: 1, maxWidth: '94%' },
   periodTabTextActive: { color: colors.surface },
   detailHeader: { alignItems: 'center', flexDirection: 'row', gap: spacing.md },
   detailHeading: { flex: 1 },
@@ -214,6 +238,15 @@ const styles = StyleSheet.create({
   ufMetricValue: { color: colors.primary, fontFamily: typography.sans, fontSize: 12, fontWeight: '900' },
   smadPanel: { alignItems: 'center', backgroundColor: colors.goldSoft, borderRadius: radii.md, flexDirection: 'row', justifyContent: 'space-around', padding: spacing.md },
   smadValue: { color: colors.primary, fontFamily: typography.serif, fontSize: 22, fontWeight: '700', marginTop: 2 },
+  requirementsSection: { backgroundColor: colors.goldSoft, borderRadius: radii.md, gap: spacing.sm, padding: spacing.md },
+  requirementsTitle: { color: colors.goldText, fontFamily: typography.sans, fontSize: 9, fontWeight: '900', letterSpacing: 0.6, textTransform: 'uppercase' },
+  requirementsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  requirementCard: { alignItems: 'center', backgroundColor: colors.surface, borderColor: '#E8D39D', borderRadius: radii.md, borderWidth: 1, flex: 1, minWidth: 78, paddingHorizontal: spacing.sm, paddingVertical: spacing.md },
+  requirementIcon: { alignItems: 'center', backgroundColor: colors.goldSoft, borderRadius: radii.pill, height: 32, justifyContent: 'center', width: 32 },
+  requirementValue: { color: colors.primary, fontFamily: typography.serif, fontSize: 23, fontWeight: '700', marginTop: 5 },
+  requirementLabel: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 8, fontWeight: '700' },
+  requirementsComplete: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, paddingVertical: spacing.xs },
+  requirementsCompleteText: { color: colors.success, fontFamily: typography.sans, fontSize: 10, fontWeight: '800' },
   emissionRow: { alignItems: 'center', flexDirection: 'row' },
   emissionItem: { flex: 1, gap: 4 },
   emissionDivider: { backgroundColor: colors.border, height: 42, marginHorizontal: spacing.md, width: 1 },
