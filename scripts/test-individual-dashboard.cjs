@@ -2,7 +2,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('nod
 const worker=(id,role,coordinator_id,manager_id,active=true)=>({id,rut:id,name:id,aliases:[],role,coordinator_id,manager_id,active,status:active?'active':'detached'});
 const workers=[worker('seller','seller','coord','chief'),worker('other','seller','other-coord','other-chief'),worker('coord','coordinator',null,'chief'),worker('chief','sales_manager'),worker('inactive','seller','coord','chief',false)];
 const row=(worker_id,source,metrics)=>({id:source,worker_id,source,metrics,label:source,period_start:'2026-01-01',period_end:'2099-10-05',published_at:'2026-09-10T12:00:00Z',sheet_name:source,senior_status:'open',rules:[]});
-const metrics=[row('seller','ranking_annual',{emittedUf:450,position:7}),row('seller','ranking_monthly',{emittedUf:20,position:2,businesses:1}),row('seller','senior',{uf:310,cancellationUf:42,level:'Junior',remaining:'Faltan 100 UF'}),row('seller','sauce',{}),row('seller','production_sellers',{uf:9999,productivity:1.18}),row('other','ranking_annual',{emittedUf:500})];
+const metrics=[row('seller','ranking_annual',{emittedUf:450,position:7}),row('seller','ranking_monthly',{emittedUf:20,position:2,businesses:1}),row('seller','category',{uf:500,emittedUf:320,notEmittedUf:180,level:'Bronce'}),row('seller','senior',{uf:310,emittedUf:100,notEmittedUf:210,cancellationUf:42,level:'Junior',remaining:'Faltan 100 UF',potentialLevel:'FALTAN 2 DESCANSO, FALTAN 1 SSFF'}),row('seller','sauce',{}),row('seller','production_sellers',{uf:9999,productivity:1.18}),row('other','ranking_annual',{emittedUf:500})];
 const db={from(table){return {select(){return this;},order(){return this;},async range(a,b){return {data:(table==='commercial_workers'?workers:metrics).slice(a,b+1),error:null};}};}};
 const code=ts.transpileModule(fs.readFileSync('src/services/individualSheetService.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 const exportsObject={};vm.runInNewContext(code,{exports:exportsObject,require(name){if(name==='./supabase')return {supabase:db};if(name.includes('individualSheetParser'))return {searchName:s=>s.toLowerCase()};if(name.includes('utils/rut'))return {normalizeRut:s=>s};throw Error(name);},console});
@@ -16,7 +16,7 @@ assert.equal(exportsObject.remainingUfTarget(500,'Pendiente'),undefined);
  assert.equal(d.profiles.length,1);assert.equal(d.profiles[0].id,'login-uuid');
  assert.equal(d.latestByUser['login-uuid'].rankingPosition,7);
  assert.equal(d.annualEmittedUfByUser['login-uuid'],450);assert.equal(d.monthlyEmittedUfByUser['login-uuid'],20);
- assert.equal(d.latestByUser['login-uuid'].cancellationUf,42);assert.equal(d.latestByUser['login-uuid'].productionUf,9999);
+ assert.equal(d.latestByUser['login-uuid'].cancellationUf,42);assert.equal(d.latestByUser['login-uuid'].productionUf,9999);assert.equal(d.latestByUser['login-uuid'].restRemaining,2);assert.equal(d.latestByUser['login-uuid'].ssffRemaining,1);assert.equal(d.latestByUser['login-uuid'].categoryNotEmittedUf,180);assert.equal(d.latestByUser['login-uuid'].seniorNotEmittedUf,210);
  assert.equal(d.latestByUser['login-uuid'].sauceRisk,undefined);assert.equal(d.latestByUser['login-uuid'].delinquencyRate,undefined);
  const team=await service.dashboard({id:'coord',rut:'coord',role:'coordinator'});
  assert.deepEqual(Array.from(team.profiles,p=>p.id).sort(),['coord','seller']);
