@@ -93,6 +93,10 @@ export interface MetricSnapshot {
   ssaaUf?: number;
   emittedUf?: number;
   notEmittedUf?: number;
+  categoryEmittedUf?: number;
+  categoryNotEmittedUf?: number;
+  seniorEmittedUf?: number;
+  seniorNotEmittedUf?: number;
   notUploadedUf?: number;
   cancellationUf?: number;
   cancellationCount?: number;
@@ -104,7 +108,9 @@ export interface MetricSnapshot {
   smadCount?: number;
   smadRemaining?: number;
   restCount?: number;
+  restRemaining?: number;
   ssffCount?: number;
+  ssffRemaining?: number;
   delinquentClientsCount?: number;
   delinquencyRate?: number;
   salesforceRecords?: number;
