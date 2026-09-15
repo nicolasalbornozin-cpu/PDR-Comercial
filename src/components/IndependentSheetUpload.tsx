@@ -25,7 +25,7 @@ export function IndependentSheetUpload(){
  }
  async function publish(){
   if(!parsed)return;setBusy(true);setError('');setMessage('');
-  try{await individualSheetService.publish(parsed,filename,label,start,end,closed?'closed':'open');setMessage(`${parsed.sheet}: ${parsed.records.length} trabajadores publicados. Las otras cargas se conservaron.`);setParsed(null);}
+  try{const result=await individualSheetService.publish(parsed,filename,label,start,end,closed?'closed':'open');const omitted=result.skipped.length?` ${result.skipped.length} persona(s) sin identidad en la dotación fueron omitidas: ${result.skipped.join(', ')}.`:'';setMessage(`${parsed.sheet}: ${result.published} trabajadores publicados. Las otras cargas se conservaron.${omitted}`);setParsed(null);}
   catch(e){setError(e instanceof Error?e.message:'No se pudo publicar.');}finally{setBusy(false);}
  }
  return <View style={styles.card}>
