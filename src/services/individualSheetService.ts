@@ -32,8 +32,10 @@ async function historicalMetrics(uploadIds:string[],workerIds:string[]):Promise<
 }
 function goalFields(source:'category'|'senior',v:SheetMetrics,seniorOpen:boolean):Partial<MetricSnapshot>{
  const num=(k:string)=>typeof v[k]==='number'?v[k] as number:undefined;
- if(source==='category')return {category:String(v.level),categoryUf:num('uf'),categoryRemaining:String(v.remaining),categoryTargetUf:remainingUfTarget(num('uf'),v.remaining),estimatedPrizeClp:num('prize'),emittedUf:num('emittedUf'),notEmittedUf:num('notEmittedUf'),smadCount:num('smad'),smadRemaining:num('smadRemaining')};
- return {cancellationUf:num('cancellationUf'),smadCount:num('smad'),smadRemaining:num('smadRemaining'),restCount:num('rest'),ssffCount:num('ssff'),tenureMonths:num('tenureMonths'),seniorStatus:seniorOpen?'open':'closed',eligibleTotalUf:num('uf'),emittedUf:num('emittedUf'),notEmittedUf:num('notEmittedUf'),seniorLevel:String(v.level),seniorRemaining:String(v.remaining),seniorTargetUf:remainingUfTarget(num('uf'),v.remaining)};
+ if(source==='category')return {category:String(v.level),categoryUf:num('uf'),categoryRemaining:String(v.remaining),categoryTargetUf:remainingUfTarget(num('uf'),v.remaining),estimatedPrizeClp:num('prize'),emittedUf:num('emittedUf'),notEmittedUf:num('notEmittedUf'),categoryEmittedUf:num('emittedUf'),categoryNotEmittedUf:num('notEmittedUf'),smadCount:num('smad'),smadRemaining:num('smadRemaining')};
+ const requirements=String(v.potentialLevel??'');
+ const missing=(label:string)=>Number(new RegExp(`FALTA(?:N)?\\s+(\\d+)\\s+${label}\\b`,'i').exec(requirements)?.[1]??0);
+ return {cancellationUf:num('cancellationUf'),smadCount:num('smad'),smadRemaining:num('smadRemaining')??missing('SMAD'),restCount:num('rest'),restRemaining:missing('DESCANSO'),ssffCount:num('ssff'),ssffRemaining:missing('SSFF'),tenureMonths:num('tenureMonths'),seniorStatus:seniorOpen?'open':'closed',eligibleTotalUf:num('uf'),emittedUf:num('emittedUf'),notEmittedUf:num('notEmittedUf'),seniorEmittedUf:num('emittedUf'),seniorNotEmittedUf:num('notEmittedUf'),seniorLevel:String(v.level),seniorRemaining:String(v.remaining),seniorTargetUf:remainingUfTarget(num('uf'),v.remaining)};
 }
 export const individualSheetService={
  async search(query:string,role:string):Promise<WorkerRow[]>{
@@ -45,13 +47,16 @@ export const individualSheetService={
   if(parsed.errors.length)throw Error('Corrige los errores del archivo antes de publicar.');
   if(!/^\d{4}-\d{2}-\d{2}$/.test(start)||!/^\d{4}-\d{2}-\d{2}$/.test(end)||end<start)throw Error('Revisa las fechas del período.');
   const workers=await allRows<WorkerRow>('commercial_workers');
-  const records=parsed.records.map(row=>{
+  const skipped:string[]=[];
+  const records=parsed.records.flatMap(row=>{
    const found=workers.filter(w=>row.rut?w.rut===row.rut:w.role===row.role&&[w.name,...(w.aliases??[])].some(n=>searchName(n)===searchName(row.name)));
+   if(found.length===0&&parsed.source==='sauce'){skipped.push(row.name);return [];}
    if(found.length!==1)throw Error(`No hay una identidad única en dotación para ${row.name}. Revisa su RUT o nombre antes de cargar.`);
-   return {worker_id:found[0].id,metrics:row.values,source_row:row.row};
+   return [{worker_id:found[0].id,metrics:row.values,source_row:row.row}];
   });
+  if(!records.length)throw Error('No hay trabajadores de esta hoja en la dotación de la plataforma.');
   const r=await supabase.rpc('publish_individual_sheet',{p_upload:{source:parsed.source,filename,sheet_name:parsed.sheet,label,period_start:start,period_end:end,senior_status:parsed.source==='senior'?status:null,rules:parsed.rules},p_records:records});
-  if(r.error)throw Error(r.error.message);return r.data as string;
+  if(r.error)throw Error(r.error.message);return {id:r.data as string,published:records.length,skipped};
  },
  async dashboard(user:User):Promise<DashboardData>{
   const [allWorkers,allMetrics,allUploads]=await Promise.all([allRows<WorkerRow>('commercial_workers'),allRows<MetricRow>('current_worker_metrics'),allRows<UploadRow>('sheet_uploads')]);
@@ -74,7 +79,10 @@ export const individualSheetService={
     Object.assign(m,goalFields('senior',v,seniorOpen));
     // An open-canto file cannot silently become an emitted-only final result after closing.
     if(seniorOpen||row.senior_status==='closed'){m.eligibleTotalUf=num('uf');m.seniorLevel=String(v.level);m.seniorRemaining=String(v.remaining);m.seniorTargetUf=remainingUfTarget(num('uf'),v.remaining);}
-    else{m.seniorRemaining='Pendiente de carga de cierre con ventas emitidas';}
+    else{
+     delete m.eligibleTotalUf; delete m.emittedUf; delete m.notEmittedUf; delete m.seniorEmittedUf; delete m.seniorNotEmittedUf; delete m.seniorLevel; delete m.seniorTargetUf;
+     m.seniorRemaining='Pendiente de carga de cierre con ventas emitidas';
+    }
    }
    if(row.source.startsWith('production_')){m.productivity=num('productivity');m.productionUf=num('uf');m.lastSaleDate=typeof v.lastSaleDate==='string'?v.lastSaleDate:undefined;}
    if(['titanes','rbh','msc'].includes(row.source)){m.debtInstallmentsCount=num('debtInstallments');m.debtUf08=num('debtUf08');m.debtSalesCount=num('debtSales');m.delinquentClientsCount=num('debtSales');}
