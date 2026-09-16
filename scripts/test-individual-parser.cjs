@@ -16,6 +16,8 @@ const debt={L1:cell('RUT'),M2:cell('Persona Prueba'),L2:cell('201276799'),B2:cel
 const d={SheetNames:['Carga Titanes'],Sheets:{'Carga Titanes':debt}};
 parsed=parseIndividualSheet(d,'titanes');assert.equal(parsed.records.length,1);assert.deepEqual(parsed.records[0].values,{debtSales:2,debtUf:150,debtInstallments:3,debtUf08:100,debtSales08:1});assert.ok(!JSON.stringify(parsed.records).includes('contract-'));
 debt.B3=cell('contract-1');assert.ok(parseIndividualSheet(d,'titanes').errors.some(e=>e.includes('repetido')));
+const shifted={L1:cell('RUT'),M1:cell('VENDEDOR'),B2:cell('contract-3'),E2:cell(120),F2:cell('0-8%'),H2:cell('Mora'),L2:cell('VIGENTE'),M2:cell('201276799'),N2:cell('Persona Prueba'),B3:cell('contract-4'),E3:cell(80),F3:cell(2),H3:cell('Mora'),L3:cell('VIGENTE'),M3:cell('201276799'),N3:cell('Persona Prueba')};
+parsed=parseIndividualSheet({SheetNames:['Carga RBH'],Sheets:{'Carga RBH':shifted}},'rbh');assert.deepEqual(parsed.errors,[]);assert.deepEqual(parsed.records[0].values,{debtSales:2,debtUf:200,debtInstallments:2,debtUf08:120,debtSales08:1});
 assert.ok(parseIndividualSheet({SheetNames:[],Sheets:{}},'category').errors.some(e=>e.includes('Falta')));
 const category={G9:cell('EJECUTIVO'),G10:cell('Persona Prueba'),H10:cell(1),I10:cell(500),J10:cell('BRONCE'),K10:cell(50000),L10:cell('PLATA: FALTAN 0 UF Y 1 SMAD'),M10:cell(320)};
 parsed=parseIndividualSheet({SheetNames:['Carga Catego'],Sheets:{'Carga Catego':category}},'category');assert.deepEqual(parsed.errors,[]);assert.equal(parsed.records[0].values.emittedUf,320);assert.equal(parsed.records[0].values.notEmittedUf,180);
