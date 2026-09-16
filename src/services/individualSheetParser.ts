@@ -65,6 +65,10 @@ export function parseIndividualSheet(book: WorkBook, source: SheetSource): Sheet
     result.errors.push(`No se reconoce el encabezado ${col} de «${sheet}». Conserva las columnas originales.`); return -1;
   };
   const debt = ['titanes', 'rbh', 'msc'].includes(source);
+  // The September files retain the old headings, but the data from ESTADO onward
+  // moved one column to the right (RUT is in M, not L).
+  const shiftedDebt = debt && Array.from({ length: Math.min(maxRow - 1, 12) }, (_, i) => i + 2)
+    .some(r => isValidRut(normalizeRut(ws[`M${r}`]?.v)) && !isValidRut(normalizeRut(ws[`L${r}`]?.v)));
   const sauceLoad = source === 'sauce' && searchName(sheet).startsWith('carga sau');
   const first = source === 'category' ? header('G', ['ejecutivo']) : source === 'senior' ? header('D', ['rut vendedor'])
     : source === 'production_sellers' ? header('A', ['rut vendedor']) : source === 'production_coordinators' ? header('A', ['coordinador'])
@@ -91,10 +95,10 @@ export function parseIndividualSheet(book: WorkBook, source: SheetSource): Sheet
     }
   }
   for (let r = first + 1; r <= maxRow; r++) {
-    const nameCol = source === 'category' ? 'G' : source === 'senior' ? 'C' : source === 'production_coordinators' ? 'A' : debt ? 'M' : source === 'sauce' && sauceLoad ? 'C' : source.startsWith('ranking_') ? 'C' : 'B';
+    const nameCol = source === 'category' ? 'G' : source === 'senior' ? 'C' : source === 'production_coordinators' ? 'A' : debt ? shiftedDebt ? 'N' : 'M' : source === 'sauce' && sauceLoad ? 'C' : source.startsWith('ranking_') ? 'C' : 'B';
     const name = text(get(nameCol, r, true));
     if (!name || /^(total|no vigente|\*|0$)/i.test(name)) continue;
-    const rutCol = source === 'category' || source === 'production_coordinators' ? null : source === 'senior' ? 'D' : debt ? 'L' : source === 'sauce' && sauceLoad ? 'B' : source.startsWith('ranking_') ? 'B' : 'A';
+    const rutCol = source === 'category' || source === 'production_coordinators' ? null : source === 'senior' ? 'D' : debt ? shiftedDebt ? 'M' : 'L' : source === 'sauce' && sauceLoad ? 'B' : source.startsWith('ranking_') ? 'B' : 'A';
     const rut = rutCol ? normalizeRut(text(get(rutCol, r))) : undefined;
     if (rutCol && (!rut || !isValidRut(rut))) { result.errors.push(`${sheet}, fila ${r}: RUT inválido de ${name}.`); continue; }
     const values: SheetMetrics = {};
@@ -142,20 +146,19 @@ export function parseIndividualSheet(book: WorkBook, source: SheetSource): Sheet
     } else if (debt) {
       const contract = text(get('B', r));
       if (!contract) { result.errors.push(`${sheet}, fila ${r}: falta contrato para evitar duplicados.`); continue; }
-      const fingerprint = JSON.stringify(['E','F','G','J','K','L'].map(c => get(c,r)));
+      const fingerprint = JSON.stringify((shiftedDebt ? ['E','F','G','H','J','K','L','M'] : ['E','F','G','J','K','L']).map(c => get(c,r)));
       if (contracts.has(contract)) { if (contracts.get(contract) !== fingerprint) result.errors.push(`${sheet}, fila ${r}: contrato repetido con valores distintos.`); continue; }
       contracts.set(contract, fingerprint);
-      const status = searchName(get('G', r));
+      const status = searchName(get(shiftedDebt ? 'H' : 'G', r));
       const a = aggregated.get(rut!) ?? { rut, name, role: 'seller' as const, row: r, values: { debtSales: 0, debtUf: 0, debtInstallments: 0, debtUf08: 0, debtSales08: 0 } };
       if (status === 'mora') {
         const uf = number(get('E', r)); if (uf === undefined || uf < 0) { result.errors.push(`${sheet}!E${r}: UF inválida.`); continue; }
         a.values.debtSales = Number(a.values.debtSales) + 1; a.values.debtUf = Number(a.values.debtUf) + uf;
+        const q = number(get('F',r));
         if (/^0\s*[-–]\s*8\s*%?$/.test(text(get('F',r)))) {
           a.values.debtUf08 = Number(a.values.debtUf08) + uf; a.values.debtSales08 = Number(a.values.debtSales08) + 1;
-        } else {
-          const q = number(get('F',r)); if (q === undefined || q < 0 || !Number.isInteger(q)) result.errors.push(`${sheet}!F${r}: cuotas morosas inválidas.`);
-          else a.values.debtInstallments = Number(a.values.debtInstallments) + q;
-        }
+        } else if (q === undefined || q < 0 || !Number.isInteger(q)) result.errors.push(`${sheet}!F${r}: cuotas morosas inválidas.`);
+        else a.values.debtInstallments = Number(a.values.debtInstallments) + q;
       }
       aggregated.set(rut!, a); continue;
     } else if (source === 'sauce') {
@@ -172,7 +175,8 @@ export function parseIndividualSheet(book: WorkBook, source: SheetSource): Sheet
   }
   if (debt) {
     result.records = [...aggregated.values()];
-    result.warnings.push('Se agrupa por RUT. No se suben contratos, compromisos ni fechas de clientes. UF 0–8% es un único total; no se inventan cuotas para ese grupo.');
+    result.warnings.push('Se agrupa por RUT. No se suben contratos, compromisos ni fechas de clientes. UF 0–8% es un único total.');
+    if (shiftedDebt) result.warnings.push('Formato de septiembre detectado: RUT en M, vendedor en N y mora en H; grupo 0–8% en F.');
   }
   if (source === 'category') {
     result.warnings.push('Catego: UF bruta emitida se toma directamente de la columna M de Carga Catego; sin emitir es UF bruta menos UF emitida, con mínimo cero.');

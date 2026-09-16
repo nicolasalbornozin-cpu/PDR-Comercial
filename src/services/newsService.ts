@@ -69,26 +69,49 @@ function currentMonthStart(): string {
   return `${year}-${month}-01`;
 }
 
-async function uploadImage(folder: 'articles' | 'gallery'): Promise<string | null> {
-  if (!supabase) throw Error('Supabase no está configurado.');
+function imageFormat(data: ArrayBuffer): { mime: string; extension: string } | null {
+  const bytes = new Uint8Array(data);
+  if (bytes.length < 12) return null;
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return { mime: 'image/jpeg', extension: 'jpg' };
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return { mime: 'image/png', extension: 'png' };
+  if (String.fromCharCode(...bytes.slice(0, 4)) === 'RIFF' && String.fromCharCode(...bytes.slice(8, 12)) === 'WEBP') return { mime: 'image/webp', extension: 'webp' };
+  return null;
+}
+
+async function pickImages(multiple: boolean): Promise<DocumentPicker.DocumentPickerAsset[]> {
   const picked = await DocumentPicker.getDocumentAsync({
     type: ['image/jpeg', 'image/png', 'image/webp'],
     copyToCacheDirectory: true,
+    multiple,
   });
-  if (picked.canceled) return null;
-  const asset = picked.assets[0];
+  return picked.canceled ? [] : picked.assets;
+}
+
+async function uploadImage(asset: DocumentPicker.DocumentPickerAsset, folder: 'articles' | 'gallery'): Promise<{ url: string; path: string }> {
+  if (!supabase) throw Error('Supabase no está configurado.');
   if (asset.size && asset.size > 10 * 1024 * 1024) throw Error('La foto supera el máximo de 10 MB.');
-  const webFile = asset.file;
-  const bytes = webFile ? new Uint8Array(await webFile.arrayBuffer()) : await new File(asset.uri).bytes();
-  const extension = asset.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+  // Supabase Storage requires an ArrayBuffer on React Native. A typed array
+  // can be serialized differently on Android and produce an unreadable image.
+  const data = asset.file ? await asset.file.arrayBuffer() : await new File(asset.uri).arrayBuffer();
+  const format = imageFormat(data);
+  if (!format) throw Error('El archivo no es una imagen JPEG, PNG o WebP válida.');
+  if (data.byteLength > 10 * 1024 * 1024) throw Error('La foto supera el máximo de 10 MB.');
   const safeName = asset.name.replace(/\.[^.]+$/, '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 55) || 'foto';
-  const path = `${folder}/${Date.now()}-${safeName}.${extension}`;
-  const uploaded = await supabase.storage.from('news-media').upload(path, bytes, {
-    contentType: asset.mimeType ?? 'image/jpeg',
+  const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 9)}-${safeName}.${format.extension}`;
+  const uploaded = await supabase.storage.from('news-media').upload(path, data, {
+    contentType: format.mime,
     upsert: false,
   });
   if (uploaded.error) throw Error(uploaded.error.message);
-  return supabase.storage.from('news-media').getPublicUrl(uploaded.data.path).data.publicUrl;
+  const url = supabase.storage.from('news-media').getPublicUrl(uploaded.data.path).data.publicUrl;
+  try {
+    const response = await fetch(url);
+    if (!response.ok || !imageFormat(await response.arrayBuffer())) throw Error('La imagen no se puede leer después de subirla.');
+  } catch (cause) {
+    await supabase.storage.from('news-media').remove([uploaded.data.path]);
+    throw cause;
+  }
+  return { url, path: uploaded.data.path };
 }
 
 export const newsService = {
@@ -126,7 +149,8 @@ export const newsService = {
   },
 
   async pickArticleImage(): Promise<string | null> {
-    return uploadImage('articles');
+    const assets = await pickImages(false);
+    return assets.length ? (await uploadImage(assets[0], 'articles')).url : null;
   },
 
   async createCareer(input: { title: string; summary: string; body: string; imageUrl?: string }): Promise<void> {
@@ -146,20 +170,26 @@ export const newsService = {
     if (result.error) throw Error(result.error.message);
   },
 
-  async addGalleryPhoto(title: string, newsArticleId?: string): Promise<boolean> {
+  async addGalleryPhotos(title: string, newsArticleId?: string): Promise<number> {
     if (!supabase) throw Error('Supabase no está configurado.');
-    const imageUrl = await uploadImage('gallery');
-    if (!imageUrl) return false;
-    const result = await supabase.from('gallery_images').insert({
-      title: title.trim() || 'Paseo Senior',
-      image_url: imageUrl,
-      news_article_id: newsArticleId && /^\d+$/.test(newsArticleId) ? Number(newsArticleId) : null,
-      // Milliseconds preserve upload order and require the bigint column added in the news migration.
-      sort_order: Date.now(),
-      active: true,
-    });
-    if (result.error) throw Error(result.error.message);
-    return true;
+    const assets = await pickImages(true);
+    let added = 0;
+    for (const asset of assets) {
+      const image = await uploadImage(asset, 'gallery');
+      const result = await supabase.from('gallery_images').insert({
+        title: title.trim() || 'Paseo Senior',
+        image_url: image.url,
+        news_article_id: newsArticleId && /^\d+$/.test(newsArticleId) ? Number(newsArticleId) : null,
+        sort_order: Date.now() + added,
+        active: true,
+      });
+      if (result.error) {
+        await supabase.storage.from('news-media').remove([image.path]);
+        throw Error(`${added} foto(s) publicada(s); la siguiente falló: ${result.error.message}`);
+      }
+      added += 1;
+    }
+    return added;
   },
 
   async deleteGalleryPhoto(photo: GalleryPhoto): Promise<void> {
