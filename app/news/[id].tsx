@@ -1,24 +1,21 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
-import { ActivityIndicator, Alert, Image, ImageBackground, ImageSourcePropType, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { DetailHeader } from '@/components/DetailHeader';
 import { NewsCard } from '@/components/NewsCard';
+import { NewsPhoto, NewsPhotoBackground } from '@/components/NewsPhoto';
 import { ScreenContainer } from '@/components/ScreenContainer';
 import { newsImages } from '@/data/assets';
 import { useAuth } from '@/hooks/useAuth';
 import { useNewsContent } from '@/hooks/useNewsContent';
 import { newsService } from '@/services/newsService';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
-import { NewsArticle } from '@/types';
+import { GalleryPhoto } from '@/types';
 import { formatDate } from '@/utils/format';
-
-function articleImage(article: NewsArticle): ImageSourcePropType {
-  return article.imageUrl ? { uri: article.imageUrl } : newsImages[article.image as keyof typeof newsImages] ?? newsImages.park;
-}
 
 export default function NewsDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -34,6 +31,10 @@ export default function NewsDetailScreen() {
   const [imageUrl, setImageUrl] = useState<string>();
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [deletingPhotoId, setDeletingPhotoId] = useState<string>();
+  const [selectedPhoto, setSelectedPhoto] = useState<number | null>(null);
+  const photoPagerRef = useRef<ScrollView>(null);
+  const { width } = useWindowDimensions();
   const isAdmin = authenticatedUser?.role === 'admin' && !isPreviewing;
   const articleGallery = article ? content.gallery.filter((photo) => photo.newsArticleId === article.id) : [];
 
@@ -73,12 +74,36 @@ export default function NewsDetailScreen() {
     if (!article) return;
     setUploadingPhoto(true);
     try {
-      if (await newsService.addGalleryPhoto(article.title, article.id)) await refresh();
+      if (await newsService.addGalleryPhotos(article.title, article.id)) await refresh();
     } catch (cause) {
+      await refresh();
       Alert.alert('No se pudo publicar la foto', cause instanceof Error ? cause.message : 'Intenta nuevamente.');
     } finally {
       setUploadingPhoto(false);
     }
+  };
+
+  const deleteArticlePhoto = (photo: GalleryPhoto) => {
+    Alert.alert('Eliminar fotografía', 'La fotografía dejará de aparecer para todos.', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Eliminar',
+        style: 'destructive',
+        onPress: () => {
+          setDeletingPhotoId(photo.id);
+          newsService.deleteGalleryPhoto(photo).then(refresh).catch((cause) => {
+            Alert.alert('No se pudo eliminar', cause instanceof Error ? cause.message : 'Intenta nuevamente.');
+          }).finally(() => setDeletingPhotoId(undefined));
+        },
+      },
+    ]);
+  };
+
+  const movePhoto = (step: number) => {
+    if (selectedPhoto === null) return;
+    const next = Math.max(0, Math.min(articleGallery.length - 1, selectedPhoto + step));
+    setSelectedPhoto(next);
+    photoPagerRef.current?.scrollTo({ x: next * width, animated: true });
   };
 
   if (!article) {
@@ -88,7 +113,7 @@ export default function NewsDetailScreen() {
   return (
     <ScreenContainer contentContainerStyle={styles.page} edges={['top', 'left', 'right', 'bottom']}>
       <View style={styles.mobileFrame}>
-        <ImageBackground source={articleImage(article)} style={styles.hero}>
+        <NewsPhotoBackground fallback={newsImages[article.image as keyof typeof newsImages] ?? newsImages.park} style={styles.hero} url={article.imageUrl}>
           <LinearGradient colors={['rgba(9,61,42,0.66)', 'rgba(9,61,42,0.04)', 'rgba(9,61,42,0.85)']} style={StyleSheet.absoluteFill} />
           <View style={styles.heroInner}>
             <DetailHeader light title="Detalle de noticia" />
@@ -101,7 +126,7 @@ export default function NewsDetailScreen() {
               <Text style={styles.date}>{formatDate(article.date)}</Text>
             </View>
           </View>
-        </ImageBackground>
+        </NewsPhotoBackground>
 
         <View style={styles.content}>
           <View style={styles.articleCard}>
@@ -112,11 +137,22 @@ export default function NewsDetailScreen() {
               <Text style={styles.galleryTitle}>Fotografías</Text>
               {isAdmin ? (
                 <Pressable disabled={uploadingPhoto} onPress={addArticlePhoto} style={[styles.galleryAdd, uploadingPhoto && styles.disabled]}>
-                  {uploadingPhoto ? <ActivityIndicator color={colors.primary} size="small" /> : <><Ionicons color={colors.primary} name="add-circle-outline" size={18} /><Text style={styles.galleryAddText}>Subir foto</Text></>}
+                  {uploadingPhoto ? <ActivityIndicator color={colors.primary} size="small" /> : <><Ionicons color={colors.primary} name="add-circle-outline" size={18} /><Text style={styles.galleryAddText}>Subir fotos</Text></>}
                 </Pressable>
               ) : null}
             </View>
-            {articleGallery.length ? <View style={styles.articleGallery}>{articleGallery.map((photo) => <Image key={photo.id} source={photo.imageUrl ? { uri: photo.imageUrl } : newsImages.park} style={styles.articlePhoto} />)}</View> : <Text style={styles.photoEmpty}>Aún no hay fotografías adicionales.</Text>}
+            {articleGallery.length ? (
+              <View style={styles.articleGallery}>
+                {articleGallery.map((photo, index) => (
+                  <View key={photo.id} style={styles.articlePhotoTile}>
+                    <Pressable accessibilityLabel={`Abrir fotografía ${index + 1}`} onPress={() => setSelectedPhoto(index)}>
+                      <NewsPhoto fallback={newsImages.park} resizeMode="contain" style={styles.articlePhoto} url={photo.imageUrl} />
+                    </Pressable>
+                    {isAdmin ? <Pressable accessibilityLabel={`Eliminar fotografía ${index + 1}`} disabled={deletingPhotoId === photo.id} onPress={() => deleteArticlePhoto(photo)} style={styles.articleDelete}><Ionicons color={colors.surface} name="trash-outline" size={17} /></Pressable> : null}
+                  </View>
+                ))}
+              </View>
+            ) : <Text style={styles.photoEmpty}>Aún no hay fotografías adicionales.</Text>}
             {isAdmin ? (
               <Pressable accessibilityRole="button" onPress={openEditor} style={styles.bottomEdit}>
                 <Ionicons color={colors.primary} name="pencil-outline" size={18} />
@@ -144,12 +180,36 @@ export default function NewsDetailScreen() {
             <TextInput onChangeText={setTitle} placeholder="Título" placeholderTextColor={colors.textMuted} style={styles.input} value={title} />
             <TextInput multiline onChangeText={setSummary} placeholder="Resumen" placeholderTextColor={colors.textMuted} style={[styles.input, styles.summaryInput]} value={summary} />
             <TextInput multiline onChangeText={setBody} placeholder="Texto completo" placeholderTextColor={colors.textMuted} style={[styles.input, styles.bodyInput]} value={body} />
-            <Image source={imageUrl ? { uri: imageUrl } : articleImage(article)} style={styles.imagePreview} />
+            <NewsPhoto fallback={newsImages[article.image as keyof typeof newsImages] ?? newsImages.park} resizeMode="contain" style={styles.imagePreview} url={imageUrl} />
             <Pressable onPress={pickImage} style={styles.photoButton}><Ionicons color={colors.primary} name="image-outline" size={19} /><Text style={styles.photoText}>Cambiar fotografía</Text></Pressable>
             <Pressable disabled={saving} onPress={save} style={[styles.saveButton, saving && styles.disabled]}>
               {saving ? <ActivityIndicator color={colors.surface} /> : <><Ionicons color={colors.surface} name="checkmark" size={20} /><Text style={styles.saveText}>Guardar para todos</Text></>}
             </Pressable>
           </View>
+        </SafeAreaView>
+      </Modal>
+
+      <Modal animationType="fade" onRequestClose={() => setSelectedPhoto(null)} transparent visible={selectedPhoto !== null}>
+        <SafeAreaView style={styles.photoModal}>
+          <Pressable accessibilityLabel="Cerrar fotografía" onPress={() => setSelectedPhoto(null)} style={styles.photoClose}><Ionicons color={colors.surface} name="close" size={27} /></Pressable>
+          <ScrollView
+            horizontal
+            onLayout={() => { if (selectedPhoto !== null) photoPagerRef.current?.scrollTo({ x: selectedPhoto * width, animated: false }); }}
+            onMomentumScrollEnd={(event) => setSelectedPhoto(Math.round(event.nativeEvent.contentOffset.x / width))}
+            pagingEnabled
+            ref={photoPagerRef}
+            showsHorizontalScrollIndicator={false}
+            style={styles.photoPager}
+          >
+            {articleGallery.map((photo) => (
+              <View key={photo.id} style={[styles.photoPage, { width }]}>
+                <NewsPhoto fallback={newsImages.park} resizeMode="contain" style={styles.fullPhoto} url={photo.imageUrl} />
+              </View>
+            ))}
+          </ScrollView>
+          {selectedPhoto !== null && selectedPhoto > 0 ? <Pressable accessibilityLabel="Fotografía anterior" onPress={() => movePhoto(-1)} style={[styles.photoArrow, styles.photoPrevious]}><Ionicons color={colors.surface} name="chevron-back" size={25} /></Pressable> : null}
+          {selectedPhoto !== null && selectedPhoto < articleGallery.length - 1 ? <Pressable accessibilityLabel="Fotografía siguiente" onPress={() => movePhoto(1)} style={[styles.photoArrow, styles.photoNext]}><Ionicons color={colors.surface} name="chevron-forward" size={25} /></Pressable> : null}
+          <Text style={styles.photoCount}>{selectedPhoto !== null ? `${selectedPhoto + 1} / ${articleGallery.length}` : ''}</Text>
         </SafeAreaView>
       </Modal>
     </ScreenContainer>
@@ -179,7 +239,9 @@ const styles = StyleSheet.create({
   galleryAdd: { alignItems: 'center', backgroundColor: colors.softGreen, borderRadius: radii.pill, flexDirection: 'row', gap: 5, paddingHorizontal: 10, paddingVertical: 8 },
   galleryAddText: { color: colors.primary, fontFamily: typography.sans, fontSize: 10, fontWeight: '800' },
   articleGallery: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  articlePhoto: { aspectRatio: 1.15, borderRadius: radii.md, width: '48%' },
+  articlePhotoTile: { backgroundColor: colors.softGreen, borderRadius: radii.md, overflow: 'hidden', position: 'relative', width: '47%' },
+  articlePhoto: { aspectRatio: 1.15, width: '100%' },
+  articleDelete: { alignItems: 'center', backgroundColor: 'rgba(171,54,48,0.92)', borderRadius: radii.pill, height: 36, justifyContent: 'center', position: 'absolute', right: 7, top: 7, width: 36 },
   photoEmpty: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 10 },
   bottomEdit: { alignItems: 'center', alignSelf: 'flex-start', backgroundColor: colors.softGreen, borderRadius: radii.pill, flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: 10 },
   bottomEditText: { color: colors.primary, fontFamily: typography.sans, fontSize: 11, fontWeight: '800' },
@@ -198,4 +260,13 @@ const styles = StyleSheet.create({
   saveButton: { alignItems: 'center', backgroundColor: colors.primary, borderRadius: radii.md, flexDirection: 'row', gap: spacing.sm, justifyContent: 'center', minHeight: 48 },
   saveText: { color: colors.surface, fontFamily: typography.sans, fontSize: 12, fontWeight: '800' },
   disabled: { opacity: 0.58 },
+  photoModal: { alignItems: 'center', backgroundColor: 'rgba(5,23,16,0.96)', flex: 1 },
+  photoClose: { alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: radii.pill, height: 45, justifyContent: 'center', position: 'absolute', right: spacing.xl, top: spacing.xl, width: 45, zIndex: 2 },
+  photoPager: { flex: 1, width: '100%' },
+  photoPage: { alignItems: 'center', justifyContent: 'center' },
+  fullPhoto: { height: '78%', width: '100%' },
+  photoArrow: { alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: radii.pill, height: 42, justifyContent: 'center', position: 'absolute', top: '48%', width: 42 },
+  photoPrevious: { left: spacing.md },
+  photoNext: { right: spacing.md },
+  photoCount: { bottom: 40, color: colors.surface, fontFamily: typography.sans, fontSize: 12, fontWeight: '800', position: 'absolute' },
 });
