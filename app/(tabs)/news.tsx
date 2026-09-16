@@ -2,11 +2,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Image, ImageBackground, ImageSourcePropType, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, ImageBackground, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppHeader } from '@/components/AppHeader';
 import { NewsCard } from '@/components/NewsCard';
+import { NewsPhoto, NewsPhotoBackground } from '@/components/NewsPhoto';
 import { ScreenContainer } from '@/components/ScreenContainer';
 import { SectionHeader } from '@/components/SectionHeader';
 import { newsImages } from '@/data/assets';
@@ -14,15 +15,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNewsContent } from '@/hooks/useNewsContent';
 import { newsService } from '@/services/newsService';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
-import { GalleryPhoto, NewsArticle } from '@/types';
-
-function articleImage(article: NewsArticle): ImageSourcePropType {
-  return article.imageUrl ? { uri: article.imageUrl } : newsImages[article.image as keyof typeof newsImages] ?? newsImages.park;
-}
-
-function galleryImage(photo: GalleryPhoto): ImageSourcePropType {
-  return photo.imageUrl ? { uri: photo.imageUrl } : newsImages[photo.image as keyof typeof newsImages] ?? newsImages.seniorEvent;
-}
 
 export default function NewsScreen() {
   const router = useRouter();
@@ -87,7 +79,7 @@ export default function NewsScreen() {
           {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
           {featured ? (
             <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/news/[id]', params: { id: featured.id } })} style={({ pressed }) => [styles.heroCard, pressed && styles.pressed]}>
-              <ImageBackground source={articleImage(featured)} style={styles.featuredImage}>
+              <NewsPhotoBackground fallback={newsImages[featured.image as keyof typeof newsImages] ?? newsImages.park} style={styles.featuredImage} url={featured.imageUrl}>
                 <LinearGradient colors={['rgba(9,61,42,0.02)', 'rgba(9,61,42,0.88)']} style={StyleSheet.absoluteFill} />
                 <View style={styles.badge}><Ionicons color={colors.goldOnDark} name="star-outline" size={15} /><Text style={styles.badgeText}>Destacada</Text></View>
                 {isAdmin ? <View style={styles.editBadge}><Ionicons color={colors.primary} name="pencil" size={15} /><Text style={styles.editBadgeText}>Editar imagen y texto</Text></View> : null}
@@ -96,7 +88,7 @@ export default function NewsScreen() {
                   <Text style={styles.featuredSummary}>{featured.summary}</Text>
                   <View style={styles.moreButton}><Text style={styles.moreText}>Ver más</Text><Ionicons color={colors.goldOnDark} name="chevron-forward" size={15} /></View>
                 </View>
-              </ImageBackground>
+              </NewsPhotoBackground>
             </Pressable>
           ) : null}
 
@@ -112,13 +104,13 @@ export default function NewsScreen() {
             <ScrollView contentContainerStyle={styles.careerCarousel} horizontal showsHorizontalScrollIndicator={false}>
               {careers.map((article) => (
                 <Pressable key={article.id} onPress={() => router.push({ pathname: '/news/[id]', params: { id: article.id } })} style={({ pressed }) => [styles.careerCard, pressed && styles.pressed]}>
-                  <ImageBackground source={articleImage(article)} style={styles.careerImage}>
+                  <NewsPhotoBackground fallback={newsImages[article.image as keyof typeof newsImages] ?? newsImages.park} style={styles.careerImage} url={article.imageUrl}>
                     <LinearGradient colors={['rgba(9,61,42,0.05)', 'rgba(9,61,42,0.9)']} style={StyleSheet.absoluteFill} />
                     <View style={styles.careerCopy}>
                       <Text numberOfLines={2} style={styles.careerTitle}>{article.title}</Text>
                       <Text numberOfLines={2} style={styles.careerSummary}>{article.summary}</Text>
                     </View>
-                  </ImageBackground>
+                  </NewsPhotoBackground>
                 </Pressable>
               ))}
               {!careers.length ? <Text style={styles.empty}>Aún no hay carreras publicadas para este mes.</Text> : null}
@@ -138,7 +130,7 @@ export default function NewsScreen() {
             <Pressable accessibilityLabel="Abrir galería" onPress={() => router.push('/gallery')} style={({ pressed }) => [styles.gallery, pressed && styles.pressed]}>
               {seniorGallery.slice(0, 3).map((photo, index) => (
                 <View key={photo.id} style={index === 2 ? styles.lastImageWrap : styles.galleryItem}>
-                  <Image source={galleryImage(photo)} style={styles.galleryImage} />
+                  <NewsPhoto fallback={newsImages.seniorEvent} resizeMode="contain" style={styles.galleryImage} url={photo.imageUrl} />
                   {index === 2 && seniorGallery.length > 3 ? <View style={styles.galleryOverlay}><Text style={styles.galleryCount}>+{seniorGallery.length - 3}</Text></View> : null}
                 </View>
               ))}
@@ -201,10 +193,10 @@ const styles = StyleSheet.create({
   careerTitle: { color: colors.surface, fontFamily: typography.serif, fontSize: 20, fontWeight: '600' },
   careerSummary: { color: 'rgba(255,255,255,0.75)', fontFamily: typography.sans, fontSize: 10, lineHeight: 15 },
   newsList: { gap: spacing.md },
-  gallery: { flexDirection: 'row', gap: 7, minHeight: 132 },
-  galleryItem: { flex: 1 },
-  galleryImage: { borderRadius: radii.md, height: '100%', width: '100%' },
-  lastImageWrap: { flex: 1, position: 'relative' },
+  gallery: { flexDirection: 'row', gap: 7, height: 122, width: '100%' },
+  galleryItem: { backgroundColor: colors.softGreen, borderRadius: radii.md, flex: 1, minWidth: 0, overflow: 'hidden' },
+  galleryImage: { height: 122, width: '100%' },
+  lastImageWrap: { backgroundColor: colors.softGreen, borderRadius: radii.md, flex: 1, minWidth: 0, overflow: 'hidden', position: 'relative' },
   galleryOverlay: { ...StyleSheet.absoluteFill, alignItems: 'center', backgroundColor: 'rgba(9,61,42,0.55)', borderRadius: radii.md, justifyContent: 'center' },
   galleryCount: { color: colors.surface, fontFamily: typography.serif, fontSize: 24, fontWeight: '700' },
   empty: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 12, padding: spacing.lg },
