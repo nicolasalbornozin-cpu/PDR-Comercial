@@ -1,13 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { DetailHeader } from '@/components/DetailHeader';
 import { NewsCard } from '@/components/NewsCard';
 import { NewsPhoto, NewsPhotoBackground } from '@/components/NewsPhoto';
+import { NewsPhotoViewer } from '@/components/NewsPhotoViewer';
 import { ScreenContainer } from '@/components/ScreenContainer';
 import { newsImages } from '@/data/assets';
 import { useAuth } from '@/hooks/useAuth';
@@ -30,11 +31,12 @@ export default function NewsDetailScreen() {
   const [body, setBody] = useState('');
   const [imageUrl, setImageUrl] = useState<string>();
   const [saving, setSaving] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [coverSaved, setCoverSaved] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState('');
   const [deletingPhotoId, setDeletingPhotoId] = useState<string>();
   const [selectedPhoto, setSelectedPhoto] = useState<number | null>(null);
-  const photoPagerRef = useRef<ScrollView>(null);
-  const { width } = useWindowDimensions();
   const isAdmin = authenticatedUser?.role === 'admin' && !isPreviewing;
   const articleGallery = article ? content.gallery.filter((photo) => photo.newsArticleId === article.id) : [];
 
@@ -44,20 +46,30 @@ export default function NewsDetailScreen() {
     setSummary(article.summary);
     setBody(article.body);
     setImageUrl(article.imageUrl);
+    setCoverSaved(false);
     setEditing(true);
   };
 
   const pickImage = async () => {
+    if (!article || uploadingCover) return;
+    setUploadingCover(true);
+    setCoverSaved(false);
     try {
-      const url = await newsService.pickArticleImage();
-      if (url) setImageUrl(url);
+      const url = await newsService.replaceArticleImage(article.id);
+      if (url) {
+        setImageUrl(url);
+        setCoverSaved(true);
+        await refresh();
+      }
     } catch (cause) {
       Alert.alert('No se pudo subir la foto', cause instanceof Error ? cause.message : 'Intenta nuevamente.');
+    } finally {
+      setUploadingCover(false);
     }
   };
 
   const save = async () => {
-    if (!article) return;
+    if (!article || uploadingCover) return;
     setSaving(true);
     try {
       await newsService.updateArticle(article.id, { title, summary, body, imageUrl });
@@ -74,12 +86,13 @@ export default function NewsDetailScreen() {
     if (!article) return;
     setUploadingPhoto(true);
     try {
-      if (await newsService.addGalleryPhotos(article.title, article.id)) await refresh();
+      if (await newsService.addGalleryPhotos(article.title, article.id, (completed, total) => setUploadProgress(`Procesando ${completed} de ${total} fotos…`))) await refresh();
     } catch (cause) {
       await refresh();
       Alert.alert('No se pudo publicar la foto', cause instanceof Error ? cause.message : 'Intenta nuevamente.');
     } finally {
       setUploadingPhoto(false);
+      setUploadProgress('');
     }
   };
 
@@ -97,13 +110,6 @@ export default function NewsDetailScreen() {
         },
       },
     ]);
-  };
-
-  const movePhoto = (step: number) => {
-    if (selectedPhoto === null) return;
-    const next = Math.max(0, Math.min(articleGallery.length - 1, selectedPhoto + step));
-    setSelectedPhoto(next);
-    photoPagerRef.current?.scrollTo({ x: next * width, animated: true });
   };
 
   if (!article) {
@@ -141,6 +147,7 @@ export default function NewsDetailScreen() {
                 </Pressable>
               ) : null}
             </View>
+            {uploadingPhoto && uploadProgress ? <Text accessibilityLiveRegion="polite" style={styles.photoEmpty}>{uploadProgress}</Text> : null}
             {articleGallery.length ? (
               <View style={styles.articleGallery}>
                 {articleGallery.map((photo, index) => (
@@ -170,48 +177,27 @@ export default function NewsDetailScreen() {
         </View>
       </View>
 
-      <Modal animationType="slide" onRequestClose={() => setEditing(false)} transparent visible={editing}>
+      <Modal animationType="slide" onRequestClose={() => { if (!uploadingCover && !saving) setEditing(false); }} transparent visible={editing}>
         <SafeAreaView style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
+          <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled" style={styles.modalCard}>
             <View style={styles.modalHeading}>
               <Text style={styles.modalTitle}>Editar publicación</Text>
-              <Pressable accessibilityLabel="Cerrar" onPress={() => setEditing(false)}><Ionicons color={colors.textMuted} name="close" size={24} /></Pressable>
+              <Pressable accessibilityLabel="Cerrar" disabled={uploadingCover || saving} onPress={() => setEditing(false)}><Ionicons color={colors.textMuted} name="close" size={24} /></Pressable>
             </View>
             <TextInput onChangeText={setTitle} placeholder="Título" placeholderTextColor={colors.textMuted} style={styles.input} value={title} />
             <TextInput multiline onChangeText={setSummary} placeholder="Resumen" placeholderTextColor={colors.textMuted} style={[styles.input, styles.summaryInput]} value={summary} />
             <TextInput multiline onChangeText={setBody} placeholder="Texto completo" placeholderTextColor={colors.textMuted} style={[styles.input, styles.bodyInput]} value={body} />
             <NewsPhoto fallback={newsImages[article.image as keyof typeof newsImages] ?? newsImages.park} resizeMode="contain" style={styles.imagePreview} url={imageUrl} />
-            <Pressable onPress={pickImage} style={styles.photoButton}><Ionicons color={colors.primary} name="image-outline" size={19} /><Text style={styles.photoText}>Cambiar fotografía</Text></Pressable>
-            <Pressable disabled={saving} onPress={save} style={[styles.saveButton, saving && styles.disabled]}>
+            <Pressable disabled={uploadingCover || saving} onPress={pickImage} style={styles.photoButton}>{uploadingCover ? <ActivityIndicator color={colors.primary} /> : <Ionicons color={colors.primary} name="image-outline" size={19} />}<Text style={styles.photoText}>{uploadingCover ? 'Publicando fotografía…' : 'Cambiar fotografía'}</Text></Pressable>
+            <Text accessibilityLiveRegion="polite" style={styles.photoEmpty}>{coverSaved ? 'Portada guardada para todos.' : 'La portada se publica al seleccionarla. Usa Guardar para los cambios de texto.'}</Text>
+            <Pressable disabled={saving || uploadingCover} onPress={save} style={[styles.saveButton, (saving || uploadingCover) && styles.disabled]}>
               {saving ? <ActivityIndicator color={colors.surface} /> : <><Ionicons color={colors.surface} name="checkmark" size={20} /><Text style={styles.saveText}>Guardar para todos</Text></>}
             </Pressable>
-          </View>
+          </ScrollView>
         </SafeAreaView>
       </Modal>
 
-      <Modal animationType="fade" onRequestClose={() => setSelectedPhoto(null)} transparent visible={selectedPhoto !== null}>
-        <SafeAreaView style={styles.photoModal}>
-          <Pressable accessibilityLabel="Cerrar fotografía" onPress={() => setSelectedPhoto(null)} style={styles.photoClose}><Ionicons color={colors.surface} name="close" size={27} /></Pressable>
-          <ScrollView
-            horizontal
-            onLayout={() => { if (selectedPhoto !== null) photoPagerRef.current?.scrollTo({ x: selectedPhoto * width, animated: false }); }}
-            onMomentumScrollEnd={(event) => setSelectedPhoto(Math.round(event.nativeEvent.contentOffset.x / width))}
-            pagingEnabled
-            ref={photoPagerRef}
-            showsHorizontalScrollIndicator={false}
-            style={styles.photoPager}
-          >
-            {articleGallery.map((photo) => (
-              <View key={photo.id} style={[styles.photoPage, { width }]}>
-                <NewsPhoto fallback={newsImages.park} resizeMode="contain" style={styles.fullPhoto} url={photo.imageUrl} />
-              </View>
-            ))}
-          </ScrollView>
-          {selectedPhoto !== null && selectedPhoto > 0 ? <Pressable accessibilityLabel="Fotografía anterior" onPress={() => movePhoto(-1)} style={[styles.photoArrow, styles.photoPrevious]}><Ionicons color={colors.surface} name="chevron-back" size={25} /></Pressable> : null}
-          {selectedPhoto !== null && selectedPhoto < articleGallery.length - 1 ? <Pressable accessibilityLabel="Fotografía siguiente" onPress={() => movePhoto(1)} style={[styles.photoArrow, styles.photoNext]}><Ionicons color={colors.surface} name="chevron-forward" size={25} /></Pressable> : null}
-          <Text style={styles.photoCount}>{selectedPhoto !== null ? `${selectedPhoto + 1} / ${articleGallery.length}` : ''}</Text>
-        </SafeAreaView>
-      </Modal>
+      {selectedPhoto !== null && articleGallery.length ? <NewsPhotoViewer initialIndex={selectedPhoto} onClose={() => setSelectedPhoto(null)} photos={articleGallery} /> : null}
     </ScreenContainer>
   );
 }
@@ -248,7 +234,8 @@ const styles = StyleSheet.create({
   relatedSection: { gap: spacing.md },
   relatedTitle: { color: colors.text, fontFamily: typography.serif, fontSize: 22, fontWeight: '600' },
   modalBackdrop: { backgroundColor: 'rgba(7,30,21,0.58)', flex: 1, justifyContent: 'flex-end' },
-  modalCard: { backgroundColor: colors.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, gap: spacing.md, maxHeight: '94%', padding: spacing.xl },
+  modalCard: { backgroundColor: colors.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, flexGrow: 0, maxHeight: '94%' },
+  modalContent: { gap: spacing.md, padding: spacing.xl },
   modalHeading: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   modalTitle: { color: colors.primary, fontFamily: typography.serif, fontSize: 24, fontWeight: '600' },
   input: { backgroundColor: colors.paleGreen, borderColor: colors.border, borderRadius: radii.md, borderWidth: 1, color: colors.text, fontFamily: typography.sans, fontSize: 13, paddingHorizontal: spacing.md, paddingVertical: 12 },
