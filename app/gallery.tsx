@@ -1,10 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { DetailHeader } from '@/components/DetailHeader';
 import { NewsPhoto } from '@/components/NewsPhoto';
+import { NewsPhotoViewer } from '@/components/NewsPhotoViewer';
 import { ScreenContainer } from '@/components/ScreenContainer';
 import { newsImages } from '@/data/assets';
 import { useAuth } from '@/hooks/useAuth';
@@ -18,21 +18,21 @@ export default function GalleryScreen() {
   const { content, loading, refresh } = useNewsContent();
   const [selected, setSelected] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState('');
   const [deletingId, setDeletingId] = useState<string>();
-  const carouselRef = useRef<ScrollView>(null);
-  const { width } = useWindowDimensions();
   const isAdmin = authenticatedUser?.role === 'admin' && !isPreviewing;
   const photos = content.gallery.filter((photo) => !photo.newsArticleId);
 
   const addPhoto = async () => {
     setUploading(true);
     try {
-      if (await newsService.addGalleryPhotos('Paseo Senior 2026')) await refresh();
+      if (await newsService.addGalleryPhotos('Paseo Senior 2026', undefined, (completed, total) => setUploadProgress(`Procesando ${completed} de ${total} fotos…`))) await refresh();
     } catch (cause) {
       await refresh();
       Alert.alert('No se pudo publicar la foto', cause instanceof Error ? cause.message : 'Intenta nuevamente.');
     } finally {
       setUploading(false);
+      setUploadProgress('');
     }
   };
 
@@ -50,13 +50,6 @@ export default function GalleryScreen() {
         },
       },
     ]);
-  };
-
-  const movePhoto = (step: number) => {
-    if (selected === null) return;
-    const next = Math.max(0, Math.min(photos.length - 1, selected + step));
-    setSelected(next);
-    carouselRef.current?.scrollTo({ x: next * width, animated: true });
   };
 
   return (
@@ -77,6 +70,7 @@ export default function GalleryScreen() {
           </View>
         </View>
         {loading ? <ActivityIndicator color={colors.gold} style={styles.loader} /> : null}
+        {uploading && uploadProgress ? <Text accessibilityLiveRegion="polite" style={styles.empty}>{uploadProgress}</Text> : null}
         <View style={styles.grid}>
           {photos.map((photo, index) => (
             <View key={photo.id} style={styles.photoTile}>
@@ -95,31 +89,7 @@ export default function GalleryScreen() {
         </View>
       </View>
 
-      <Modal animationType="fade" onRequestClose={() => setSelected(null)} transparent visible={selected !== null}>
-        <SafeAreaView style={styles.modal}>
-          <Pressable accessibilityLabel="Cerrar fotografía" onPress={() => setSelected(null)} style={styles.close}>
-            <Ionicons color={colors.surface} name="close" size={26} />
-          </Pressable>
-          <ScrollView
-            horizontal
-            onLayout={() => { if (selected !== null) carouselRef.current?.scrollTo({ x: selected * width, animated: false }); }}
-            onMomentumScrollEnd={(event) => setSelected(Math.round(event.nativeEvent.contentOffset.x / width))}
-            pagingEnabled
-            ref={carouselRef}
-            showsHorizontalScrollIndicator={false}
-            style={styles.photoPager}
-          >
-            {photos.map((photo) => (
-              <View key={photo.id} style={[styles.photoPage, { width }]}>
-                <NewsPhoto fallback={newsImages.seniorEvent} resizeMode="contain" style={styles.fullImage} url={photo.imageUrl} />
-              </View>
-            ))}
-          </ScrollView>
-          {selected !== null && selected > 0 ? <Pressable accessibilityLabel="Fotografía anterior" onPress={() => movePhoto(-1)} style={[styles.arrow, styles.previous]}><Ionicons color={colors.surface} name="chevron-back" size={24} /></Pressable> : null}
-          {selected !== null && selected < photos.length - 1 ? <Pressable accessibilityLabel="Fotografía siguiente" onPress={() => movePhoto(1)} style={[styles.arrow, styles.next]}><Ionicons color={colors.surface} name="chevron-forward" size={24} /></Pressable> : null}
-          <Text style={styles.counter}>{selected !== null ? `${selected + 1} / ${photos.length}` : ''}</Text>
-        </SafeAreaView>
-      </Modal>
+      {selected !== null && photos.length ? <NewsPhotoViewer initialIndex={selected} onClose={() => setSelected(null)} photos={photos} /> : null}
     </ScreenContainer>
   );
 }
