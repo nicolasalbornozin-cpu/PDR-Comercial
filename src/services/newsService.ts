@@ -144,13 +144,27 @@ export const newsService = {
     if (changes.summary !== undefined) payload.summary = changes.summary.trim();
     if (changes.body !== undefined) payload.body = changes.body.trim();
     if (changes.imageUrl !== undefined) payload.image_url = changes.imageUrl;
-    const result = await supabase.from('news_articles').update(payload).eq('id', Number(id));
+    const result = await supabase.from('news_articles').update(payload).eq('id', Number(id)).select('id').single();
     if (result.error) throw Error(result.error.message);
+    if (!result.data) throw Error('No se pudo guardar la noticia. Revisa tu sesión de administrador.');
   },
 
   async pickArticleImage(): Promise<string | null> {
     const assets = await pickImages(false);
     return assets.length ? (await uploadImage(assets[0], 'articles')).url : null;
+  },
+
+  async replaceArticleImage(id: string): Promise<string | null> {
+    const assets = await pickImages(false);
+    if (!assets.length) return null;
+    const image = await uploadImage(assets[0], 'articles');
+    try {
+      await newsService.updateArticle(id, { imageUrl: image.url });
+    } catch (cause) {
+      await supabase?.storage.from('news-media').remove([image.path]);
+      throw cause;
+    }
+    return image.url;
   },
 
   async createCareer(input: { title: string; summary: string; body: string; imageUrl?: string }): Promise<void> {
@@ -170,25 +184,33 @@ export const newsService = {
     if (result.error) throw Error(result.error.message);
   },
 
-  async addGalleryPhotos(title: string, newsArticleId?: string): Promise<number> {
+  async addGalleryPhotos(title: string, newsArticleId?: string, onProgress?: (completed: number, total: number) => void): Promise<number> {
     if (!supabase) throw Error('Supabase no está configurado.');
     const assets = await pickImages(true);
     let added = 0;
+    const failures: string[] = [];
+    onProgress?.(0, assets.length);
     for (const asset of assets) {
-      const image = await uploadImage(asset, 'gallery');
-      const result = await supabase.from('gallery_images').insert({
-        title: title.trim() || 'Paseo Senior',
-        image_url: image.url,
-        news_article_id: newsArticleId && /^\d+$/.test(newsArticleId) ? Number(newsArticleId) : null,
-        sort_order: Date.now() + added,
-        active: true,
-      });
-      if (result.error) {
-        await supabase.storage.from('news-media').remove([image.path]);
-        throw Error(`${added} foto(s) publicada(s); la siguiente falló: ${result.error.message}`);
+      try {
+        const image = await uploadImage(asset, 'gallery');
+        const result = await supabase.from('gallery_images').insert({
+          title: title.trim() || 'Paseo Senior',
+          image_url: image.url,
+          news_article_id: newsArticleId && /^\d+$/.test(newsArticleId) ? Number(newsArticleId) : null,
+          sort_order: Date.now() + added,
+          active: true,
+        });
+        if (result.error) {
+          await supabase.storage.from('news-media').remove([image.path]);
+          throw Error(result.error.message);
+        }
+        added += 1;
+      } catch (cause) {
+        failures.push(`${asset.name}: ${cause instanceof Error ? cause.message : 'No se pudo subir.'}`);
       }
-      added += 1;
+      onProgress?.(added + failures.length, assets.length);
     }
+    if (failures.length) throw Error(`Se publicaron ${added} de ${assets.length} fotos. Puedes volver a seleccionar las que fallaron:\n${failures.join('\n')}`);
     return added;
   },
 
