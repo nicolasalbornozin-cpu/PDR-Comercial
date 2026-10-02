@@ -434,3 +434,11 @@ entrypoint = "./functions/password-reset-request/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/password-reset-request/*.html" ]
+
+[functions.register-account]
+enabled = true
+# Pre-login endpoint for the publishable-key client. All authorisation is the
+# service-only roster gate; admin-users retains verify_jwt=true and admin checks.
+verify_jwt = false
+import_map = "./functions/register-account/deno.json"
+entrypoint = "./functions/register-account/index.ts"
