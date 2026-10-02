@@ -5,7 +5,7 @@ import { AppState } from 'react-native';
 import { NewsContent, newsService } from '@/services/newsService';
 import { supabase } from '@/services/supabase';
 
-const emptyContent: NewsContent = { articles: [], gallery: [] };
+const emptyContent: NewsContent = { articles: [], gallery: [], sections: [] };
 let sharedContent = emptyContent;
 let requestVersion = 0;
 const listeners = new Set<(content: NewsContent) => void>();
@@ -45,6 +45,7 @@ export function useNewsContent() {
       .channel(`news-content-live-${Date.now()}-${Math.random().toString(36).slice(2)}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'news_articles' }, () => { void refresh(); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'gallery_images' }, () => { void refresh(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'news_sections' }, () => { void refresh(); })
       .subscribe();
     return () => { appState.remove(); void client.removeChannel(channel); };
   }, [refresh]);
