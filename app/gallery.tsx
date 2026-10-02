@@ -8,6 +8,7 @@ import { NewsPhotoViewer } from '@/components/NewsPhotoViewer';
 import { ScreenContainer } from '@/components/ScreenContainer';
 import { newsImages } from '@/data/assets';
 import { useAuth } from '@/hooks/useAuth';
+import { canEditNews } from '@/utils/permissions';
 import { useNewsContent } from '@/hooks/useNewsContent';
 import { newsService } from '@/services/newsService';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
@@ -20,7 +21,7 @@ export default function GalleryScreen() {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
   const [deletingId, setDeletingId] = useState<string>();
-  const isAdmin = authenticatedUser?.role === 'admin' && !isPreviewing;
+  const isAdmin = canEditNews(authenticatedUser?.role) && !isPreviewing;
   const photos = content.gallery.filter((photo) => !photo.newsArticleId);
 
   const addPhoto = async () => {
