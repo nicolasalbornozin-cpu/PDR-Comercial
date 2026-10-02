@@ -91,6 +91,7 @@ export default function LoginScreen() {
             ) : (
               <>
                 <AppButton label="Iniciar sesión" loading={isLoading} onPress={handleLogin} />
+                <AppButton label="Crear cuenta" onPress={() => router.push('/(auth)/register')} variant="secondary" />
                 <Pressable onPress={() => { setResetMode(true); setError(''); setMessage(''); }} style={styles.forgotButton}>
                   <Text style={styles.link}>¿Olvidaste tu contraseña?</Text>
                 </Pressable>
@@ -99,7 +100,7 @@ export default function LoginScreen() {
           </View>
           <View style={styles.demoTag}>
             <Ionicons color={colors.secondary} name="shield-checkmark-outline" size={16} />
-            <Text style={styles.demoText}>{authMode === 'demo' ? 'Modo demostración activo' : 'Acceso administrado y seguro'}</Text>
+            <Text style={styles.demoText}>{authMode === 'demo' ? 'Modo demostración activo' : 'Acceso para dotación habilitada'}</Text>
           </View>
         </View>
 
