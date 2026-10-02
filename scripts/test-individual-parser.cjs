@@ -24,3 +24,17 @@ parsed=parseIndividualSheet({SheetNames:['Carga Catego'],Sheets:{'Carga Catego':
 const sauce={B1:cell('RUT AGENTE'),C2:cell('Persona Prueba'),B2:cell('201276799'),E2:cell(57)};
 parsed=parseIndividualSheet({SheetNames:['Carga sause'],Sheets:{'Carga sause':sauce}},'sauce');assert.deepEqual(parsed.errors,[]);assert.equal(parsed.records[0].values.risk,57);
 console.log('PASS: Senior, Catego, Carga Sauce, RUT, mora 0–8%, cuotas, privacidad y duplicados.');
+const october={...shifted,M2:cell('VIGENTE'),N2:cell('201276799'),O2:cell('Persona Prueba'),M3:cell('VIGENTE'),N3:cell('201276799'),O3:cell('Persona Prueba')};
+assert.deepEqual(parseIndividualSheet({SheetNames:['Carga MSC'],Sheets:{'Carga MSC':october}},'msc').errors,[]);
+assert.equal(parseIndividualSheet({SheetNames:['Carga MSC'],Sheets:{'Carga MSC':october}},'msc').records[0].values.debtSales,2);
+s.D4=cell('201276799');s.N3=cell('UF Emitida');s.N4=cell(1500);s.O3=cell('SMAD SOMETIDOS');s.O4=cell(8);s.P3=cell('Tramo por emisión');s.P4=cell('SENIOR');
+parsed=parseIndividualSheet(book,'senior');assert.equal(parsed.records[0].values.emittedUf,1500);assert.equal(parsed.records[0].values.emittedSmad,8);
+const canto={A1:cell('Fecha canto'),D1:cell('RUT vendedor'),E1:cell('Vendedor'),F1:cell('UF'),I1:cell('N° operación'),N1:cell('Unidad negocio')};
+const trio={A1:cell('U. NEG.'),B1:cell('NUM OPE'),P1:cell('ESTADO')};
+for(const [i,unit,state,day,uf]of [[2,'LPSA','Emitida','2026-09-06',200],[3,'LPSA','PreVenta','2026-09-07',100],[4,'OTRA','Emitida','2026-09-08',999],[5,'LPSA','Emitida','2025-09-08',888]]){
+ for(const [col,v]of Object.entries({A:day,D:'201276799',E:'Persona Prueba',F:uf,I:String(i),N:unit}))canto[col+i]=cell(v);
+ trio['A'+i]=cell(unit);trio['B'+i]=cell(String(i));trio['P'+i]=cell(state);
+}
+parsed=parseIndividualSheet({SheetNames:['BASE ANUAL','TRIO'],Sheets:{'BASE ANUAL':canto,TRIO:trio}},'ranking_monthly',{start:'2026-09-06',end:'2026-10-05'});
+assert.deepEqual(parsed.errors,[]);assert.equal(parsed.records.length,1);assert.equal(parsed.records[0].values.totalUf,300);assert.equal(parsed.records[0].values.emittedUf,200);assert.equal(parsed.records[0].values.notEmittedUf,100);
+console.log('PASS: new shifted debt layout, direct Senior emission, total ranking LPSA, TRIO emission, and date filtering.');
