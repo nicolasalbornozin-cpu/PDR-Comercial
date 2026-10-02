@@ -19,7 +19,7 @@ export function IndependentSheetUpload(){
    if(file.canceled)return;setBusy(true);const asset=file.assets[0];if((asset.size??0)>20*1024*1024)throw Error('El Excel excede 20 MB.');
    const webFile=(asset as typeof asset & {file?:Blob}).file;
    const data=webFile?new Uint8Array(await webFile.arrayBuffer()):await new File(asset.uri).bytes();const xlsx=await import('xlsx');
-   const result=parseIndividualSheet(xlsx.read(data,{type:'array',cellNF:true}),source);
+   const result=parseIndividualSheet(xlsx.read(data,{type:'array',cellNF:true}),source,{start,end});
    setFilename(asset.name);setParsed(result);
   }catch(e){setError(e instanceof Error?e.message:'No se pudo leer el Excel.');}finally{setBusy(false);}
  }
@@ -34,8 +34,8 @@ export function IndependentSheetUpload(){
   <View style={styles.choices}>{(Object.keys(sheetSources) as SheetSource[]).map(key=><Pressable disabled={busy} key={key} onPress={()=>{setSource(key);setParsed(null);setFilename('');setLabel('');setStart('');setEnd('');setError('');setMessage('');setClosed(false);}} style={[styles.chip,source===key&&styles.selected]}><Text style={{color:source===key?colors.surface:colors.primary}}>{sheetSources[key].label}</Text></Pressable>)}</View>
   <Text style={styles.sheet}>Hoja: {sheetSources[source].sheet}</Text>
   <FormField label="Nombre del período" icon="calendar-outline" value={label} onChangeText={setLabel} placeholder="Ej.: Catego julio-agosto 2026"/>
-  <FormField label="Inicio del período" icon="calendar-outline" value={start} onChangeText={setStart} placeholder="AAAA-MM-DD"/>
-  <FormField label="Cierre del período" icon="calendar-outline" value={end} onChangeText={setEnd} placeholder="AAAA-MM-DD"/>
+  <FormField label="Inicio del período" icon="calendar-outline" value={start} onChangeText={v=>{setStart(v);setParsed(null);}} placeholder="AAAA-MM-DD"/>
+  <FormField label="Cierre del período" icon="calendar-outline" value={end} onChangeText={v=>{setEnd(v);setParsed(null);}} placeholder="AAAA-MM-DD"/>
   {source==='senior'?<Pressable accessibilityRole="checkbox" accessibilityState={{checked:closed}} onPress={()=>{setClosed(!closed);setParsed(null);}}><Text style={styles.copy}>{closed?'☑':'☐'} Cierre Senior: confirmo que esta hoja está recalculada solo con ventas emitidas.</Text></Pressable>:null}
   <AppButton label={filename||'Seleccionar Excel'} icon="document-attach-outline" variant="secondary" onPress={choose} disabled={busy}/>
   {parsed?<View style={styles.validation}><Text style={styles.sheet}>{parsed.records.length} trabajadores · {parsed.errors.length} errores</Text>{[...parsed.errors.slice(0,6),...parsed.warnings.slice(0,6)].map((t,i)=><Text style={styles.copy} key={i}>{t}</Text>)}</View>:null}
