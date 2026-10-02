@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader } from '@/components/AppHeader';
 import { RankingRow } from '@/components/RankingRow';
@@ -23,6 +23,7 @@ export default function RankingScreen() {
   const [loaded, setLoaded] = useState<{userId:string;period:RankingPeriod;entries:RankingEntry[]}|null>(null);
   const [periodLabel, setPeriodLabel] = useState('Mes comercial vigente');
   const [error, setError] = useState('');
+  const [showEmission, setShowEmission] = useState(false);
   const { isPreviewing, user } = useAuth();
   const entries = useMemo(() => loaded?.userId === user?.id && loaded?.period === period ? loaded.entries : [], [loaded, period, user?.id]);
 
@@ -65,12 +66,13 @@ export default function RankingScreen() {
             <View style={styles.globalItemWide}>
               <Ionicons color={colors.gold} name="checkmark-circle-outline" size={20} />
               <Text adjustsFontSizeToFit numberOfLines={1} style={styles.globalValue}>{formatUF(totalUf)}</Text>
-              <Text style={styles.globalLabel}>UF emitidas</Text>
+              <Text style={styles.globalLabel}>UF totales</Text>
             </View>
           </View>
 
           <RankingTabs onChange={setPeriod} value={period} />
-          <Text style={styles.period}>{period === 'annual' ? 'Acumulado del año calendario 2026' : periodLabel} · solo ventas emitidas</Text>
+          <Text style={styles.period}>{period === 'annual' ? 'Acumulado del año calendario 2026' : periodLabel} · ventas totales</Text>
+          {period==='monthly'?<Pressable accessibilityRole="button" accessibilityState={{expanded:showEmission}} onPress={()=>setShowEmission(current=>!current)} style={styles.emissionToggle}><Ionicons name="swap-horizontal" size={19} color={colors.primary}/><Text style={styles.emissionText}>{showEmission?'Ocultar':'Ver'} emitidas vs. sin emitir</Text></Pressable>:null}
           {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
 
           {currentEntry ? (
@@ -84,7 +86,7 @@ export default function RankingScreen() {
                 </View>
                 <View style={styles.insightRow}>
                   <Ionicons color={colors.gold} name="arrow-up-circle-outline" size={18} />
-                  <Text style={styles.insight}>{gap > 0 ? `Faltan ${formatUF(gap)} UF emitidas para subir un puesto` : 'Liderando este ranking'}</Text>
+                  <Text style={styles.insight}>{gap > 0 ? `Faltan ${formatUF(gap)} UF para subir un puesto` : 'Liderando este ranking'}</Text>
                 </View>
               </View>
               <Ionicons color="rgba(255,255,255,0.08)" name="trophy-outline" size={104} style={styles.trophy} />
@@ -94,11 +96,11 @@ export default function RankingScreen() {
           <View style={styles.rankingSection}>
             <View style={styles.rankingHeading}>
               <Text style={styles.rankingTitle}>{period === 'annual' ? 'Ranking anual 2026' : `Ranking mensual · ${periodLabel}`}</Text>
-              <View style={styles.liveBadge}><View style={styles.liveDot} /><Text style={styles.liveText}>EMITIDAS</Text></View>
+              <View style={styles.liveBadge}><View style={styles.liveDot} /><Text style={styles.liveText}>TOTALES</Text></View>
             </View>
             <View style={styles.list}>
-              {entries.map((entry) => <RankingRow entry={entry} key={entry.userId} />)}
-              {!entries.length ? <Text style={styles.empty}>Aún no hay ventas emitidas para este período.</Text> : null}
+              {entries.map((entry) => <View key={entry.userId}><RankingRow entry={entry}/>{period==='monthly'&&showEmission?<View style={styles.comparison}><Text style={styles.emissionText}>Emitidas: {entry.emittedValue===undefined?'Sin dato':`${formatUF(entry.emittedValue)} UF`}</Text><Text style={styles.emissionText}>Sin emitir: {entry.notEmittedValue===undefined?'Sin dato':`${formatUF(entry.notEmittedValue)} UF`}</Text></View>:null}</View>)}
+              {!entries.length ? <Text style={styles.empty}>Aún no hay un ranking total publicado para este período.</Text> : null}
             </View>
           </View>
         </View>
@@ -122,6 +124,9 @@ const styles = StyleSheet.create({
   globalLabel: { color: 'rgba(255,255,255,0.62)', fontFamily: typography.sans, fontSize: 9, fontWeight: '600', textAlign: 'center' },
   globalDivider: { backgroundColor: 'rgba(255,255,255,0.17)', height: 58, width: 1 },
   period: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 10, textAlign: 'center' },
+  emissionToggle:{alignSelf:'center',flexDirection:'row',alignItems:'center',gap:8,padding:12,borderRadius:radii.pill,backgroundColor:colors.softGreen},
+  emissionText:{fontFamily:typography.sans,fontSize:11,color:colors.primary,fontWeight:'700'},
+  comparison:{padding:spacing.md,gap:spacing.sm,flexDirection:'row',flexWrap:'wrap',justifyContent:'space-between',backgroundColor:colors.paleGreen},
   error: { backgroundColor: '#FBECE9', borderRadius: radii.md, color: colors.danger, fontFamily: typography.sans, fontSize: 11, padding: spacing.md },
   positionCard: { ...shadows.floating, backgroundColor: colors.primary, borderRadius: radii.xl, minHeight: 154, overflow: 'hidden', padding: spacing.xl },
   positionContent: { zIndex: 1 },

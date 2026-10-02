@@ -12,6 +12,7 @@ import { ScreenContainer } from '@/components/ScreenContainer';
 import { SectionHeader } from '@/components/SectionHeader';
 import { newsImages } from '@/data/assets';
 import { useAuth } from '@/hooks/useAuth';
+import { canEditNews } from '@/utils/permissions';
 import { useNewsContent } from '@/hooks/useNewsContent';
 import { newsService } from '@/services/newsService';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
@@ -26,7 +27,7 @@ export default function NewsScreen() {
   const [careerBody, setCareerBody] = useState('');
   const [careerImageUrl, setCareerImageUrl] = useState<string>();
   const [saving, setSaving] = useState(false);
-  const isAdmin = authenticatedUser?.role === 'admin' && !isPreviewing;
+  const isAdmin = canEditNews(authenticatedUser?.role) && !isPreviewing;
   const featured = content.articles.find((article) => article.featured) ?? content.articles[0];
   const currentMonth = newsService.currentMonthStart().slice(0, 7);
   const careers = useMemo(

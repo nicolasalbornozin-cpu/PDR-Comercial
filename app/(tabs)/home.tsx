@@ -15,7 +15,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { snapshotService } from '@/services/snapshotService';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
 import { DashboardData, MetricSnapshot, roleLabels, VisibleProfile } from '@/types';
-import { daysWithoutSale, isBirthdayToday, productivityTone } from '@/utils/commercialRules';
+import { daysWithoutSale, hasMonthWithoutSale, hasGoalLevel, hasQualifiedSenior, latestGoal, isBirthdayToday, productivityTone } from '@/utils/commercialRules';
 import { formatUF } from '@/utils/format';
 
 function sumMetric(workers: VisibleProfile[], latest: DashboardData['latestByUser'], key: keyof MetricSnapshot): number {
@@ -27,10 +27,6 @@ function averageMetric(workers: VisibleProfile[], latest: DashboardData['latestB
   return values.length ? values.reduce((total, value) => total + value, 0) / values.length : 0;
 }
 
-function averageCount(workers: VisibleProfile[], latest: DashboardData['latestByUser'], key: keyof MetricSnapshot): number {
-  return workers.length ? sumMetric(workers, latest, key) / workers.length : 0;
-}
-
 function sellerDays(metric?: Partial<MetricSnapshot>): string {
   const days = daysWithoutSale(metric?.lastSaleDate);
   return days === null ? 'Sin fecha' : `${days} día${days === 1 ? '' : 's'}`;
@@ -39,7 +35,7 @@ function sellerDays(metric?: Partial<MetricSnapshot>): string {
 function ScopeCard({ title, subtitle, sellers, data, monthlyTarget }: { title: string; subtitle: string; sellers: VisibleProfile[]; data: DashboardData; monthlyTarget: number }) {
   const annual = sellers.reduce((total, seller) => total + Number(data.annualEmittedUfByUser[seller.id] ?? 0), 0);
   const monthly = sellers.reduce((total, seller) => total + Number(data.monthlyEmittedUfByUser[seller.id] ?? 0), 0);
-  const mora = averageCount(sellers, data.latestByUser, 'debtSalesCount');
+  const mora = sumMetric(sellers, data.latestByUser, 'debtSalesCount');
   const hasMora = sellers.some(w=>data.latestByUser[w.id]?.debtSalesCount !== undefined);
   const hasProductivity = sellers.some(w=>data.latestByUser[w.id]?.productivity !== undefined);
   const productivity = averageMetric(sellers, data.latestByUser, 'productivity');
@@ -55,7 +51,7 @@ function ScopeCard({ title, subtitle, sellers, data, monthlyTarget }: { title: s
       </View>
       <View style={styles.scopeStats}>
         <Text style={styles.scopeStat}>Mes <Text style={styles.scopeStrong}>{formatUF(monthly)} UF</Text></Text>
-        <Text style={[styles.scopeStat, { color: hasMora ? mora > 0 ? colors.danger : colors.success : colors.textMuted }]}>Mora prom. <Text style={styles.scopeStrong}>{hasMora ? `${mora.toFixed(1)} contratos` : '—'}</Text></Text>
+        <Text style={[styles.scopeStat, { color: hasMora ? mora > 0 ? colors.danger : colors.success : colors.textMuted }]}>Mora total <Text style={styles.scopeStrong}>{hasMora ? `${mora} contratos` : '—'}</Text></Text>
         <Text style={[styles.scopeStat, hasProductivity && productivity < 1 && styles.dangerText]}>Prod. <Text style={styles.scopeStrong}>{hasProductivity ? productivity.toFixed(2) : '—'}</Text></Text>
         <Text style={styles.scopeStat}>Anul. <Text style={styles.scopeStrong}>{formatUF(cancellations)} UF</Text></Text>
       </View>
@@ -103,7 +99,7 @@ export default function HomeScreen() {
   const totalMonthlyUf = isSeller
     ? Number(data?.monthlyEmittedUfByUser[user?.id ?? ''] ?? 0)
     : sellerRows.reduce((total, seller) => total + Number(data?.monthlyEmittedUfByUser[seller.id] ?? 0), 0);
-  const moraContracts = isSeller ? Number(ownMetric?.debtSalesCount ?? 0) : averageCount(sellerRows, data?.latestByUser ?? {}, 'debtSalesCount');
+  const moraContracts = isSeller ? Number(ownMetric?.debtSalesCount ?? 0) : sumMetric(sellerRows, data?.latestByUser ?? {}, 'debtSalesCount');
   const productivity = ownMetric?.productivity ?? averageMetric(sellerRows, data?.latestByUser ?? {}, 'productivity');
   const cancellations = isSeller ? Number(ownMetric?.cancellationUf ?? 0) : sumMetric(sellerRows, data?.latestByUser ?? {}, 'cancellationUf');
   const hasMora = isSeller ? ownMetric?.debtSalesCount !== undefined : sellerRows.some(w=>data?.latestByUser[w.id]?.debtSalesCount !== undefined);
@@ -111,7 +107,9 @@ export default function HomeScreen() {
   const hasSalesforce = isSeller ? ownMetric?.salesforceRecords !== undefined : sellerRows.some(w=>data?.latestByUser[w.id]?.salesforceRecords !== undefined);
   const noSaleCount = isSeller
     ? daysWithoutSale(ownMetric?.lastSaleDate) ?? 0
-    : sellerRows.filter((seller) => (daysWithoutSale(data?.latestByUser[seller.id]?.lastSaleDate) ?? 0) >= 3).length;
+    : sellerRows.filter((seller) => hasMonthWithoutSale(data?.latestByUser[seller.id])).length;
+  const categoryCount = data ? sellerRows.filter(seller => hasGoalLevel(latestGoal(data, seller.id, 'category')?.category)).length : 0;
+  const seniorCount = data ? sellerRows.filter(seller => hasQualifiedSenior(latestGoal(data,seller.id,'senior'))).length : 0;
   const birthdayProfiles = data?.profiles.filter((profile) => isBirthdayToday(profile.birthDate)) ?? [];
   const debtInstallments = sumMetric(sellerRows, data?.latestByUser ?? {}, 'debtInstallmentsCount');
   const debtUf08 = sumMetric(sellerRows, data?.latestByUser ?? {}, 'debtUf08');
@@ -170,7 +168,7 @@ export default function HomeScreen() {
           </View>
 
           <View style={styles.metricsRow}>
-            <MetricCard detail={hasMora ? isSeller ? 'contratos en mora' : 'promedio por vendedor' : 'sin mora cargada'} icon="alert-circle-outline" label="MORA" tone={hasMora && moraContracts > 0 ? 'red' : 'green'} value={hasMora ? isSeller ? `${moraContracts}` : moraContracts.toFixed(1) : '—'} />
+            <MetricCard onPress={!isSeller ? () => router.push({pathname:'/team',params:{kind:'debt'}}) : undefined} detail={hasMora ? isSeller ? 'contratos en mora' : 'total · ver vendedores' : 'sin mora cargada'} icon="alert-circle-outline" label="MORA" tone={hasMora && moraContracts > 0 ? 'red' : 'green'} value={hasMora ? `${moraContracts}` : '—'} />
             <MetricCard detail={hasProductivity?'según Producción':'sin datos cargados'} icon="briefcase-outline" label="PRODUCTIVIDAD" tone={hasProductivity?productivityTone(productivity):'gold'} value={hasProductivity?productivity.toFixed(2):'—'} />
             <MetricCard detail={isSeller ? 'posición anual' : 'personas visibles'} icon="trophy-outline" label={isSeller ? 'RANKING' : 'EQUIPO'} tone="gold" value={isSeller ? rankingPosition !== undefined ? `#${rankingPosition}` : '—' : `${sellerRows.length}`} />
             <MetricCard detail={hasSalesforce?'registros':'sin datos cargados'} icon="cloud-outline" label="SALESFORCE" value={hasSalesforce?`${salesforceRecords}`:'—'} />
@@ -183,11 +181,16 @@ export default function HomeScreen() {
               <View><Text style={styles.secondaryLabel}>Anulaciones del período</Text><Text style={[styles.secondaryValue, cancellations ? styles.dangerText : styles.successText]}>{formatUF(cancellations)} UF</Text></View>
             </View>
             <View style={styles.secondaryDivider} />
-            <View style={styles.secondaryMetric}>
+            <Pressable disabled={isSeller} onPress={() => router.push({pathname:'/team',params:{kind:'zero'}})} style={styles.secondaryMetric}>
               <View style={[styles.secondaryIcon, { backgroundColor: noSaleCount >= 3 ? '#FBECE9' : colors.softGreen }]}><Ionicons color={noSaleCount >= 3 ? colors.danger : colors.success} name="calendar-outline" size={19} /></View>
-              <View><Text style={styles.secondaryLabel}>Días sin vender</Text><Text style={[styles.secondaryValue, noSaleCount >= 3 ? styles.dangerText : styles.successText]}>{isSeller ? sellerDays(ownMetric) : `${noSaleCount} personas`}</Text></View>
-            </View>
+              <View><Text style={styles.secondaryLabel}>{isSeller ? 'Días sin vender' : 'Sin ventas · 1 mes'}</Text><Text style={[styles.secondaryValue, noSaleCount >= 3 ? styles.dangerText : styles.successText]}>{isSeller ? sellerDays(ownMetric) : `${noSaleCount} personas  ›`}</Text></View>
+            </Pressable>
           </View>
+
+          {user?.role === 'coordinator' ? <View style={styles.metricsRow}>
+            <MetricCard label="CATEGORIZANDO" icon="star-outline" value={`${categoryCount}`} detail="ejecutivos · ver detalle" onPress={() => router.push({pathname:'/team',params:{kind:'category'}})} />
+            <MetricCard label="SENIORS" icon="diamond-outline" value={`${seniorCount}`} detail="ejecutivos · ver detalle" onPress={() => router.push({pathname:'/team',params:{kind:'senior'}})} />
+          </View> : null}
 
           {isSeller ? (
             <View style={styles.goalsSection}>
@@ -258,7 +261,7 @@ export default function HomeScreen() {
 
           <View style={styles.privacyNote}>
             <Ionicons color={colors.secondary} name="shield-checkmark-outline" size={21} />
-            <Text style={styles.privacyText}>Ventas acumuladas y rankings: solo emitidas. Producción y Catego conservan los resultados de sus hojas cargadas. Senior abierto admite cantadas; el cierre requiere una nueva carga recalculada con emitidas.</Text>
+            <Text style={styles.privacyText}>Ranking por ventas totales. El ranking mensual permite comparar emitidas y sin emitir. Producción, Catego y Senior conservan los resultados de sus hojas cargadas.</Text>
           </View>
           <RecentAchievements data={data} />
         </View>
