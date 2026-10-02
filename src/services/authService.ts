@@ -62,7 +62,7 @@ async function getProfile(userId: string): Promise<User> {
     await supabase.auth.signOut();
     throw new Error('Error al comunicar con el servidor');
   }
-  if (user.role !== 'admin') {
+  if (user.role !== 'admin' && user.role !== 'audiovisual') {
     const roster = await supabase.from('commercial_workers').select('*').eq('rut', normalizeRut(user.rut)).maybeSingle();
     if (roster.error || !roster.data || !roster.data.active || roster.data.status !== 'active') {
       await supabase.auth.signOut();

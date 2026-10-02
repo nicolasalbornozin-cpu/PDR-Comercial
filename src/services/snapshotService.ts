@@ -237,7 +237,9 @@ function previewDashboard(user: User): DashboardData {
     snapshots,
     latestByUser: latestByUser(snapshots),
     annualEmittedUfByUser: Object.fromEntries(sellers.map((profile, index) => [profile.id, previewMetricSeeds[index % previewMetricSeeds.length].annualEmittedUf])),
+    annualTotalUfByUser: Object.fromEntries(sellers.map((profile, index) => [profile.id, Math.round(previewMetricSeeds[index % previewMetricSeeds.length].annualEmittedUf * 1.2)])),
     monthlyEmittedUfByUser: Object.fromEntries(sellers.map((profile, index) => [profile.id, previewMetricSeeds[index % previewMetricSeeds.length].monthlyEmittedUf])),
+    monthlyTotalUfByUser: Object.fromEntries(sellers.map((profile, index) => [profile.id, Math.round(previewMetricSeeds[index % previewMetricSeeds.length].monthlyEmittedUf * 1.2)])),
     periodLabel: '01 sep — 30 sep 2026 · datos de ejemplo',
     seniorOpen: true,
   };
@@ -322,7 +324,9 @@ function demoDashboard(): DashboardData {
     snapshots: [demoSnapshot],
     latestByUser: { [currentUser.id]: demoSnapshot },
     annualEmittedUfByUser: { [currentUser.id]: executiveMetrics.ufSold },
+    annualTotalUfByUser: { [currentUser.id]: Math.round(executiveMetrics.ufSold * 1.2) },
     monthlyEmittedUfByUser: { [currentUser.id]: executiveMetrics.ufSold },
+    monthlyTotalUfByUser: { [currentUser.id]: Math.round(executiveMetrics.ufSold * 1.2) },
     periodLabel: '01 ago — 31 ago 2026',
     seniorOpen: true,
   };

@@ -2,7 +2,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
 
 import { galleryImages, newsArticles } from '@/data/mockData';
-import { GalleryPhoto, NewsArticle } from '@/types';
+import { GalleryPhoto, NewsArticle, NewsSection } from '@/types';
 
 import { supabase } from './supabase';
 
@@ -22,6 +22,7 @@ interface NewsRow {
 interface GalleryRow {
   id: number;
   news_article_id: number | null;
+  news_section_id: number | null;
   title: string;
   image_url: string;
   sort_order: number;
@@ -30,6 +31,7 @@ interface GalleryRow {
 export interface NewsContent {
   articles: NewsArticle[];
   gallery: GalleryPhoto[];
+  sections: NewsSection[];
 }
 
 export interface NewsArticleChanges {
@@ -42,6 +44,7 @@ export interface NewsArticleChanges {
 function fallbackContent(): NewsContent {
   return {
     articles: newsArticles,
+    sections: [],
     gallery: galleryImages.map((image, index) => ({ id: `local-${index}`, title: `Paseo Senior ${index + 1}`, image, sortOrder: index })),
   };
 }
@@ -119,9 +122,10 @@ export const newsService = {
 
   async getContent(): Promise<NewsContent> {
     if (!supabase) return fallbackContent();
-    const [articlesResult, galleryResult] = await Promise.all([
+    const [articlesResult, galleryResult, sectionsResult] = await Promise.all([
       supabase.from('news_articles').select('id,title,summary,body,image_url,published_at,featured,category,event_month,sort_order').eq('active', true).order('sort_order').order('published_at', { ascending: false }),
-      supabase.from('gallery_images').select('id,news_article_id,title,image_url,sort_order').eq('active', true).order('sort_order').order('created_at', { ascending: false }),
+      supabase.from('gallery_images').select('id,news_article_id,news_section_id,title,image_url,sort_order').eq('active', true).order('sort_order').order('created_at', { ascending: false }),
+      supabase.from('news_sections').select('id,news_article_id,title,description,sort_order').eq('active', true).order('sort_order').order('id'),
     ]);
     let articleRows: NewsRow[];
     // Keep the public feed visible while the news migration is rolling out.
@@ -131,9 +135,13 @@ export const newsService = {
       articleRows = legacy.data.map((row) => ({ ...row, event_month: null, sort_order: 0 })) as NewsRow[];
     } else articleRows = articlesResult.data as NewsRow[];
     if (galleryResult.error) throw Error(galleryResult.error.message);
+    if (sectionsResult.error) throw Error(sectionsResult.error.message);
+    const sections: NewsSection[] = sectionsResult.data.map(row=>({id:String(row.id),newsArticleId:String(row.news_article_id),title:row.title,description:row.description,sortOrder:row.sort_order}));
+    const activeSections = new Set(sections.map(section=>section.id));
     return {
       articles: articleRows.length ? articleRows.map(rowToArticle) : fallbackContent().articles,
-      gallery: (galleryResult.data as GalleryRow[]).map((row) => ({ id: String(row.id), title: row.title, imageUrl: row.image_url, newsArticleId: row.news_article_id ? String(row.news_article_id) : undefined, sortOrder: row.sort_order })),
+      sections,
+      gallery: (galleryResult.data as GalleryRow[]).filter(row=>!row.news_section_id||activeSections.has(String(row.news_section_id))).map((row) => ({ id: String(row.id), title: row.title, imageUrl: row.image_url, newsArticleId: row.news_article_id ? String(row.news_article_id) : undefined, newsSectionId:row.news_section_id?String(row.news_section_id):undefined, sortOrder: row.sort_order })),
     };
   },
 
@@ -184,7 +192,7 @@ export const newsService = {
     if (result.error) throw Error(result.error.message);
   },
 
-  async addGalleryPhotos(title: string, newsArticleId?: string, onProgress?: (completed: number, total: number) => void): Promise<number> {
+  async addGalleryPhotos(title: string, newsArticleId?: string, onProgress?: (completed: number, total: number) => void, newsSectionId?: string): Promise<number> {
     if (!supabase) throw Error('Supabase no está configurado.');
     const assets = await pickImages(true);
     let added = 0;
@@ -197,6 +205,7 @@ export const newsService = {
           title: title.trim() || 'Paseo Senior',
           image_url: image.url,
           news_article_id: newsArticleId && /^\d+$/.test(newsArticleId) ? Number(newsArticleId) : null,
+          news_section_id: newsSectionId && /^\d+$/.test(newsSectionId) ? Number(newsSectionId) : null,
           sort_order: Date.now() + added,
           active: true,
         });
@@ -212,6 +221,23 @@ export const newsService = {
     }
     if (failures.length) throw Error(`Se publicaron ${added} de ${assets.length} fotos. Puedes volver a seleccionar las que fallaron:\n${failures.join('\n')}`);
     return added;
+  },
+
+  async saveSection(articleId: string, title: string, description: string, id?: string): Promise<void> {
+    if (!supabase || !/^\d+$/.test(articleId) || (id && !/^\d+$/.test(id))) throw Error('La noticia no está habilitada para edición.');
+    if (!title.trim() || !description.trim()) throw Error('Completa el título y la descripción.');
+    const payload = {title:title.trim(),description:description.trim()};
+    const result = id
+      ? await supabase.from('news_sections').update(payload).eq('id',Number(id)).eq('news_article_id',Number(articleId)).select('id').single()
+      : await supabase.from('news_sections').insert({...payload,news_article_id:Number(articleId),sort_order:Date.now()}).select('id').single();
+    if (result.error) throw Error(result.error.message);
+  },
+
+  async deleteSection(id: string): Promise<void> {
+    if (!supabase || !/^\d+$/.test(id)) throw Error('Sección inválida.');
+    // Archive rather than erase photos; this is recoverable in the database.
+    const result=await supabase.from('news_sections').update({active:false}).eq('id',Number(id)).select('id').single();
+    if(result.error)throw Error(result.error.message);
   },
 
   async deleteGalleryPhoto(photo: GalleryPhoto): Promise<void> {

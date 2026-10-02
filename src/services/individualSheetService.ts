@@ -4,7 +4,7 @@ import {DashboardData,EmploymentStatus,MetricSnapshot,User,UserRole} from '@/typ
 import {normalizeRut} from '@/utils/rut';
 
 export interface WorkerRow {
- id:string;rut:string|null;name:string;aliases:string[];role:Exclude<UserRole,'admin'>;active:boolean;status:EmploymentStatus;
+ id:string;rut:string|null;name:string;aliases:string[];role:Exclude<UserRole,'admin'|'audiovisual'>;active:boolean;status:EmploymentStatus;
  coordinator_id:string|null;manager_id:string|null;birth_date:string|null;join_date:string|null;
 }
 interface MetricRow {id:string;worker_id:string;source:SheetSource;metrics:SheetMetrics;label:string;period_start:string;period_end:string;published_at:string;sheet_name:string;senior_status:'open'|'closed'|null;rules:{label:string;uf:number;smad:number;prize:number}[]}
@@ -54,6 +54,11 @@ export const individualSheetService={
    if(found.length!==1)throw Error(`No hay una identidad única en dotación para ${row.name}. Revisa su RUT o nombre antes de cargar.`);
    return [{worker_id:found[0].id,metrics:row.values,source_row:row.row}];
   });
+  // These are complete debt reports for one jefatura. Absence means no debt,
+  // not an unknown value; keep active sellers with zero contracts visible.
+  const debtManagerRut:Partial<Record<SheetSource,string>>={titanes:'10368000k',rbh:'124603005',msc:'83624663'};
+  const manager=workers.find(w=>w.role==='sales_manager'&&w.rut===debtManagerRut[parsed.source]);
+  if(manager){const included=new Set(records.map(r=>r.worker_id));for(const w of workers){if(w.role==='seller'&&w.active&&w.status==='active'&&w.manager_id===manager.id&&!included.has(w.id))records.push({worker_id:w.id,source_row:1,metrics:{debtSales:0,debtUf:0,debtInstallments:0,debtUf08:0,debtSales08:0}});}}
   if(!records.length)throw Error('No hay trabajadores de esta hoja en la dotación de la plataforma.');
   const r=await supabase.rpc('publish_individual_sheet',{p_upload:{source:parsed.source,filename,sheet_name:parsed.sheet,label,period_start:start,period_end:end,senior_status:parsed.source==='senior'?status:null,rules:parsed.rules},p_records:records});
   if(r.error)throw Error(r.error.message);return {id:r.data as string,published:records.length,skipped};
@@ -67,7 +72,7 @@ export const individualSheetService={
   // Keep the authenticated UUID as the UI's own key, while roster joins use stable worker IDs.
   const uiId=(id:string|null)=>id===self?.id?user.id:id??'';
   const rows=allMetrics.filter(m=>ids.has(m.worker_id));
-  const latest:DashboardData['latestByUser']={},annual:Record<string,number>={},monthly:Record<string,number>={},snapshots:MetricSnapshot[]=[];
+  const latest:DashboardData['latestByUser']={},annual:Record<string,number>={},monthly:Record<string,number>={},annualTotal:Record<string,number>={},monthlyTotal:Record<string,number>={},snapshots:MetricSnapshot[]=[];
   const senior=rows.find(m=>m.source==='senior');
   const seniorOpen=Boolean(senior&&senior.senior_status==='open'&&new Date().toLocaleDateString('en-CA',{timeZone:'America/Santiago'})<=senior.period_end);
   for(const [index,row]of rows.entries()){
@@ -84,18 +89,22 @@ export const individualSheetService={
      m.seniorRemaining='Pendiente de carga de cierre con ventas emitidas';
     }
    }
-   if(row.source.startsWith('production_')){m.productivity=num('productivity');m.productionUf=num('uf');m.lastSaleDate=typeof v.lastSaleDate==='string'?v.lastSaleDate:undefined;}
+   if(row.source.startsWith('production_')){m.productivity=num('productivity');m.productionUf=num('uf');m.lastSaleDate=typeof v.lastSaleDate==='string'?v.lastSaleDate:undefined;m.daysWithoutSale=num('daysWithoutSale');m.daysWithoutSaleText=typeof v.daysWithoutSaleText==='string'?v.daysWithoutSaleText:undefined;}
    if(['titanes','rbh','msc'].includes(row.source)){m.debtInstallmentsCount=num('debtInstallments');m.debtUf08=num('debtUf08');m.debtSalesCount=num('debtSales');m.delinquentClientsCount=num('debtSales');}
    if(row.source==='sauce')m.sauceRisk=num('risk');
-   if(row.source==='ranking_annual'){annual[id]=num('emittedUf')??0;m.rankingPosition=num('position');}
-   if(row.source==='ranking_monthly'){monthly[id]=num('emittedUf')??0;m.businessCount=num('businesses');}
+   if(row.source==='ranking_annual'){annual[id]=num('emittedUf')??0;if(num('totalUf')!==undefined)annualTotal[id]=num('totalUf')!;m.rankingPosition=num('position');}
+   if(row.source==='ranking_monthly'){monthly[id]=num('emittedUf')??0;if(num('totalUf')!==undefined)monthlyTotal[id]=num('totalUf')!;m.businessCount=num('businesses');}
    const snap:MetricSnapshot={id:index,batchId:row.id,userId:id,kind:row.source==='category'?'category':row.source==='senior'?'senior':row.source==='sauce'?'sauce':row.source.startsWith('ranking_')?'ranking':'commercial',periodStart:row.period_start,periodEnd:row.period_end,sourceName:row.sheet_name,publishedAt:row.published_at,...m};
-   snapshots.push(snap);latest[id]={...latest[id],...Object.fromEntries(Object.entries(m).filter(([,value])=>value!==undefined))};
+   snapshots.push(snap);
+   const merged={...latest[id],...Object.fromEntries(Object.entries(m).filter(([,value])=>value!==undefined))};
+   if(['titanes','rbh','msc'].includes(row.source))for(const key of ['debtInstallmentsCount','debtUf08','debtSalesCount','delinquentClientsCount'] as const){if(m[key]!==undefined)merged[key]=(latest[id]?.[key]??0)+m[key]!;}
+   latest[id]=merged;
   }
   const currentGoalUploadIds=new Set(rows.filter(row=>row.source==='category'||row.source==='senior').map(row=>row.id));
-  const previousGoalUploads=(['category','senior'] as const).flatMap(source=>allUploads.filter(upload=>upload.source===source&&!currentGoalUploadIds.has(upload.id)).sort((a,b)=>b.published_at.localeCompare(a.published_at)).slice(0,1));
+  const previousGoalUploads=(['category','senior'] as const).flatMap(source=>{const current=rows.find(r=>r.source===source);return allUploads.filter(upload=>upload.source===source&&!currentGoalUploadIds.has(upload.id)&&(!current||upload.period_end<current.period_end)).sort((a,b)=>b.period_end.localeCompare(a.period_end)||b.published_at.localeCompare(a.published_at)).slice(0,1);});
   const historical=await historicalMetrics(previousGoalUploads.map(upload=>upload.id),[...ids]);
   for(const row of historical){const upload=previousGoalUploads.find(item=>item.id===row.upload_id);if(!upload)continue;const id=uiId(row.worker_id);const fields=goalFields(upload.source as 'category'|'senior',row.metrics,upload.senior_status==='open');snapshots.push({id:snapshots.length,batchId:upload.id,userId:id,kind:upload.source as 'category'|'senior',periodStart:upload.period_start,periodEnd:upload.period_end,sourceName:upload.sheet_name,publishedAt:upload.published_at,...fields,...(upload.source==='category'?{categoryLabel:upload.label}:{})});}
-  return {profiles:workers.map(w=>({...workerUser(w),id:uiId(w.id),supervisorId:uiId(w.coordinator_id),salesManagerId:uiId(w.manager_id)})),snapshots,latestByUser:latest,annualEmittedUfByUser:annual,monthlyEmittedUfByUser:monthly,periodLabel:rows.find(r=>r.source==='ranking_monthly')?.label??'Cargas independientes',seniorOpen};
+  if(self&&Object.keys(annualTotal).length&&supabase){const ranking=await supabase.rpc('individual_sheet_ranking',{p_period:'annual',p_target:self.id});if(ranking.error)throw Error(ranking.error.message);const own=ranking.data?.find((entry:{userId:string})=>entry.userId===self.id);if(own)latest[user.id]={...latest[user.id],rankingPosition:own.position};}
+  return {profiles:workers.map(w=>({...workerUser(w),id:uiId(w.id),supervisorId:uiId(w.coordinator_id),salesManagerId:uiId(w.manager_id)})),snapshots,latestByUser:latest,annualEmittedUfByUser:annual,monthlyEmittedUfByUser:monthly,annualTotalUfByUser:annualTotal,monthlyTotalUfByUser:monthlyTotal,periodLabel:rows.find(r=>r.source==='ranking_monthly')?.label??'Cargas independientes',seniorOpen};
  }
 };
