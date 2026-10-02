@@ -9,6 +9,7 @@ import { DetailHeader } from '@/components/DetailHeader';
 import { NewsCard } from '@/components/NewsCard';
 import { NewsPhoto, NewsPhotoBackground } from '@/components/NewsPhoto';
 import { NewsPhotoViewer } from '@/components/NewsPhotoViewer';
+import { NewsEventSections } from '@/components/NewsEventSections';
 import { ScreenContainer } from '@/components/ScreenContainer';
 import { newsImages } from '@/data/assets';
 import { useAuth } from '@/hooks/useAuth';
@@ -17,6 +18,7 @@ import { newsService } from '@/services/newsService';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
 import { GalleryPhoto } from '@/types';
 import { formatDate } from '@/utils/format';
+import { canEditNews } from '@/utils/permissions';
 
 export default function NewsDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -37,8 +39,8 @@ export default function NewsDetailScreen() {
   const [uploadProgress, setUploadProgress] = useState('');
   const [deletingPhotoId, setDeletingPhotoId] = useState<string>();
   const [selectedPhoto, setSelectedPhoto] = useState<number | null>(null);
-  const isAdmin = authenticatedUser?.role === 'admin' && !isPreviewing;
-  const articleGallery = article ? content.gallery.filter((photo) => photo.newsArticleId === article.id) : [];
+  const isAdmin = canEditNews(authenticatedUser?.role) && !isPreviewing;
+  const articleGallery = article ? content.gallery.filter((photo) => photo.newsArticleId === article.id && !photo.newsSectionId) : [];
 
   const openEditor = () => {
     if (!article) return;
@@ -167,6 +169,8 @@ export default function NewsDetailScreen() {
               </Pressable>
             ) : null}
           </View>
+
+          {article.category === 'Eventos recientes' ? <NewsEventSections articleId={article.id} sections={content.sections.filter(section=>section.newsArticleId===article.id)} photos={content.gallery} canEdit={isAdmin} refresh={refresh}/> : null}
 
           {related ? (
             <View style={styles.relatedSection}>
