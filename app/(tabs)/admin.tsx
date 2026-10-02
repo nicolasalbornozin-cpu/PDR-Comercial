@@ -1,4 +1,5 @@
 import {IndependentSheetUpload} from '@/components/IndependentSheetUpload';
+import { RegistrationControls } from '@/components/RegistrationControls';
 import { Redirect } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -149,8 +150,9 @@ export default function AdminScreen() {
 
           {section === 'users' ? (
             <>
+              <View style={styles.card}><RegistrationControls /></View>
               <View style={styles.card}>
-                <Text style={styles.cardTitle}>Crear cuenta</Text>
+                <Text style={styles.cardTitle}>Crear cuenta manual (opcional)</Text>
                 <FormField icon="person-outline" label="Nombre completo" onChangeText={setName} placeholder="Nombre y apellido" value={name} />
                 <FormField autoCapitalize="characters" icon="card-outline" label="RUT" onChangeText={setRut} placeholder="12.345.678-9" value={rut} />
                 <FormField icon="lock-closed-outline" label="Contraseña permanente" onChangeText={setPassword} password placeholder="10+ caracteres, mayúscula, número y símbolo" value={password} />
