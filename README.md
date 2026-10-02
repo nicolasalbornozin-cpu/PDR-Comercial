@@ -5,8 +5,8 @@ Primera versión completa de la aplicación móvil comercial de Parque del Recue
 ## Estado del MVP
 
 - Autenticación real por RUT y contraseña conectada a Supabase, con modo demostración cuando no hay credenciales.
-- Cuentas administradas sin autorregistro público y recuperación resuelta por el administrador.
-- Paneles separados para vendedor, coordinador, jefe de ventas y administrador.
+- Registro por RUT habilitado en dotación vigente, contraseña y confirmación, una sola vez por persona; recuperación y gestión a cargo del administrador.
+- Paneles separados para vendedor, coordinador, jefe de ventas y administrador; Audiovisual tiene acceso exclusivamente a Noticias.
 - Panel administrativo para cuentas, accesos y cargas CSV exportadas desde Excel.
 - Fotos publicables de ventas emitidas, emisión, avance comercial, Senior, categorización, Mora, Sauce y Salesforce.
 - Acumulado anual y mes comercial calculados solo con ventas emitidas; Senior abierto es la única excepción y usa ventas cantadas hasta su cierre.
@@ -69,11 +69,13 @@ El esquema reproducible está en `supabase/migrations/`. Incluye perfiles vincul
 - Todas las tablas tienen RLS habilitado.
 - Los usuarios anónimos no tienen acceso a las tablas comerciales.
 - Cada vendedor solo lee sus datos; coordinadores y jefes ven únicamente su jerarquía; el administrador gestiona el conjunto.
-- Los roles nunca se aceptan desde el cliente: las cuentas se crean mediante una Edge Function que comprueba el rol administrador.
+- Los roles nunca se aceptan desde el cliente: el registro obtiene el cargo de la dotación habilitada en el servidor; las operaciones de gestión requieren un administrador.
 - Las funciones de administración usan la clave de servicio únicamente en el servidor; esa clave nunca entra a la app.
 - El ranking comparte solo nombre, equipo, posición y UF emitidas, sin RUT ni correo.
 
 El procedimiento y las columnas permitidas para las cargas están en [docs/IMPORTACION_DATOS.md](docs/IMPORTACION_DATOS.md).
+
+El registro, las restricciones y la habilitación de Audiovisual se describen en [docs/REGISTRO_CUENTAS.md](docs/REGISTRO_CUENTAS.md). El RUT no verifica identidad: el registro sin verificación adicional debe habilitarse únicamente tras aceptar el riesgo de que otra persona registre primero un RUT ajeno.
 
 Para un proyecto nuevo, vincula Supabase CLI y aplica las migraciones revisadas:
 
