@@ -1,6 +1,6 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
 const worker=(id,role,coordinator_id,manager_id,active=true)=>({id,rut:id,name:id,aliases:[],role,coordinator_id,manager_id,active,status:active?'active':'detached'});
-const workers=[worker('seller','seller','coord','chief'),worker('other','seller','other-coord','other-chief'),worker('coord','coordinator',null,'chief'),worker('chief','sales_manager'),worker('inactive','seller','coord','chief',false)];
+const workers=[worker('seller','seller','coord','chief'),worker('other','seller','other-coord','other-chief'),worker('coord','coordinator',null,'chief'),worker('chief','sales_manager'),worker('commercial','commercial_manager'),worker('inactive','seller','coord','chief',false)];
 const row=(worker_id,source,metrics)=>({id:source,worker_id,source,metrics,label:source,period_start:'2026-01-01',period_end:'2099-10-05',published_at:'2026-09-10T12:00:00Z',sheet_name:source,senior_status:'open',rules:[]});
 const metrics=[row('seller','ranking_annual',{emittedUf:450,position:7}),row('seller','ranking_monthly',{emittedUf:20,position:2,businesses:1}),row('seller','category',{uf:500,emittedUf:320,notEmittedUf:180,level:'Bronce'}),row('seller','senior',{uf:310,emittedUf:100,notEmittedUf:210,cancellationUf:42,level:'Junior',remaining:'Faltan 100 UF',potentialLevel:'FALTAN 2 DESCANSO, FALTAN 1 SSFF'}),row('seller','sauce',{}),row('seller','production_sellers',{uf:9999,productivity:1.18}),row('other','ranking_annual',{emittedUf:500})];
 const db={from(table){return {select(){return this;},order(){return this;},async range(a,b){return {data:(table==='commercial_workers'?workers:metrics).slice(a,b+1),error:null};}};}};
@@ -22,6 +22,8 @@ assert.equal(exportsObject.remainingUfTarget(500,'Pendiente'),undefined);
  assert.deepEqual(Array.from(team.profiles,p=>p.id).sort(),['coord','seller']);
  const chief=await service.dashboard({id:'chief',rut:'chief',role:'sales_manager'});
  assert.deepEqual(Array.from(chief.profiles,p=>p.id).sort(),['chief','coord','seller']);
+ const commercial=await service.dashboard({id:'commercial',rut:'commercial',role:'commercial_manager'});
+ assert.deepEqual(Array.from(commercial.profiles,p=>p.id).sort(),['chief','commercial','coord','other','seller']);
  await assert.rejects(()=>service.dashboard({id:'inactive',rut:'inactive',role:'seller'}),/Error al comunicar/);
  metrics.find(m=>m.source==='senior').period_end='2020-10-05';
  const closed=await service.dashboard({id:'seller',rut:'seller',role:'seller'});

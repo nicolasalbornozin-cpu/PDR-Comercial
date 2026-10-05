@@ -7,5 +7,6 @@ assert.deepEqual(teamProductivityRows(data,{id:'c1',role:'coordinator'}).map(r=>
 assert.deepEqual(teamProductivityRows(data,{id:'j1',role:'sales_manager'}).map(r=>r.person.id),['b','a','c']);
 assert.equal(teamProductivityRows(data,{id:'c1',role:'seller'}).length,0);
 assert.equal(teamProductivityRows(data,{id:'admin',role:'admin'}).length,4);
+assert.equal(teamProductivityRows(data,{id:'commercial',role:'commercial_manager'}).length,4);
 assert.equal(teamProductivityRows(data,{id:'j1',role:'sales_manager'})[2].metric.productivity,undefined);
 console.log('PASS: productivity team scope, manager scope, zero versus missing data, inactive staff excluded.');
