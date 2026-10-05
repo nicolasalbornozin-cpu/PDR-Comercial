@@ -2,6 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { ComponentProps } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { NewsPhoto } from '@/components/NewsPhoto';
+import { newsImages } from '@/data/assets';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
 import { NewsArticle } from '@/types';
 
@@ -27,7 +29,7 @@ export function NewsCard({ article, onPress }: NewsCardProps) {
   const date = compactDateFormatter.format(new Date(`${article.date}T12:00:00`));
   return (
     <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
-      <View style={styles.icon}><Ionicons color={article.category === 'Reconocimientos' ? colors.goldText : colors.primary} name={iconByCategory[article.category] ?? 'newspaper-outline'} size={25} /></View>
+      {article.imageUrl ? <NewsPhoto fallback={newsImages.park} style={styles.thumbnail} url={article.imageUrl} /> : <View style={styles.icon}><Ionicons color={article.category === 'Reconocimientos' ? colors.goldText : colors.primary} name={iconByCategory[article.category] ?? 'newspaper-outline'} size={25} /></View>}
       <View style={styles.content}>
         <Text numberOfLines={2} style={styles.title}>{article.title}</Text>
         <Text numberOfLines={2} style={styles.summary}>{article.summary}</Text>
@@ -41,6 +43,7 @@ const styles = StyleSheet.create({
   card: { ...shadows.card, alignItems: 'center', backgroundColor: colors.surface, borderColor: '#EEF1EE', borderRadius: radii.lg, borderWidth: 1, flexDirection: 'row', gap: spacing.md, minHeight: 104, padding: spacing.md },
   pressed: { opacity: 0.74 },
   icon: { alignItems: 'center', backgroundColor: colors.softGreen, borderRadius: radii.pill, height: 52, justifyContent: 'center', width: 52 },
+  thumbnail: { borderRadius: radii.md, height: 64, width: 64 },
   content: { flex: 1 },
   title: { color: colors.primary, fontFamily: typography.serif, fontSize: 16, fontWeight: '600' },
   summary: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 11, lineHeight: 16, marginTop: 3 },

@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { ComponentProps } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, radii, shadows, typography } from '@/theme';
 
@@ -10,19 +10,20 @@ interface MetricCardProps {
   detail?: string;
   icon: ComponentProps<typeof Ionicons>['name'];
   tone?: 'green' | 'gold' | 'red';
+  onPress?: () => void;
 }
 
-export function MetricCard({ label, value, detail, icon, tone = 'green' }: MetricCardProps) {
+export function MetricCard({ label, value, detail, icon, tone = 'green', onPress }: MetricCardProps) {
   const accent = tone === 'red' ? colors.danger : tone === 'gold' ? colors.gold : colors.secondary;
   return (
-    <View style={styles.card}>
+    <Pressable accessibilityRole={onPress ? 'button' : undefined} accessibilityLabel={`${label}: ${value}. ${detail ?? ''}`} disabled={!onPress} onPress={onPress} style={styles.card}>
       <View style={[styles.icon, { backgroundColor: `${accent}16` }]}>
         <Ionicons color={accent} name={icon} size={18} />
       </View>
       <Text numberOfLines={1} style={styles.label}>{label}</Text>
       <Text adjustsFontSizeToFit numberOfLines={1} style={[styles.value, { color: accent }]}>{value}</Text>
       {detail ? <Text numberOfLines={1} style={styles.detail}>{detail}</Text> : null}
-    </View>
+    </Pressable>
   );
 }
 

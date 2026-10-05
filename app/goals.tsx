@@ -36,7 +36,7 @@ function categoryPeriodName(snapshot: Partial<MetricSnapshot> | undefined, fallb
 }
 
 export default function GoalsScreen() {
-  const { focus } = useLocalSearchParams<{ focus?: string }>();
+  const { focus, worker } = useLocalSearchParams<{ focus?: string; worker?: string }>();
   const { isPreviewing, user } = useAuth();
   const [loaded, setLoaded] = useState<{userId:string;data:DashboardData}|null>(null);
   const [openGoal, setOpenGoal] = useState<GoalKind | null>(focus === 'category' || focus === 'senior' ? focus : null);
@@ -52,8 +52,10 @@ export default function GoalsScreen() {
     return () => { active = false; };
   }, [isPreviewing, user]);
 
-  const metric = user && data ? data.latestByUser[user.id] : undefined;
-  const snapshotsFor = (kind: GoalKind) => user ? (data?.snapshots.filter((snapshot) => snapshot.userId === user.id && snapshot.kind === kind).sort((left, right) => right.publishedAt.localeCompare(left.publishedAt)) ?? []) : [];
+  const selected = worker && ['coordinator','sales_manager','admin'].includes(user?.role ?? '') ? data?.profiles.find(p => p.id === worker && p.role === 'seller') : undefined;
+  const targetId = worker ? selected?.id : user?.id;
+  const metric = targetId && data ? data.latestByUser[targetId] : undefined;
+  const snapshotsFor = (kind: GoalKind) => targetId ? (data?.snapshots.filter((snapshot) => snapshot.userId === targetId && snapshot.kind === kind).sort((left, right) => right.periodEnd.localeCompare(left.periodEnd) || right.publishedAt.localeCompare(left.publishedAt)) ?? []) : [];
   const seniorSnapshots = snapshotsFor('senior');
   const categorySnapshots = snapshotsFor('category');
   const seniorSnapshot = periodView.senior === 'previous' && seniorSnapshots[1] ? seniorSnapshots[1] : seniorSnapshots[0];
@@ -69,7 +71,8 @@ export default function GoalsScreen() {
   const validLevel = (level?:string) => Boolean(level && !/^(no|sin|pendiente|en carrera)/i.test(level));
   const completed = Number(validLevel(metric?.category)) + Number(validLevel(metric?.seniorLevel));
   const available = Number(metric?.categoryUf !== undefined) + Number(metric?.eligibleTotalUf !== undefined);
-  const firstName = user?.name.split(' ')[0] ?? 'Erika';
+  const firstName = (selected?.name ?? user?.name)?.split(' ')[0] ?? '';
+  if (worker && data && !selected) return <ScreenContainer><DetailHeader title="Detalle del ejecutivo" /><Text>No tienes acceso a este ejecutivo.</Text></ScreenContainer>;
   return (
     <ScreenContainer contentContainerStyle={styles.page} edges={['top', 'left', 'right', 'bottom']}>
       <View style={styles.mobileFrame}>
@@ -79,7 +82,7 @@ export default function GoalsScreen() {
             <DetailHeader title="Mis metas" />
             <View style={styles.heroTitleBlock}>
               <Text style={styles.title}>Mis metas</Text>
-              <Text style={styles.subtitle}>Tu progreso actualizado al día de hoy</Text>
+              <Text style={styles.subtitle}>{selected?.name ?? 'Tu progreso actualizado al día de hoy'}</Text>
             </View>
           </View>
         </ImageBackground>
@@ -126,6 +129,7 @@ export default function GoalsScreen() {
                 <View style={styles.ufMetric}><Text style={styles.detailMetricLabel}>Sin emitir</Text><Text style={[styles.ufMetricValue, styles.pendingValue]}>{pendingUf(seniorSnapshot, seniorSnapshot?.eligibleTotalUf) === undefined ? 'Sin dato' : `${formatUF(pendingUf(seniorSnapshot, seniorSnapshot?.eligibleTotalUf)!)} UF`}</Text></View>
               </View>
               <View style={styles.requirementsSection}>
+                {selected ? <Text style={styles.detailNote}>Tiene {seniorSnapshot?.smadCount ?? '—'} SMAD · {seniorSnapshot?.restCount ?? '—'} descansos · {seniorSnapshot?.ssffCount ?? '—'} SSFF</Text> : null}
                 <Text style={styles.requirementsTitle}>Solo falta para cumplir</Text>
                 <View style={styles.requirementsGrid}>
                   {([

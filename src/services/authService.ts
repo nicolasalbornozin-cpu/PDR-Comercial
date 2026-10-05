@@ -3,6 +3,7 @@ import { isSupabaseConfigured, supabase } from '@/services/supabase';
 import { EmploymentStatus, User, UserRole } from '@/types';
 import { isEmploymentBlocked } from '@/utils/commercialRules';
 import { isValidRut, normalizeRut, rutToInternalEmail } from '@/utils/rut';
+import { registrationValidation } from '@/utils/registration';
 import { WorkerRow, workerUser } from './individualSheetService';
 
 const authMode: 'demo' | 'supabase' = isSupabaseConfigured ? 'supabase' : 'demo';
@@ -62,7 +63,7 @@ async function getProfile(userId: string): Promise<User> {
     await supabase.auth.signOut();
     throw new Error('Error al comunicar con el servidor');
   }
-  if (user.role !== 'admin') {
+  if (user.role !== 'admin' && user.role !== 'audiovisual') {
     const roster = await supabase.from('commercial_workers').select('*').eq('rut', normalizeRut(user.rut)).maybeSingle();
     if (roster.error || !roster.data || !roster.data.active || roster.data.status !== 'active') {
       await supabase.auth.signOut();
@@ -79,6 +80,27 @@ async function getProfile(userId: string): Promise<User> {
 
 export const authService = {
   mode: authMode,
+
+  async register(rut: string, password: string, confirmPassword: string): Promise<void> {
+    const validation = registrationValidation(rut, password, confirmPassword);
+    if (validation) throw new Error(validation);
+    if (!supabase) throw new Error('Crear cuenta requiere conexión con la plataforma.');
+    const { data, error } = await supabase.functions.invoke('register-account', {
+      body: { rut: normalizeRut(rut), password, confirmPassword },
+    });
+    if (error) {
+      let message = 'No fue posible crear la cuenta. Inténtalo nuevamente.';
+      try {
+        const response = 'context' in error ? error.context : null;
+        if (response && typeof response.json === 'function') {
+          const payload = await response.json();
+          if (typeof payload.error === 'string') message = payload.error;
+        }
+      } catch { /* Do not expose transport details or credentials. */ }
+      throw new Error(message);
+    }
+    if (!data?.ok) throw new Error(data?.error ?? 'No fue posible crear la cuenta.');
+  },
 
   async restoreSession(): Promise<User | null> {
     if (!supabase) return null;

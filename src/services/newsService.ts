@@ -2,9 +2,34 @@ import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
 
 import { galleryImages, newsArticles } from '@/data/mockData';
-import { GalleryPhoto, NewsArticle } from '@/types';
+import { GalleryPhoto, NewsArticle, NewsSection } from '@/types';
 
-import { supabase } from './supabase';
+import { supabase, supabaseMediaOrigin } from './supabase';
+import { newsMediaPath } from '../utils/newsMedia';
+
+const signedImages = new Map<string, {url: string; until: number}>();
+const signingImages = new Map<string, Promise<string>>();
+let imageSessionVersion = 0;
+export function clearNewsImageCache() { imageSessionVersion++; signedImages.clear(); signingImages.clear(); }
+
+export async function resolveNewsImageUrl(value: string): Promise<string> {
+  const path = newsMediaPath(value, supabaseMediaOrigin);
+  if (!path || !supabase) throw Error('La fotografía no pertenece al almacenamiento autorizado.');
+  const cached = signedImages.get(path);
+  if (cached && cached.until > Date.now()) return cached.url;
+  const pending = signingImages.get(path);
+  if (pending) return pending;
+  const version = imageSessionVersion;
+  const request = (async () => {
+    const result = await supabase.storage.from('news-media').createSignedUrl(path, 600);
+    if (result.error) throw Error('No fue posible autorizar la fotografía. Revisa tu sesión.');
+    if (version !== imageSessionVersion) throw Error('La sesión cambió.');
+    signedImages.set(path, {url: result.data.signedUrl, until: Date.now() + 540000});
+    return result.data.signedUrl;
+  })();
+  signingImages.set(path, request);
+  try { return await request; } finally { if (signingImages.get(path) === request) signingImages.delete(path); }
+}
 
 interface NewsRow {
   id: number;
@@ -22,14 +47,24 @@ interface NewsRow {
 interface GalleryRow {
   id: number;
   news_article_id: number | null;
+  news_section_id: number | null;
   title: string;
   image_url: string;
+  sort_order: number;
+}
+
+interface NewsSectionRow {
+  id: number;
+  news_article_id: number;
+  title: string;
+  description: string;
   sort_order: number;
 }
 
 export interface NewsContent {
   articles: NewsArticle[];
   gallery: GalleryPhoto[];
+  sections: NewsSection[];
 }
 
 export interface NewsArticleChanges {
@@ -42,6 +77,7 @@ export interface NewsArticleChanges {
 function fallbackContent(): NewsContent {
   return {
     articles: newsArticles,
+    sections: [],
     gallery: galleryImages.map((image, index) => ({ id: `local-${index}`, title: `Paseo Senior ${index + 1}`, image, sortOrder: index })),
   };
 }
@@ -105,7 +141,7 @@ async function uploadImage(asset: DocumentPicker.DocumentPickerAsset, folder: 'a
   if (uploaded.error) throw Error(uploaded.error.message);
   const url = supabase.storage.from('news-media').getPublicUrl(uploaded.data.path).data.publicUrl;
   try {
-    const response = await fetch(url);
+    const response = await fetch(await resolveNewsImageUrl(url));
     if (!response.ok || !imageFormat(await response.arrayBuffer())) throw Error('La imagen no se puede leer después de subirla.');
   } catch (cause) {
     await supabase.storage.from('news-media').remove([uploaded.data.path]);
@@ -119,9 +155,10 @@ export const newsService = {
 
   async getContent(): Promise<NewsContent> {
     if (!supabase) return fallbackContent();
-    const [articlesResult, galleryResult] = await Promise.all([
+    const [articlesResult, galleryResult, sectionsResult] = await Promise.all([
       supabase.from('news_articles').select('id,title,summary,body,image_url,published_at,featured,category,event_month,sort_order').eq('active', true).order('sort_order').order('published_at', { ascending: false }),
-      supabase.from('gallery_images').select('id,news_article_id,title,image_url,sort_order').eq('active', true).order('sort_order').order('created_at', { ascending: false }),
+      supabase.from('gallery_images').select('id,news_article_id,news_section_id,title,image_url,sort_order').eq('active', true).order('sort_order').order('created_at', { ascending: false }),
+      supabase.from('news_sections').select('id,news_article_id,title,description,sort_order').eq('active', true).order('sort_order').order('id'),
     ]);
     let articleRows: NewsRow[];
     // Keep the public feed visible while the news migration is rolling out.
@@ -131,9 +168,13 @@ export const newsService = {
       articleRows = legacy.data.map((row) => ({ ...row, event_month: null, sort_order: 0 })) as NewsRow[];
     } else articleRows = articlesResult.data as NewsRow[];
     if (galleryResult.error) throw Error(galleryResult.error.message);
+    if (sectionsResult.error) throw Error(sectionsResult.error.message);
+    const sections: NewsSection[] = (sectionsResult.data as NewsSectionRow[]).map(row=>({id:String(row.id),newsArticleId:String(row.news_article_id),title:row.title,description:row.description,sortOrder:row.sort_order}));
+    const activeSections = new Set(sections.map(section=>section.id));
     return {
       articles: articleRows.length ? articleRows.map(rowToArticle) : fallbackContent().articles,
-      gallery: (galleryResult.data as GalleryRow[]).map((row) => ({ id: String(row.id), title: row.title, imageUrl: row.image_url, newsArticleId: row.news_article_id ? String(row.news_article_id) : undefined, sortOrder: row.sort_order })),
+      sections,
+      gallery: (galleryResult.data as GalleryRow[]).filter((row: GalleryRow)=>!row.news_section_id||activeSections.has(String(row.news_section_id))).map((row: GalleryRow) => ({ id: String(row.id), title: row.title, imageUrl: row.image_url, newsArticleId: row.news_article_id ? String(row.news_article_id) : undefined, newsSectionId:row.news_section_id?String(row.news_section_id):undefined, sortOrder: row.sort_order })),
     };
   },
 
@@ -144,8 +185,11 @@ export const newsService = {
     if (changes.summary !== undefined) payload.summary = changes.summary.trim();
     if (changes.body !== undefined) payload.body = changes.body.trim();
     if (changes.imageUrl !== undefined) payload.image_url = changes.imageUrl;
-    const result = await supabase.from('news_articles').update(payload).eq('id', Number(id));
+    if (changes.imageUrl !== undefined && !newsMediaPath(changes.imageUrl, supabaseMediaOrigin)) throw Error('Fotografía no autorizada.');
+    if ((payload.title?.length ?? 0) > 180 || (payload.summary?.length ?? 0) > 2000 || (payload.body?.length ?? 0) > 10000) throw Error('El texto supera el tamaño permitido.');
+    const result = await supabase.from('news_articles').update(payload).eq('id', Number(id)).select('id').single();
     if (result.error) throw Error(result.error.message);
+    if (!result.data) throw Error('No se pudo guardar la noticia. Revisa tu sesión de administrador.');
   },
 
   async pickArticleImage(): Promise<string | null> {
@@ -153,9 +197,24 @@ export const newsService = {
     return assets.length ? (await uploadImage(assets[0], 'articles')).url : null;
   },
 
+  async replaceArticleImage(id: string): Promise<string | null> {
+    const assets = await pickImages(false);
+    if (!assets.length) return null;
+    const image = await uploadImage(assets[0], 'articles');
+    try {
+      await newsService.updateArticle(id, { imageUrl: image.url });
+    } catch (cause) {
+      await supabase?.storage.from('news-media').remove([image.path]);
+      throw cause;
+    }
+    return image.url;
+  },
+
   async createCareer(input: { title: string; summary: string; body: string; imageUrl?: string }): Promise<void> {
     if (!supabase) throw Error('Supabase no está configurado.');
     if (!input.title.trim() || !input.summary.trim() || !input.body.trim()) throw Error('Completa el título, resumen y texto de la carrera.');
+    if (input.title.length > 180 || input.summary.length > 2000 || input.body.length > 10000) throw Error('El texto supera el tamaño permitido.');
+    if (input.imageUrl && !newsMediaPath(input.imageUrl, supabaseMediaOrigin)) throw Error('Fotografía no autorizada.');
     const result = await supabase.from('news_articles').insert({
       title: input.title.trim(),
       summary: input.summary.trim(),
@@ -170,36 +229,60 @@ export const newsService = {
     if (result.error) throw Error(result.error.message);
   },
 
-  async addGalleryPhotos(title: string, newsArticleId?: string): Promise<number> {
+  async addGalleryPhotos(title: string, newsArticleId?: string, onProgress?: (completed: number, total: number) => void, newsSectionId?: string): Promise<number> {
     if (!supabase) throw Error('Supabase no está configurado.');
     const assets = await pickImages(true);
     let added = 0;
+    const failures: string[] = [];
+    onProgress?.(0, assets.length);
     for (const asset of assets) {
-      const image = await uploadImage(asset, 'gallery');
-      const result = await supabase.from('gallery_images').insert({
-        title: title.trim() || 'Paseo Senior',
-        image_url: image.url,
-        news_article_id: newsArticleId && /^\d+$/.test(newsArticleId) ? Number(newsArticleId) : null,
-        sort_order: Date.now() + added,
-        active: true,
-      });
-      if (result.error) {
-        await supabase.storage.from('news-media').remove([image.path]);
-        throw Error(`${added} foto(s) publicada(s); la siguiente falló: ${result.error.message}`);
+      try {
+        const image = await uploadImage(asset, 'gallery');
+        const result = await supabase.from('gallery_images').insert({
+          title: title.trim() || 'Paseo Senior',
+          image_url: image.url,
+          news_article_id: newsArticleId && /^\d+$/.test(newsArticleId) ? Number(newsArticleId) : null,
+          news_section_id: newsSectionId && /^\d+$/.test(newsSectionId) ? Number(newsSectionId) : null,
+          sort_order: Date.now() + added,
+          active: true,
+        });
+        if (result.error) {
+          await supabase.storage.from('news-media').remove([image.path]);
+          throw Error(result.error.message);
+        }
+        added += 1;
+      } catch (cause) {
+        failures.push(`${asset.name}: ${cause instanceof Error ? cause.message : 'No se pudo subir.'}`);
       }
-      added += 1;
+      onProgress?.(added + failures.length, assets.length);
     }
+    if (failures.length) throw Error(`Se publicaron ${added} de ${assets.length} fotos. Puedes volver a seleccionar las que fallaron:\n${failures.join('\n')}`);
     return added;
+  },
+
+  async saveSection(articleId: string, title: string, description: string, id?: string): Promise<void> {
+    if (!supabase || !/^\d+$/.test(articleId) || (id && !/^\d+$/.test(id))) throw Error('La noticia no está habilitada para edición.');
+    if (!title.trim() || !description.trim()) throw Error('Completa el título y la descripción.');
+    const payload = {title:title.trim(),description:description.trim()};
+    const result = id
+      ? await supabase.from('news_sections').update(payload).eq('id',Number(id)).eq('news_article_id',Number(articleId)).select('id').single()
+      : await supabase.from('news_sections').insert({...payload,news_article_id:Number(articleId),sort_order:Date.now()}).select('id').single();
+    if (result.error) throw Error(result.error.message);
+  },
+
+  async deleteSection(id: string): Promise<void> {
+    if (!supabase || !/^\d+$/.test(id)) throw Error('Sección inválida.');
+    // Archive rather than erase photos; this is recoverable in the database.
+    const result=await supabase.from('news_sections').update({active:false}).eq('id',Number(id)).select('id').single();
+    if(result.error)throw Error(result.error.message);
   },
 
   async deleteGalleryPhoto(photo: GalleryPhoto): Promise<void> {
     if (!supabase || !/^\d+$/.test(photo.id)) throw Error('Esta fotografía no está publicada en Supabase.');
-    const result = await supabase.from('gallery_images').delete().eq('id', Number(photo.id));
+    const result = await supabase.from('gallery_images').delete().eq('id', Number(photo.id)).select('id').single();
     if (result.error) throw Error(result.error.message);
-    const marker = '/storage/v1/object/public/news-media/';
-    const markerIndex = photo.imageUrl?.indexOf(marker) ?? -1;
-    if (markerIndex >= 0 && photo.imageUrl) {
-      const path = decodeURIComponent(photo.imageUrl.slice(markerIndex + marker.length).split('?')[0]);
+    const path = newsMediaPath(photo.imageUrl, supabaseMediaOrigin);
+    if (path) {
       const removed = await supabase.storage.from('news-media').remove([path]);
       if (removed.error) throw Error(`Se quitó la foto de la galería, pero no el archivo: ${removed.error.message}`);
     }

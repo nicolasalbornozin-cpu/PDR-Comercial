@@ -28,6 +28,8 @@ interface AdminListResponse {
   resetRequests: PasswordResetRequest[];
 }
 
+interface ActiveProfileRow { id: string; rut: string | null; full_name: string; active: boolean }
+
 async function invokeAdmin<T>(body: Record<string, unknown>): Promise<T> {
   if (!supabase) throw new Error('Supabase no está configurado.');
   const { data, error } = await supabase.functions.invoke('admin-users', { body });
@@ -84,12 +86,13 @@ export const adminService = {
     if (profilesError) throw new Error(`No fue posible validar los RUT: ${profilesError.message}`);
 
     const normalizeName = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-    const profileByRut = new Map((profiles ?? []).map((profile) => [profile.rut, profile.id]));
+    const activeProfiles = (profiles ?? []) as ActiveProfileRow[];
+    const profileByRut = new Map(activeProfiles.map((profile) => [profile.rut, profile.id]));
     const missingRuts = ruts.filter((rut) => !profileByRut.has(rut));
     if (missingRuts.length) throw new Error(`RUT sin cuenta activa: ${missingRuts.join(', ')}.`);
 
     const idsByName = new Map<string, string[]>();
-    (profiles ?? []).forEach((profile) => {
+    activeProfiles.forEach((profile) => {
       const key = normalizeName(profile.full_name);
       idsByName.set(key, [...(idsByName.get(key) ?? []), profile.id]);
     });

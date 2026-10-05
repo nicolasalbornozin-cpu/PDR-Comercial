@@ -17,7 +17,7 @@ export default function IndexScreen() {
     );
   }
 
-  return <Redirect href={user ? '/(tabs)/home' : '/(auth)/login'} />;
+  return <Redirect href={user ? user.role === 'audiovisual' ? '/(tabs)/news' : '/(tabs)/home' : '/(auth)/login'} />;
 }
 
 const styles = StyleSheet.create({

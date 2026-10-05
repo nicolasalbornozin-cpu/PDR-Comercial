@@ -1,4 +1,4 @@
-export type UserRole = 'seller' | 'coordinator' | 'sales_manager' | 'admin';
+export type UserRole = 'seller' | 'coordinator' | 'sales_manager' | 'admin' | 'audiovisual';
 export type EmploymentStatus = 'active' | 'detached' | 'medical_leave' | 'vacation';
 
 export const employmentStatusLabels: Record<EmploymentStatus, string> = {
@@ -13,6 +13,7 @@ export const roleLabels: Record<UserRole, string> = {
   coordinator: 'Coordinador/a',
   sales_manager: 'Jefe/a de ventas',
   admin: 'Administrador/a',
+  audiovisual: 'Audiovisual',
 };
 
 export interface User {
@@ -120,6 +121,8 @@ export interface MetricSnapshot {
   seniorLevel?: string;
   estimatedPrizeClp?: number;
   lastSaleDate?: string;
+  daysWithoutSale?: number;
+  daysWithoutSaleText?: string;
   debtInstallmentsCount?: number;
   debtUf0?: number;
   debtUf8?: number;
@@ -145,6 +148,8 @@ export interface DashboardData {
   latestByUser: Record<string, Partial<MetricSnapshot>>;
   annualEmittedUfByUser: Record<string, number>;
   monthlyEmittedUfByUser: Record<string, number>;
+  annualTotalUfByUser: Record<string, number>;
+  monthlyTotalUfByUser: Record<string, number>;
   periodLabel: string;
   seniorOpen: boolean;
 }
@@ -213,6 +218,8 @@ export interface RankingEntry {
   name: string;
   avatar: string;
   value: number;
+  emittedValue?: number;
+  notEmittedValue?: number;
   position: number;
   teamId: string;
   subtitle?: string;
@@ -246,6 +253,15 @@ export interface GalleryPhoto {
   image?: string;
   imageUrl?: string;
   newsArticleId?: string;
+  newsSectionId?: string;
+  sortOrder: number;
+}
+
+export interface NewsSection {
+  id: string;
+  newsArticleId: string;
+  title: string;
+  description: string;
   sortOrder: number;
 }
 
