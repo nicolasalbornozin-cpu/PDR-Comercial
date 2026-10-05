@@ -1,6 +1,8 @@
 import { createContext, PropsWithChildren, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { authService } from '@/services/authService';
+import { clearNewsImageCache } from '@/services/newsService';
+import { resetNewsContentCache } from '@/hooks/useNewsContent';
 import { User } from '@/types';
 
 interface AuthContextValue {
@@ -42,6 +44,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setIsLoading(true);
     try {
       setPreviewUser(null);
+      clearNewsImageCache();
+      resetNewsContentCache();
       setAuthenticatedUser(await authService.signIn(rut, password));
     } finally {
       setIsLoading(false);
@@ -56,6 +60,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setIsLoading(true);
     try {
       await authService.signOut();
+      clearNewsImageCache();
+      resetNewsContentCache();
       setPreviewUser(null);
       setAuthenticatedUser(null);
     } finally {

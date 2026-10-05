@@ -1,0 +1,10 @@
+const assert = require('node:assert/strict');
+const decode = require('../vendor/decode-uri-component');
+assert.equal(decode('hello%20world'), 'hello world');
+assert.equal(decode('%F0%9F%8C%B1'), '🌱');
+assert.equal(decode('%E0%A4%A'), '%E0%A4%A');
+const malicious = '%C2'.repeat(25000);
+const started = Date.now();
+assert.equal(decode(malicious), malicious);
+assert.ok(Date.now() - started < 1000, 'Malformed input must remain bounded.');
+console.log('PASS: bounded CommonJS URI decoder.');

@@ -32,7 +32,6 @@ export function NewsPhotoViewer({ photos, initialIndex, onClose }: { photos: Gal
           initialNumToRender={1}
           initialScrollIndex={start}
           keyExtractor={(photo) => photo.id}
-          maxToRenderPerBatch={2}
           onMomentumScrollEnd={(event) => setSelected(Math.max(0, Math.min(photos.length - 1, Math.round(event.nativeEvent.contentOffset.x / width))))}
           pagingEnabled
           ref={pager}

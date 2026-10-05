@@ -1,0 +1,11 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript');
+require.extensions['.ts']=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{module:1,target:9}}).outputText,f);
+const {teamProductivityRows}=require('../src/utils/teamProductivity.ts');
+const worker=(id,supervisorId,salesManagerId,active=true)=>({id,name:id,role:'seller',supervisorId,salesManagerId,active,employmentStatus:active?'active':'vacation'});
+const data={profiles:[worker('a','c1','j1'),worker('b','c1','j1'),worker('c','c2','j1'),worker('d','c3','j2'),worker('e','c1','j1',false)],latestByUser:{a:{productivity:0},b:{productivity:1.5},c:{}}};
+assert.deepEqual(teamProductivityRows(data,{id:'c1',role:'coordinator'}).map(r=>r.person.id),['b','a']);
+assert.deepEqual(teamProductivityRows(data,{id:'j1',role:'sales_manager'}).map(r=>r.person.id),['b','a','c']);
+assert.equal(teamProductivityRows(data,{id:'c1',role:'seller'}).length,0);
+assert.equal(teamProductivityRows(data,{id:'admin',role:'admin'}).length,4);
+assert.equal(teamProductivityRows(data,{id:'j1',role:'sales_manager'})[2].metric.productivity,undefined);
+console.log('PASS: productivity team scope, manager scope, zero versus missing data, inactive staff excluded.');

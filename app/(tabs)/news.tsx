@@ -2,8 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Image, ImageBackground, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ActivityIndicator, Alert, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { NewsEditorInput, NewsEditorModal } from '@/components/NewsEditorModal';
 
 import { AppHeader } from '@/components/AppHeader';
 import { NewsCard } from '@/components/NewsCard';
@@ -141,24 +141,20 @@ export default function NewsScreen() {
         </View>
       </View>
 
-      <Modal animationType="slide" onRequestClose={() => setCareerOpen(false)} transparent visible={careerOpen}>
-        <SafeAreaView style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
+      <NewsEditorModal onClose={() => { if (!saving) setCareerOpen(false); }} visible={careerOpen}>
             <View style={styles.modalHeading}>
               <Text style={styles.modalTitle}>Publicar nueva carrera</Text>
               <Pressable accessibilityLabel="Cerrar" onPress={() => setCareerOpen(false)}><Ionicons color={colors.textMuted} name="close" size={24} /></Pressable>
             </View>
-            <TextInput onChangeText={setCareerTitle} placeholder="Nombre de la carrera" placeholderTextColor={colors.textMuted} style={styles.input} value={careerTitle} />
-            <TextInput multiline onChangeText={setCareerSummary} placeholder="Resumen breve" placeholderTextColor={colors.textMuted} style={[styles.input, styles.shortText]} value={careerSummary} />
-            <TextInput multiline onChangeText={setCareerBody} placeholder="Detalle, fechas, metas y requisitos" placeholderTextColor={colors.textMuted} style={[styles.input, styles.longText]} value={careerBody} />
-            {careerImageUrl ? <Image source={{ uri: careerImageUrl }} style={styles.previewImage} /> : null}
+            <NewsEditorInput accessibilityLabel="Nombre de la carrera" maxLength={180} onChangeText={setCareerTitle} placeholder="Nombre de la carrera" placeholderTextColor={colors.textMuted} style={styles.input} value={careerTitle} />
+            <NewsEditorInput accessibilityLabel="Resumen de la carrera" maxLength={2000} multiline onChangeText={setCareerSummary} placeholder="Resumen breve" placeholderTextColor={colors.textMuted} style={[styles.input, styles.shortText]} value={careerSummary} />
+            <NewsEditorInput accessibilityLabel="Detalle de la carrera" maxLength={10000} multiline onChangeText={setCareerBody} placeholder="Detalle, fechas, metas y requisitos" placeholderTextColor={colors.textMuted} style={[styles.input, styles.longText]} value={careerBody} />
+            {careerImageUrl ? <NewsPhoto url={careerImageUrl} fallback={newsImages.park} style={styles.previewImage} /> : null}
             <Pressable onPress={selectCareerPhoto} style={styles.photoButton}><Ionicons color={colors.primary} name="image-outline" size={19} /><Text style={styles.photoButtonText}>{careerImageUrl ? 'Cambiar foto' : 'Subir foto'}</Text></Pressable>
             <Pressable disabled={saving} onPress={saveCareer} style={[styles.publishButton, saving && styles.disabled]}>
               {saving ? <ActivityIndicator color={colors.surface} /> : <><Ionicons color={colors.surface} name="cloud-upload-outline" size={19} /><Text style={styles.publishText}>Publicar para todos</Text></>}
             </Pressable>
-          </View>
-        </SafeAreaView>
-      </Modal>
+      </NewsEditorModal>
     </ScreenContainer>
   );
 }

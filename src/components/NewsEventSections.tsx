@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { NewsEditorInput, NewsEditorModal } from './NewsEditorModal';
 import { NewsPhoto } from './NewsPhoto';
 import { NewsPhotoViewer } from './NewsPhotoViewer';
 import { newsImages } from '@/data/assets';
@@ -27,13 +27,13 @@ export function NewsEventSections({articleId,sections,photos,canEdit,refresh}:{a
       <View style={styles.grid}>{gallery.map((photo,index)=><View key={photo.id} style={styles.tile}><Pressable accessibilityLabel={`Ver ${section.title}, foto ${index+1}`} onPress={()=>setViewer({photos:gallery,index})}><NewsPhoto style={styles.photo} resizeMode="contain" fallback={newsImages.park} url={photo.imageUrl}/></Pressable>{canEdit?<Pressable accessibilityLabel={`Eliminar foto ${index+1} de ${section.title}`} disabled={busy} onPress={()=>removePhoto(photo)} style={styles.trash}><Ionicons name="trash-outline" size={18} color={colors.surface}/></Pressable>:null}</View>)}</View>
       {canEdit?<Pressable disabled={Boolean(uploading)} onPress={()=>{void upload(section);}} style={styles.action}>{uploading===section.id?<ActivityIndicator color={colors.primary}/>:<Ionicons name="images-outline" color={colors.primary} size={19}/>}<Text style={styles.actionText}>{uploading===section.id?progress||'Seleccionando fotos…':'Subir fotos'}</Text></Pressable>:!gallery.length?<Text style={styles.description}>Aún no hay fotografías.</Text>:null}
     </View>;})}
-    <Modal transparent visible={Boolean(editor)} animationType="slide" onRequestClose={()=>{if(!busy)setEditor(null);}}><SafeAreaView style={styles.backdrop}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.form}>
+    <NewsEditorModal visible={Boolean(editor)} onClose={()=>{if(!busy)setEditor(null);}}>
       <Text style={styles.title}>{editor?.id?'Editar sección':'Nueva sección'}</Text>
-      <TextInput accessibilityLabel="Título de la sección" placeholder="Título" value={title} onChangeText={setTitle} style={styles.input}/>
-      <TextInput accessibilityLabel="Descripción de la sección" placeholder="Descripción" value={description} onChangeText={setDescription} multiline style={[styles.input,{minHeight:100,textAlignVertical:'top'}]}/>
+      <NewsEditorInput accessibilityLabel="Título de la sección" maxLength={180} placeholder="Título" value={title} onChangeText={setTitle} style={styles.input}/>
+      <NewsEditorInput accessibilityLabel="Descripción de la sección" maxLength={10000} placeholder="Descripción" value={description} onChangeText={setDescription} multiline style={styles.input}/>
       <Pressable disabled={busy} onPress={()=>{void run(async()=>{await newsService.saveSection(articleId,title,description,editor?.id);setEditor(null);});}} style={styles.save}>{busy?<ActivityIndicator color={colors.surface}/>:<Text style={styles.saveText}>Guardar para todos</Text>}</Pressable>
       <Pressable disabled={busy} onPress={()=>setEditor(null)} style={styles.action}><Text style={styles.actionText}>Cancelar</Text></Pressable>
-    </ScrollView></SafeAreaView></Modal>
+    </NewsEditorModal>
     {viewer?<NewsPhotoViewer initialIndex={viewer.index} photos={viewer.photos} onClose={()=>setViewer(null)}/>:null}
   </View>;
 }

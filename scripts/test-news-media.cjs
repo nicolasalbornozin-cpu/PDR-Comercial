@@ -2,6 +2,9 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const ts = require('typescript');
+require.extensions['.ts'] = (m,f) => m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'), {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,f);
+const {newsMediaPath}=require('../src/utils/newsMedia.ts');
+const mediaOrigin = 'https://photos.example';
 
 // Exercise the real upload service with Storage, picker and database boundaries
 // mocked: a six-photo batch, one failed file, and an immediate cover change.
@@ -12,7 +15,8 @@ const storage = {
     assert.ok(data instanceof ArrayBuffer);
     return path.includes(failName) && failName ? { error: { message: 'fallo simulado' } } : { data: { path } };
   },
-  getPublicUrl: (path) => ({ data: { publicUrl: `https://photos.example/${path}` } }),
+  getPublicUrl: (path) => ({ data: { publicUrl: `${mediaOrigin}/storage/v1/object/public/news-media/${path}` } }),
+  createSignedUrl: async (path, seconds) => { assert.equal(seconds,600); return {data:{signedUrl:`${mediaOrigin}/storage/v1/object/sign/news-media/${path}?token=temporary`}}; },
   remove: async (paths) => { removed.push(...paths); return {}; },
 };
 const supabase = {
@@ -34,7 +38,8 @@ vm.runInNewContext(compiled, {
   require: (name) => {
     if (name === 'expo-document-picker') return { getDocumentAsync: async () => ({ canceled: !assets.length, assets }) };
     if (name === 'expo-file-system') return { File: class { async arrayBuffer() { return jpeg; } } };
-    if (name === './supabase') return { supabase };
+    if (name === './supabase') return { supabase, supabaseMediaOrigin:mediaOrigin };
+    if (name === '../utils/newsMedia') return {newsMediaPath};
     if (name === '@/data/mockData') return { galleryImages: [], newsArticles: [] };
     throw Error(name);
   },
@@ -42,6 +47,10 @@ vm.runInNewContext(compiled, {
 const service = exportsObject.newsService;
 const makePhotos = () => Array.from({ length: 6 }, (_, i) => ({ name: `photo-${i + 1}.jpg`, uri: `file://${i}.jpg`, size: 12 }));
 (async () => {
+  assert.equal(newsMediaPath(`${mediaOrigin}/storage/v1/object/public/news-media/gallery/a.jpg`,mediaOrigin),'gallery/a.jpg');
+  assert.equal(newsMediaPath('https://evil.example/storage/v1/object/public/news-media/gallery/a.jpg',mediaOrigin),undefined);
+  assert.equal(newsMediaPath(`${mediaOrigin}/storage/v1/object/public/news-media/gallery/%2e%2e%2fprivate.jpg`,mediaOrigin),undefined);
+  await assert.rejects(exportsObject.resolveNewsImageUrl('https://evil.example/image.jpg'),/autorizado/);
   assets = makePhotos();
   const progress = [];
   assert.equal(await service.addGalleryPhotos('Evento', '4', (done, total) => progress.push([done, total])), 6);
@@ -57,6 +66,8 @@ const makePhotos = () => Array.from({ length: 6 }, (_, i) => ({ name: `photo-${i
   const url = await service.replaceArticleImage('4');
   assert.equal(updates.at(-1).image_url, url);
   assert.equal(updates.at(-1).id, 4);
+  assert.match(await exportsObject.resolveNewsImageUrl(url),/\/sign\/news-media\//);
+  await assert.rejects(service.updateArticle('4',{imageUrl:'https://evil.example/photo.jpg'}),/autorizada/);
   denied = true;
   await assert.rejects(service.replaceArticleImage('4'), /Sin permisos/);
   assert.equal(removed.length, 1);

@@ -38,3 +38,14 @@ for(const [i,unit,state,day,uf]of [[2,'LPSA','Emitida','2026-09-06',200],[3,'LPS
 parsed=parseIndividualSheet({SheetNames:['BASE ANUAL','TRIO'],Sheets:{'BASE ANUAL':canto,TRIO:trio}},'ranking_monthly',{start:'2026-09-06',end:'2026-10-05'});
 assert.deepEqual(parsed.errors,[]);assert.equal(parsed.records.length,1);assert.equal(parsed.records[0].values.totalUf,300);assert.equal(parsed.records[0].values.emittedUf,200);assert.equal(parsed.records[0].values.notEmittedUf,100);
 console.log('PASS: new shifted debt layout, direct Senior emission, total ranking LPSA, TRIO emission, and date filtering.');
+const summary=(uf,count)=>({D2:cell('Vendedor'),E2:cell('RUT'),F2:cell('UF'),G2:cell('negocios'),D3:cell('Persona Prueba'),E3:cell('201276799'),F3:{...cell(uf),f:'formula-del-operador'},G3:cell(count)});
+const prepared={SheetNames:['Ranking Septiembre','Ranking Septiembre emitido'],Sheets:{'Ranking Septiembre':summary(180,2),'Ranking Septiembre emitido':summary(80,1)}};
+parsed=parseIndividualSheet(prepared,'ranking_monthly',{start:'2026-09-06',end:'2026-10-05'});
+assert.deepEqual(parsed.errors,[]);assert.equal(parsed.records[0].values.totalUf,180);assert.equal(parsed.records[0].values.emittedUf,80);assert.equal(parsed.records[0].values.notEmittedUf,100);
+assert.ok(!JSON.stringify(parsed.records).includes('formula-del-operador'));
+prepared.Sheets['Ranking Septiembre'].F3={t:'n',f:'uncached'};assert.ok(parseIndividualSheet(prepared,'ranking_monthly',{start:'2026-09-06',end:'2026-10-05'}).errors.length);
+console.log('PASS: saved ranking totals and emitted comparison preserved; uncached formulas rejected; no raw worksheets transmitted.');
+const rankingOctober={SheetNames:['Ranking Octubre','Ranking Octubre emitido'],Sheets:{'Ranking Octubre':summary(220,3),'Ranking Octubre emitido':summary(120,2)}};
+parsed=parseIndividualSheet(rankingOctober,'ranking_monthly',{start:'2026-10-06',end:'2026-11-05'});
+assert.deepEqual(parsed.errors,[]);assert.equal(parsed.sheet,'Ranking Octubre');assert.equal(parsed.records[0].values.notEmittedUf,100);
+console.log('PASS: the monthly sheets can change from September to October (and other Spanish months).');

@@ -1,0 +1,7 @@
+{
+  "name": "decode-uri-component",
+  "version": "0.5.0-pdr.1",
+  "description": "Bounded CommonJS URI decoder maintained for the Expo dependency tree",
+  "main": "index.js",
+  "license": "MIT"
+}

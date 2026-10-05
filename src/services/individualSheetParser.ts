@@ -10,7 +10,7 @@ export const sheetSources = {
   rbh: { label: 'Mora RBH · Rodolfo', sheet: 'Carga RBH' },
   msc: { label: 'Mora MSC · Mauricio', sheet: 'Carga MSC' },
   sauce: { label: 'Riesgo Sauce', sheet: 'Carga Sauce' },
-  ranking_monthly: { label: 'Ranking mensual · ventas totales', sheet: 'Septiembre Comercial 26' },
+  ranking_monthly: { label: 'Ranking Plataforma · anual y mensual', sheet: 'Ranking del mes + emitido' },
   ranking_annual: { label: 'Ranking anual · ventas totales', sheet: 'BASE ANUAL' },
 } as const;
 export type SheetSource = keyof typeof sheetSources;
@@ -41,7 +41,7 @@ const sheetAliases: Partial<Record<SheetSource, string[]>> = {
 
 // Only aggregate worker results are published; no operation or client rows are uploaded.
 export function parseIndividualSheet(book: WorkBook, source: SheetSource, period?: {start:string;end:string}): SheetImport {
-  if (source === 'ranking_annual' || source === 'ranking_monthly') return parseCantoRanking(book,source,period);
+  if (source === 'ranking_annual' || source === 'ranking_monthly') return parsePreparedRanking(book, source, period) ?? parseCantoRanking(book,source,period);
   const expectedSheets = sheetAliases[source] ?? [sheetSources[source].sheet];
   const sheet = expectedSheets.map(expected => book.SheetNames.find(n => searchName(n) === searchName(expected))).find(Boolean);
   const result: SheetImport = { source, sheet: sheet ?? sheetSources[source].sheet, records: [], errors: [], warnings: [], rules: [] };
@@ -213,6 +213,55 @@ export function parseIndividualSheet(book: WorkBook, source: SheetSource, period
   return result;
 }
 
+// Preserve the saved ranking formulas (including monthly resciliations).
+// No client/contract column or raw worksheet is included in these records.
+function parsePreparedRanking(book: WorkBook, source: 'ranking_annual'|'ranking_monthly', period?: {start:string;end:string}): SheetImport | undefined {
+  const names = book.SheetNames.map(name => ({ name, key: searchName(name) }));
+  const total = source === 'ranking_annual'
+    ? names.find(sheet => sheet.key === 'ranking anual total')
+    : names.find(sheet => /^ranking (enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)$/.test(sheet.key));
+  if (!total) return undefined;
+  const emitted = names.find(sheet => source === 'ranking_annual' ? sheet.key === 'ranking anual' : sheet.key === `${total.key} emitido`);
+  const result: SheetImport = { source, sheet: total.name, records: [], errors: [], warnings: [], rules: [] };
+  if (!period || !/^\d{4}-\d{2}-\d{2}$/.test(period.start) || !/^\d{4}-\d{2}-\d{2}$/.test(period.end) || period.end < period.start) {
+    result.errors.push('Indica las fechas del ranking antes de seleccionar el archivo.'); return result;
+  }
+  if (!emitted) { result.errors.push('Falta el ranking emitido para comparar con el ranking total.'); return result; }
+  const read = (name: string) => {
+    const ws = book.Sheets[name];
+    const rows = Object.keys(ws).filter(a => /^E\d+$/.test(a)).map(a => Number(a.slice(1))).sort((a,b) => a-b);
+    const values = new Map<string, SheetRecord>();
+    if (searchName(ws.E2?.v) !== 'rut' || searchName(ws.D2?.v) !== 'vendedor' || !searchName(ws.F2?.v).startsWith('uf')) {
+      result.errors.push(`No se reconocen los encabezados de ${name}.`); return values;
+    }
+    for (const row of rows.filter(row => row > 2)) {
+      const rawRut = ws[`E${row}`]?.v;
+      if (!text(rawRut)) continue;
+      const rut = normalizeRut(rawRut), person = text(ws[`D${row}`]?.v);
+      const ufCell = ws[`F${row}`], businessesCell = ws[`G${row}`];
+      const uf = number(ufCell?.v), businesses = number(businessesCell?.v);
+      if (!isValidRut(rut) || !person || ufCell?.t === 'e' || businessesCell?.t === 'e' || uf === undefined || businesses === undefined || !Number.isInteger(businesses) || businesses < 0) {
+        result.errors.push(`${name}, fila ${row}: identidad o resultado guardado inválido. Recalcula y guarda el Excel.`); continue;
+      }
+      if (values.has(rut)) { result.errors.push(`${name}, fila ${row}: RUT repetido.`); continue; }
+      values.set(rut, {rut, name:person, role:'seller', row, values:{uf, businesses}});
+    }
+    return values;
+  };
+  const totals = read(total.name), emissions = read(emitted.name);
+  for (const [rut, row] of totals) {
+    const issued = emissions.get(rut);
+    if (!issued) { result.errors.push(`${emitted.name}: falta el vendedor de la fila ${row.row} del ranking total.`); continue; }
+    const totalUf = Number(row.values.uf), emittedUf = Number(issued.values.uf);
+    result.records.push({...row, values:{totalUf, emittedUf, notEmittedUf:Math.max(totalUf-emittedUf,0), businesses:row.values.businesses,
+      position:1+[...totals.values()].filter(other => Number(other.values.uf)>totalUf).length}});
+  }
+  if ([...emissions.keys()].some(rut => !totals.has(rut))) result.errors.push('Los rankings total y emitido no tienen la misma nómina.');
+  if (!result.records.length) result.errors.push('No hay resultados válidos en los rankings.');
+  result.warnings.push(`Se conservan exactamente los valores guardados de «${total.name}» y «${emitted.name}», incluidas sus anulaciones. Solo se publican RUT de trabajador y métricas agregadas. Dotación vigente controla quién aparece.`);
+  return result;
+}
+
 // Canto supplies date, seller and UF. TRIO alone supplies emission status.
 // Canto can have several UF movements for an operation (e.g. an increase).
 // They all contribute to total UF. The TRIO join never multiplies these rows.
@@ -227,6 +276,7 @@ function parseCantoRanking(book: WorkBook, source: 'ranking_annual'|'ranking_mon
   const ws=book.Sheets[sheet],trio=book.Sheets[trioName];
   const columns=(s:WorkBook['Sheets'][string])=>Object.fromEntries(Object.entries(s).filter(([a])=>/^[A-Z]+1$/.test(a)).map(([a,cell])=>[searchName(cell.v),a.replace(/1$/,'')]));
   const cantoCols=columns(ws),trioCols=columns(trio);
+  cantoCols['fecha canto'] ??= cantoCols.canto;
   if(!['fecha canto','rut vendedor','vendedor','uf','n operacion','unidad negocio'].every(h=>cantoCols[h])||!['u neg','num ope','estado'].every(h=>trioCols[h])){result.errors.push('No se reconoce el formato de Canto o TRIO. Conserva sus encabezados originales.');return result;}
   const lastRow=(s:WorkBook['Sheets'][string])=>Object.keys(s).filter(a=>/^[A-Z]+\d+$/.test(a)).reduce((last,a)=>Math.max(last,Number(a.replace(/\D/g,''))),1);
   const cantoLast=lastRow(ws),trioLast=lastRow(trio);

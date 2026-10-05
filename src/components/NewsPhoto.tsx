@@ -3,6 +3,7 @@ import { ReactNode, useEffect, useState } from 'react';
 import { ActivityIndicator, Image, ImageResizeMode, ImageSourcePropType, ImageStyle, Pressable, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 
 import { colors, typography } from '@/theme';
+import { resolveNewsImageUrl } from '@/services/newsService';
 
 interface PhotoProps {
   url?: string;
@@ -19,6 +20,14 @@ function PhotoContent({ url, fallback, style, resizeMode = 'cover' }: PhotoProps
   const [attempt, setAttempt] = useState(0);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [retryKey, setRetryKey] = useState('');
+  const [authorizedUrl, setAuthorizedUrl] = useState<string>();
+  useEffect(() => {
+    if (!url) return;
+    let active = true;
+    setAuthorizedUrl(undefined);
+    resolveNewsImageUrl(url).then(next => { if (active) setAuthorizedUrl(next); }).catch(() => { if (active) setStatus('error'); });
+    return () => { active = false; };
+  }, [url, retryKey]);
 
   useEffect(() => {
     if (status !== 'error' || !url || attempt >= 2) return;
@@ -30,11 +39,11 @@ function PhotoContent({ url, fallback, style, resizeMode = 'cover' }: PhotoProps
     return () => clearTimeout(timer);
   }, [attempt, status, url]);
 
-  const uri = url && retryKey ? `${url}${url.includes('?') ? '&' : '?'}pdr_retry=${retryKey}` : url;
+  const uri = authorizedUrl && retryKey ? `${authorizedUrl}${authorizedUrl.includes('?') ? '&' : '?'}pdr_retry=${retryKey}` : authorizedUrl;
   const exhausted = status === 'error' && (!url || attempt >= 2);
   return (
     <View style={[style as StyleProp<ViewStyle>, styles.frame]}>
-      {!exhausted ? (
+      {!exhausted && (!url || authorizedUrl) ? (
         <Image
           key={uri || 'local'}
           onError={() => setStatus('error')}

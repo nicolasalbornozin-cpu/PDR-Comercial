@@ -169,7 +169,7 @@ export default function HomeScreen() {
 
           <View style={styles.metricsRow}>
             <MetricCard onPress={!isSeller ? () => router.push({pathname:'/team',params:{kind:'debt'}}) : undefined} detail={hasMora ? isSeller ? 'contratos en mora' : 'total · ver vendedores' : 'sin mora cargada'} icon="alert-circle-outline" label="MORA" tone={hasMora && moraContracts > 0 ? 'red' : 'green'} value={hasMora ? `${moraContracts}` : '—'} />
-            <MetricCard detail={hasProductivity?'según Producción':'sin datos cargados'} icon="briefcase-outline" label="PRODUCTIVIDAD" tone={hasProductivity?productivityTone(productivity):'gold'} value={hasProductivity?productivity.toFixed(2):'—'} />
+            <MetricCard onPress={!isSeller ? () => router.push({pathname:'/team',params:{kind:'productivity'}}) : undefined} detail={hasProductivity?isSeller?'según Producción':'ver productividad del equipo':'sin datos cargados'} icon="briefcase-outline" label="PRODUCTIVIDAD" tone={hasProductivity?productivityTone(productivity):'gold'} value={hasProductivity?productivity.toFixed(2):'—'} />
             <MetricCard detail={isSeller ? 'posición anual' : 'personas visibles'} icon="trophy-outline" label={isSeller ? 'RANKING' : 'EQUIPO'} tone="gold" value={isSeller ? rankingPosition !== undefined ? `#${rankingPosition}` : '—' : `${sellerRows.length}`} />
             <MetricCard detail={hasSalesforce?'registros':'sin datos cargados'} icon="cloud-outline" label="SALESFORCE" value={hasSalesforce?`${salesforceRecords}`:'—'} />
           </View>

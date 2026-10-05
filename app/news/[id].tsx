@@ -2,8 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { NewsEditorInput, NewsEditorModal } from '@/components/NewsEditorModal';
 
 import { DetailHeader } from '@/components/DetailHeader';
 import { NewsCard } from '@/components/NewsCard';
@@ -181,25 +181,21 @@ export default function NewsDetailScreen() {
         </View>
       </View>
 
-      <Modal animationType="slide" onRequestClose={() => { if (!uploadingCover && !saving) setEditing(false); }} transparent visible={editing}>
-        <SafeAreaView style={styles.modalBackdrop}>
-          <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled" style={styles.modalCard}>
+      <NewsEditorModal onClose={() => { if (!uploadingCover && !saving) setEditing(false); }} visible={editing}>
             <View style={styles.modalHeading}>
               <Text style={styles.modalTitle}>Editar publicación</Text>
               <Pressable accessibilityLabel="Cerrar" disabled={uploadingCover || saving} onPress={() => setEditing(false)}><Ionicons color={colors.textMuted} name="close" size={24} /></Pressable>
             </View>
-            <TextInput onChangeText={setTitle} placeholder="Título" placeholderTextColor={colors.textMuted} style={styles.input} value={title} />
-            <TextInput multiline onChangeText={setSummary} placeholder="Resumen" placeholderTextColor={colors.textMuted} style={[styles.input, styles.summaryInput]} value={summary} />
-            <TextInput multiline onChangeText={setBody} placeholder="Texto completo" placeholderTextColor={colors.textMuted} style={[styles.input, styles.bodyInput]} value={body} />
+            <NewsEditorInput accessibilityLabel="Título de la noticia" maxLength={180} onChangeText={setTitle} placeholder="Título" placeholderTextColor={colors.textMuted} style={styles.input} value={title} />
+            <NewsEditorInput accessibilityLabel="Resumen de la noticia" maxLength={2000} multiline onChangeText={setSummary} placeholder="Resumen" placeholderTextColor={colors.textMuted} style={[styles.input, styles.summaryInput]} value={summary} />
+            <NewsEditorInput accessibilityLabel="Texto completo de la noticia" maxLength={10000} multiline onChangeText={setBody} placeholder="Texto completo" placeholderTextColor={colors.textMuted} style={[styles.input, styles.bodyInput]} value={body} />
             <NewsPhoto fallback={newsImages[article.image as keyof typeof newsImages] ?? newsImages.park} resizeMode="contain" style={styles.imagePreview} url={imageUrl} />
             <Pressable disabled={uploadingCover || saving} onPress={pickImage} style={styles.photoButton}>{uploadingCover ? <ActivityIndicator color={colors.primary} /> : <Ionicons color={colors.primary} name="image-outline" size={19} />}<Text style={styles.photoText}>{uploadingCover ? 'Publicando fotografía…' : 'Cambiar fotografía'}</Text></Pressable>
             <Text accessibilityLiveRegion="polite" style={styles.photoEmpty}>{coverSaved ? 'Portada guardada para todos.' : 'La portada se publica al seleccionarla. Usa Guardar para los cambios de texto.'}</Text>
             <Pressable disabled={saving || uploadingCover} onPress={save} style={[styles.saveButton, (saving || uploadingCover) && styles.disabled]}>
               {saving ? <ActivityIndicator color={colors.surface} /> : <><Ionicons color={colors.surface} name="checkmark" size={20} /><Text style={styles.saveText}>Guardar para todos</Text></>}
             </Pressable>
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
+      </NewsEditorModal>
 
       {selectedPhoto !== null && articleGallery.length ? <NewsPhotoViewer initialIndex={selectedPhoto} onClose={() => setSelectedPhoto(null)} photos={articleGallery} /> : null}
     </ScreenContainer>

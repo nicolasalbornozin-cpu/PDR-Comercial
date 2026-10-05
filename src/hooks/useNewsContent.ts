@@ -10,6 +10,12 @@ let sharedContent = emptyContent;
 let requestVersion = 0;
 const listeners = new Set<(content: NewsContent) => void>();
 
+export function resetNewsContentCache() {
+  requestVersion += 1;
+  sharedContent = emptyContent;
+  listeners.forEach((listener) => listener(emptyContent));
+}
+
 export function useNewsContent() {
   const [content, setContent] = useState<NewsContent>(sharedContent);
   const [loading, setLoading] = useState(true);
