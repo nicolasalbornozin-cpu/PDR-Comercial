@@ -3,15 +3,20 @@ import { createClient } from 'npm:@supabase/supabase-js@2.112.3';
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts';
 import { registerAccount } from './handler.ts';
 
-async function activateExistingRosterUser(admin: ReturnType<typeof createClient>, rut: string, password: string, role: string) {
-  const email = `${rut}@pdr.internal`;
-  let existingId = '';
-  for (let page = 1; page <= 20 && !existingId; page += 1) {
+async function findAuthUserIdByEmail(admin: ReturnType<typeof createClient>, email: string) {
+  for (let page = 1; page <= 20; page += 1) {
     const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
-    if (error) return { ok: false };
-    existingId = data.users.find((user) => user.email?.toLowerCase() === email)?.id ?? '';
+    if (error) return null;
+    const existingId = data.users.find((user) => user.email?.toLowerCase() === email)?.id;
+    if (existingId) return existingId;
     if (data.users.length < 1000) break;
   }
+  return '';
+}
+
+async function activateExistingRosterUser(admin: ReturnType<typeof createClient>, rut: string, password: string, role: string) {
+  const email = `${rut}@pdr.internal`;
+  const existingId = await findAuthUserIdByEmail(admin, email);
   if (!existingId) return { ok: false };
 
   // A completed or differently-linked profile must never be claimable again.
@@ -106,8 +111,14 @@ Deno.serve(async (request) => {
         return data;
       },
       create: async (attributes) => {
+        // Some Auth versions hide the duplicate-account code. Detect the
+        // pre-associated identity before create instead of trusting error text.
+        const existingId = await findAuthUserIdByEmail(admin, attributes.email);
+        if (existingId) return { ok: false, duplicate: true };
         const { data, error } = await admin.auth.admin.createUser(attributes);
-        return { ok: !error && Boolean(data.user), duplicate: error?.code === 'email_exists' || error?.code === 'user_already_exists' };
+        if (!error && data.user) return { ok: true };
+        const appearedAfterCreate = await findAuthUserIdByEmail(admin, attributes.email);
+        return { ok: false, duplicate: Boolean(appearedAfterCreate) };
       },
       activateExisting: (rut, password, role) => activateExistingRosterUser(admin, rut, password, role),
       release: async (rut, token) => {
