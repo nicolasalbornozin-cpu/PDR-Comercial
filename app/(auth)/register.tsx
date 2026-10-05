@@ -20,6 +20,7 @@ export default function RegisterScreen() {
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState(false);
   const [error, setError] = useState('');
+  const validRut = isValidRut(rut);
   const matching = password.length > 0 && password === confirmation;
   const strong = isStrongRegistrationPassword(password);
 
@@ -62,12 +63,13 @@ export default function RegisterScreen() {
             <>
               <Text style={styles.body}>Regístrate una sola vez con tu RUT. Tu nombre y perfil se asignan desde la dotación habilitada.</Text>
               <FormField autoCapitalize="characters" autoComplete="off" editable={!busy} icon="card-outline" label="RUT" maxLength={12} onChangeText={(value) => { setRut(formatRut(value)); setError(''); }} placeholder="12.345.678-9" value={rut} />
+              {rut ? <Text accessibilityLiveRegion="polite" style={[styles.check, validRut ? styles.checkOk : styles.checkPending]}>{validRut ? '✓ RUT válido' : '○ Revisa el RUT ingresado'}</Text> : null}
               <FormField autoCapitalize="none" autoComplete="new-password" editable={!busy} icon="lock-closed-outline" label="Contraseña" maxLength={72} onChangeText={(value) => { setPassword(value); setError(''); }} password placeholder="Crea tu contraseña" value={password} />
-              <Text style={[styles.check, strong && styles.checkOk]}>{strong ? '✓' : '○'} 10+ caracteres, mayúscula, minúscula, número y símbolo</Text>
+              <Text accessibilityLiveRegion="polite" style={[styles.check, strong ? styles.checkOk : styles.checkPending]}>{strong ? '✓' : '○'} 10+ caracteres, mayúscula, minúscula, número y símbolo</Text>
               <FormField autoCapitalize="none" autoComplete="new-password" editable={!busy} icon="lock-closed-outline" label="Confirmar contraseña" maxLength={72} onChangeText={(value) => { setConfirmation(value); setError(''); }} password placeholder="Repite tu contraseña" value={confirmation} />
               {confirmation ? <Text accessibilityLiveRegion="polite" style={[styles.check, matching ? styles.checkOk : styles.error]}>{matching ? '✓ Las contraseñas coinciden' : 'Las contraseñas no coinciden'}</Text> : null}
               {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
-              <AppButton disabled={!isValidRut(rut) || !strong || !matching || busy} label="Crear cuenta" loading={busy} onPress={createAccount} />
+              <AppButton disabled={busy} label="Crear cuenta" loading={busy} onPress={createAccount} />
               <AppButton disabled={busy} label="Ya tengo cuenta · Iniciar sesión" onPress={() => router.replace('/(auth)/login')} variant="secondary" />
             </>
           )}
@@ -89,6 +91,7 @@ const styles = StyleSheet.create({
   body: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 14, lineHeight: 22, textAlign: 'center' },
   check: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 12, lineHeight: 18, marginTop: -10 },
   checkOk: { color: colors.success },
+  checkPending: { color: colors.danger },
   error: { color: colors.danger, fontFamily: typography.sans, fontSize: 13, lineHeight: 19 },
   created: { alignItems: 'center', gap: spacing.lg },
 });
