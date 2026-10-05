@@ -16,6 +16,7 @@ function rankingCopy(role?: string) {
   if (role === 'coordinator') return { title: 'Ranking de equipos', subtitle: 'Tu equipo frente a los demás equipos', position: 'POSICIÓN DE TU EQUIPO' };
   if (role === 'sales_manager') return { title: 'Mis coordinaciones', subtitle: 'Comparación de los equipos de tu jefatura', position: 'MEJOR COORDINACIÓN' };
   if (role === 'commercial_manager') return { title: 'Ranking por jefatura', subtitle: 'Comparación de las tres unidades comerciales', position: 'MEJOR JEFATURA' };
+  if (role === 'sales_director') return { title: 'Ranking por jefatura', subtitle: 'Comparación de las tres unidades comerciales', position: 'MEJOR JEFATURA' };
   return { title: 'Ranking general', subtitle: 'Tu avance frente al resto de vendedores', position: 'TU POSICIÓN' };
 }
 
@@ -42,7 +43,7 @@ export default function RankingScreen() {
 
   const copy = rankingCopy(user?.role);
   const totalUf = useMemo(() => entries.reduce((total, entry) => total + entry.value, 0), [entries]);
-  const currentEntry = entries.find((entry) => entry.isCurrentUser) ?? (user?.role === 'sales_manager' || user?.role === 'commercial_manager' ? entries[0] : undefined);
+  const currentEntry = entries.find((entry) => entry.isCurrentUser) ?? (user?.role === 'sales_manager' || user?.role === 'commercial_manager' || user?.role === 'sales_director' ? entries[0] : undefined);
   const nextEntry = currentEntry ? entries.find((entry) => entry.position === currentEntry.position - 1) : undefined;
   const gap = currentEntry && nextEntry ? Math.max(nextEntry.value - currentEntry.value, 0) : 0;
 
@@ -61,7 +62,7 @@ export default function RankingScreen() {
             <View style={styles.globalItem}>
               <Ionicons color={colors.gold} name="people-outline" size={20} />
               <Text style={styles.globalValue}>{entries.length}</Text>
-              <Text style={styles.globalLabel}>{user?.role === 'seller' ? 'Vendedores' : user?.role === 'coordinator' ? 'Equipos' : user?.role === 'commercial_manager' ? 'Jefaturas' : 'Coordinaciones'}</Text>
+              <Text style={styles.globalLabel}>{user?.role === 'seller' ? 'Vendedores' : user?.role === 'coordinator' ? 'Equipos' : user?.role === 'commercial_manager' || user?.role === 'sales_director' ? 'Jefaturas' : 'Coordinaciones'}</Text>
             </View>
             <View style={styles.globalDivider} />
             <View style={styles.globalItemWide}>

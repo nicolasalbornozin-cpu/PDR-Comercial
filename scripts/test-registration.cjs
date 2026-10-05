@@ -43,7 +43,7 @@ for (const value of [password, 'Password1', 'NoSymbols1234', 'Aa1' + 'x'.repeat(
   assert.equal(releases, 2);
   await assert.rejects(registerAccount(input, 'fixture', 'hash', { ...dependencies, create: async () => { throw new Error('transport'); } }));
   assert.equal(releases, 3);
-  for (const role of ['coordinator', 'sales_manager', 'commercial_manager', 'audiovisual']) {
+  for (const role of ['coordinator', 'sales_manager', 'commercial_manager', 'sales_director', 'audiovisual']) {
     assert.equal((await registerAccount(input, 'fixture', 'hash', { ...dependencies, reserve: async () => ({ ok: true, role }) })).status, 201);
     assert.equal(attributes.app_metadata.role, role);
   }

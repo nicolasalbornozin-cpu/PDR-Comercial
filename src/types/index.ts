@@ -1,4 +1,4 @@
-export type UserRole = 'seller' | 'coordinator' | 'sales_manager' | 'commercial_manager' | 'admin' | 'audiovisual';
+export type UserRole = 'seller' | 'coordinator' | 'sales_manager' | 'commercial_manager' | 'sales_director' | 'admin' | 'audiovisual';
 export type EmploymentStatus = 'active' | 'detached' | 'medical_leave' | 'vacation';
 
 export const employmentStatusLabels: Record<EmploymentStatus, string> = {
@@ -13,6 +13,7 @@ export const roleLabels: Record<UserRole, string> = {
   coordinator: 'Coordinador/a',
   sales_manager: 'Jefe/a de ventas',
   commercial_manager: 'Jefe Comercial',
+  sales_director: 'Gerente de Venta',
   admin: 'Administrador/a',
   audiovisual: 'Audiovisual',
 };
