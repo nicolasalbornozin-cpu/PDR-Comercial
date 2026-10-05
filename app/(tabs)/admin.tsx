@@ -16,7 +16,7 @@ import { formatRut } from '@/utils/rut';
 
 type AdminSection = 'uploads' | 'users' | 'resets';
 
-const roles: UserRole[] = ['seller', 'coordinator', 'sales_manager', 'commercial_manager', 'audiovisual', 'admin'];
+const roles: UserRole[] = ['seller', 'coordinator', 'sales_manager', 'commercial_manager', 'sales_director', 'audiovisual', 'admin'];
 export default function AdminScreen() {
   const { user } = useAuth();
   const [section, setSection] = useState<AdminSection>('uploads');

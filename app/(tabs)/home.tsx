@@ -96,7 +96,7 @@ export default function HomeScreen() {
   const ownMetric = user && data ? data.latestByUser[user.id] : undefined;
   const isSeller = user?.role === 'seller';
   const isManager = user?.role === 'sales_manager';
-  const isCommercialManager = user?.role === 'commercial_manager';
+  const isCommercialManager = user?.role === 'commercial_manager' || user?.role === 'sales_director';
   const firstName = user?.name.split(' ')[0] ?? '';
   const totalAnnualUf = isSeller
     ? Number(data?.annualEmittedUfByUser[user?.id ?? ''] ?? 0)

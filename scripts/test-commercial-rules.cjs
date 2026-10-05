@@ -15,6 +15,6 @@ assert.equal(hasQualifiedSenior({seniorLevel:'SUPER SENIOR',smadCount:9,eligible
 assert.equal(daysWithoutSale('2026-09-05',new Date('2026-09-07T12:00:00Z')),2);
 assert.equal(latestGoal({snapshots:[{userId:'a',kind:'category',periodEnd:'2026-08-24',publishedAt:'2026-10-01'}, {userId:'a',kind:'category',periodEnd:'2026-09-24',publishedAt:'2026-09-15'}]},'a','category').periodEnd,'2026-09-24');
 for(const role of ['admin','audiovisual'])assert.equal(canEditNews(role),true);
-for(const role of ['seller','coordinator','sales_manager','commercial_manager'])assert.equal(canEditNews(role),false);
+for(const role of ['seller','coordinator','sales_manager','commercial_manager','sales_director'])assert.equal(canEditNews(role),false);
 assert.equal(isNewsOnly('audiovisual'),true);assert.equal(isNewsOnly('admin'),false);
 console.log('PASS: Chile calendar month, month-end, unknown sale dates, goal history, audiovisual permissions.');

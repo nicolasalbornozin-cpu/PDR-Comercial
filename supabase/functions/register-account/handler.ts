@@ -33,7 +33,7 @@ export async function registerAccount(body: unknown, requestId: string, ipHash: 
   if (input.password !== input.confirmPassword) return { status: 400, body: { error: 'Las contraseñas no coinciden.' } };
 
   const reservation = await dependencies.reserve(rut, requestId, ipHash);
-  if (!reservation.ok || !['seller', 'coordinator', 'sales_manager', 'commercial_manager', 'audiovisual'].includes(reservation.role ?? '')) {
+  if (!reservation.ok || !['seller', 'coordinator', 'sales_manager', 'commercial_manager', 'sales_director', 'audiovisual'].includes(reservation.role ?? '')) {
     return { status: reservation.status ?? 403, body: { error: reservation.error ?? 'Error al comunicar con el servidor' } };
   }
   try {

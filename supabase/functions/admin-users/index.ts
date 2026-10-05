@@ -4,7 +4,7 @@ import { createClient, SupabaseClient } from 'npm:@supabase/supabase-js@2.112.3'
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts';
 import { internalEmail, isValidRut, normalizeRut } from '../_shared/rut.ts';
 
-const allowedRoles = new Set(['seller', 'coordinator', 'sales_manager', 'commercial_manager', 'audiovisual', 'admin']);
+const allowedRoles = new Set(['seller', 'coordinator', 'sales_manager', 'commercial_manager', 'sales_director', 'audiovisual', 'admin']);
 const allowedEmploymentStatuses = new Set(['active', 'detached', 'medical_leave', 'vacation']);
 
 function hasStrongPassword(password: unknown): password is string {
