@@ -91,7 +91,7 @@ export default function LoginScreen() {
             ) : (
               <>
                 <AppButton label="Iniciar sesión" loading={isLoading} onPress={handleLogin} />
-                <AppButton label="Crear cuenta" onPress={() => router.push('/(auth)/register')} variant="secondary" />
+                <AppButton label="Primera vez · Crear contraseña" onPress={() => router.push('/(auth)/register')} variant="secondary" />
                 <Pressable onPress={() => { setResetMode(true); setError(''); setMessage(''); }} style={styles.forgotButton}>
                   <Text style={styles.link}>¿Olvidaste tu contraseña?</Text>
                 </Pressable>

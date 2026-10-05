@@ -16,10 +16,11 @@ for (const value of [password, 'Password1', 'NoSymbols1234', 'Aa1' + 'x'.repeat(
   assert.equal(strongPassword(value), true);
 }
 (async () => {
-  let reserves = 0, creates = 0, releases = 0, attributes;
+  let reserves = 0, creates = 0, activations = 0, releases = 0, attributes;
   const dependencies = {
     reserve: async () => { reserves++; return { ok: true, role: 'seller' }; },
     create: async (input) => { creates++; attributes = input; return { ok: true }; },
+    activateExisting: async () => { activations++; return { ok: true }; },
     release: async () => { releases++; },
   };
   const input = { rut, password, confirmPassword: password };
@@ -41,11 +42,15 @@ for (const value of [password, 'Password1', 'NoSymbols1234', 'Aa1' + 'x'.repeat(
   assert.equal(creates, 1);
   assert.equal((await registerAccount(input, 'fixture', 'hash', { ...dependencies, create: async () => ({ ok: false }) })).status, 409);
   assert.equal(releases, 2);
+  assert.equal((await registerAccount(input, 'fixture', 'hash', { ...dependencies, create: async () => ({ ok: false, duplicate: true }) })).status, 201);
+  assert.equal(activations, 1); assert.equal(releases, 3);
+  assert.equal((await registerAccount(input, 'fixture', 'hash', { ...dependencies, create: async () => ({ ok: false, duplicate: true }), activateExisting: async () => ({ ok: false }) })).status, 409);
+  assert.equal(releases, 4);
   await assert.rejects(registerAccount(input, 'fixture', 'hash', { ...dependencies, create: async () => { throw new Error('transport'); } }));
-  assert.equal(releases, 3);
+  assert.equal(releases, 5);
   for (const role of ['coordinator', 'sales_manager', 'commercial_manager', 'sales_director', 'audiovisual']) {
     assert.equal((await registerAccount(input, 'fixture', 'hash', { ...dependencies, reserve: async () => ({ ok: true, role }) })).status, 201);
     assert.equal(attributes.app_metadata.role, role);
   }
-  console.log('PASS: registration validation, 72-byte limit, matching passwords, roster roles only, duplicates/blocked/rate limits, cleanup, no role override.');
+  console.log('PASS: registration validation, roster roles, precreated-user activation, duplicates/blocked/rate limits, cleanup, no role override.');
 })().catch((error) => { console.error(error); process.exitCode = 1; });

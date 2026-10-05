@@ -50,7 +50,7 @@ export default function RegisterScreen() {
         </View>
         <View style={styles.card}>
           <View style={styles.icon}><Ionicons color={colors.gold} name="shield-checkmark-outline" size={34} /></View>
-          <Text style={styles.title}>{created ? '¡Tu cuenta ha sido creada!' : 'Crear cuenta'}</Text>
+          <Text style={styles.title}>{created ? '¡Tu acceso fue activado!' : 'Activar cuenta'}</Text>
           {created ? (
             <>
               <View accessibilityRole="alert" style={styles.created}>
@@ -61,7 +61,7 @@ export default function RegisterScreen() {
             </>
           ) : (
             <>
-              <Text style={styles.body}>Regístrate una sola vez con tu RUT. Tu nombre y perfil se asignan desde la dotación habilitada.</Text>
+              <Text style={styles.body}>Tu perfil ya está asociado a tu RUT. Define tu contraseña una sola vez para activar el acceso.</Text>
               <FormField autoCapitalize="characters" autoComplete="off" editable={!busy} icon="card-outline" label="RUT" maxLength={12} onChangeText={(value) => { setRut(formatRut(value)); setError(''); }} placeholder="12.345.678-9" value={rut} />
               {rut ? <Text accessibilityLiveRegion="polite" style={[styles.check, validRut ? styles.checkOk : styles.checkPending]}>{validRut ? '✓ RUT válido' : '○ Revisa el RUT ingresado'}</Text> : null}
               <FormField autoCapitalize="none" autoComplete="new-password" editable={!busy} icon="lock-closed-outline" label="Contraseña" maxLength={72} onChangeText={(value) => { setPassword(value); setError(''); }} password placeholder="Crea tu contraseña" value={password} />
@@ -69,7 +69,7 @@ export default function RegisterScreen() {
               <FormField autoCapitalize="none" autoComplete="new-password" editable={!busy} icon="lock-closed-outline" label="Confirmar contraseña" maxLength={72} onChangeText={(value) => { setConfirmation(value); setError(''); }} password placeholder="Repite tu contraseña" value={confirmation} />
               {confirmation ? <Text accessibilityLiveRegion="polite" style={[styles.check, matching ? styles.checkOk : styles.error]}>{matching ? '✓ Las contraseñas coinciden' : 'Las contraseñas no coinciden'}</Text> : null}
               {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
-              <AppButton disabled={busy} label="Crear cuenta" loading={busy} onPress={createAccount} />
+              <AppButton disabled={busy} label="Crear contraseña y activar" loading={busy} onPress={createAccount} />
               <AppButton disabled={busy} label="Ya tengo cuenta · Iniciar sesión" onPress={() => router.replace('/(auth)/login')} variant="secondary" />
             </>
           )}
