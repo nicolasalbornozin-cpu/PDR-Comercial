@@ -9,7 +9,8 @@ export interface RegistrationReservation {
 
 export interface RegistrationDependencies {
   reserve: (rut: string, requestId: string, ipHash: string) => Promise<RegistrationReservation>;
-  create: (attributes: { email: string; password: string; email_confirm: true; app_metadata: Record<string, unknown> }) => Promise<{ ok: boolean }>;
+  create: (attributes: { email: string; password: string; email_confirm: true; app_metadata: Record<string, unknown> }) => Promise<{ ok: boolean; duplicate?: boolean }>;
+  activateExisting: (rut: string, password: string, role: string) => Promise<{ ok: boolean }>;
   release: (rut: string, requestId: string) => Promise<void>;
 }
 
@@ -41,8 +42,12 @@ export async function registerAccount(body: unknown, requestId: string, ipHash: 
       email: internalEmail(rut), password: input.password, email_confirm: true,
       app_metadata: { role: reservation.role, must_change_password: false, roster_registration: requestId, roster_rut: rut },
     });
-    if (!created.ok) return { status: 409, body: { error: 'No fue posible crear la cuenta. Si ya tienes cuenta, inicia sesión o solicita recuperar acceso.' } };
-    return { status: 201, body: { ok: true, message: 'Tu cuenta ha sido creada.' } };
+    if (!created.ok && !created.duplicate) return { status: 409, body: { error: 'No fue posible activar el acceso. Inténtalo nuevamente.' } };
+    if (created.duplicate) {
+      const activated = await dependencies.activateExisting(rut, input.password, reservation.role!);
+      if (!activated.ok) return { status: 409, body: { error: 'No fue posible activar el acceso. Si ya ingresaste antes, inicia sesión o solicita recuperar acceso.' } };
+    }
+    return { status: 201, body: { ok: true, message: 'Tu acceso ha sido activado.' } };
   } finally {
     // Token-scoped release cannot remove another attempt or modify an existing account.
     await dependencies.release(rut, requestId);
