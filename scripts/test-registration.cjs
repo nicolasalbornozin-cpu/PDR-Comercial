@@ -6,6 +6,7 @@ const rut = '18.541.395-0', password = 'Synthetic!927a'; // Test fixture, never 
 assert.equal(registrationValidation(rut, password, password), null);
 assert.match(registrationValidation(rut, password, password + 'x'), /coinciden/);
 assert.match(registrationValidation('185413951', password, password), /RUT/);
+assert.match(registrationValidation(rut, 'same-password', 'same-password'), /10 o más/);
 for (const value of ['short', 'abcdef123456!', 'ABCDEF123456!', 'NoNumbers!abc', 'NoSymbols1234', 'Aa1!' + 'á'.repeat(35), '\ud800Aa1!123456']) {
   assert.equal(isStrongRegistrationPassword(value), false);
 }
