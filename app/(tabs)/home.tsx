@@ -85,6 +85,10 @@ export default function HomeScreen() {
     () => data?.profiles.filter((profile) => profile.role === 'coordinator' && profile.active && profile.employmentStatus === 'active') ?? [],
     [data],
   );
+  const salesManagers = useMemo(
+    () => data?.profiles.filter((profile) => profile.role === 'sales_manager' && profile.active && profile.employmentStatus === 'active') ?? [],
+    [data],
+  );
   const sellerRows = useMemo(
     () => [...sellers].sort((left, right) => Number(data?.annualEmittedUfByUser[right.id] ?? 0) - Number(data?.annualEmittedUfByUser[left.id] ?? 0)),
     [data, sellers],
@@ -92,6 +96,7 @@ export default function HomeScreen() {
   const ownMetric = user && data ? data.latestByUser[user.id] : undefined;
   const isSeller = user?.role === 'seller';
   const isManager = user?.role === 'sales_manager';
+  const isCommercialManager = user?.role === 'commercial_manager';
   const firstName = user?.name.split(' ')[0] ?? '';
   const totalAnnualUf = isSeller
     ? Number(data?.annualEmittedUfByUser[user?.id ?? ''] ?? 0)
@@ -140,7 +145,7 @@ export default function HomeScreen() {
             <View style={styles.titleIdentity}>
               <View style={styles.titleIcon}><Ionicons color={colors.secondary} name="leaf-outline" size={24} /></View>
               <View style={styles.flex}>
-              <Text style={styles.screenTitle}>{isSeller ? 'Mi avance' : user?.role === 'coordinator' ? 'Mi equipo' : isManager ? 'Mis coordinaciones' : 'Vista general'}</Text>
+              <Text style={styles.screenTitle}>{isSeller ? 'Mi avance' : user?.role === 'coordinator' ? 'Mi equipo' : isManager ? 'Mis coordinaciones' : isCommercialManager ? 'Mis jefaturas' : 'Vista general'}</Text>
               <Text style={styles.period}>{data?.periodLabel ?? 'Cargando última actualización…'}</Text>
               </View>
             </View>
@@ -221,10 +226,40 @@ export default function HomeScreen() {
           {!isSeller && data ? (
             <View style={styles.section}>
               <View style={styles.sectionHeading}>
-                <Text style={styles.sectionTitle}>{isManager ? 'Detalle por coordinador' : 'Detalle de vendedores'}</Text>
-                <Text style={styles.sectionCount}>{isManager ? coordinators.length : sellerRows.length} visibles</Text>
+                <Text style={styles.sectionTitle}>{isCommercialManager ? 'Detalle por jefe de venta' : isManager ? 'Detalle por coordinador' : 'Detalle de vendedores'}</Text>
+                <Text style={styles.sectionCount}>{isCommercialManager ? salesManagers.length : isManager ? coordinators.length : sellerRows.length} visibles</Text>
               </View>
-              {isManager ? (
+              {isCommercialManager ? (
+                <View style={styles.unitList}>
+                  {salesManagers.map((manager) => {
+                    const managerSellers = sellerRows.filter((seller) => seller.salesManagerId === manager.id);
+                    const managerCoordinators = coordinators.filter((coordinator) => coordinator.salesManagerId === manager.id);
+                    const managerMonthly = managerSellers.reduce((total, seller) => total + Number(data.monthlyEmittedUfByUser[seller.id] ?? 0), 0);
+                    const bestManagement = Math.max(...salesManagers.map((item) => sellerRows.filter((seller) => seller.salesManagerId === item.id).reduce((total, seller) => total + Number(data.monthlyEmittedUfByUser[seller.id] ?? 0), 0)), managerMonthly);
+                    return (
+                      <View key={manager.id} style={styles.unitCard}>
+                        <ScopeCard data={data} monthlyTarget={bestManagement} sellers={managerSellers} subtitle={`${managerCoordinators.length} coordinadores · ${managerSellers.length} vendedores`} title={manager.name} />
+                        <View style={styles.unitTeams}>
+                          {managerCoordinators.map((coordinator) => {
+                            const coordinatedSellers = managerSellers.filter((seller) => seller.supervisorId === coordinator.id);
+                            return (
+                              <View key={coordinator.id} style={styles.unitTeamRow}>
+                                <View style={styles.flex}>
+                                  <Text numberOfLines={1} style={styles.workerName}>{coordinator.name}</Text>
+                                  <Text style={styles.workerMeta}>{coordinatedSellers.length} vendedores · Mora {sumMetric(coordinatedSellers, data.latestByUser, 'debtSalesCount')} contratos</Text>
+                                </View>
+                                <Text style={styles.workerUf}>{formatUF(coordinatedSellers.reduce((total, seller) => total + Number(data.monthlyEmittedUfByUser[seller.id] ?? 0), 0))} UF mes</Text>
+                              </View>
+                            );
+                          })}
+                          {!managerCoordinators.length ? <Text style={styles.empty}>Sin coordinadores activos asignados.</Text> : null}
+                        </View>
+                      </View>
+                    );
+                  })}
+                  {!salesManagers.length ? <Text style={styles.empty}>Aún no hay jefaturas activas asignadas.</Text> : null}
+                </View>
+              ) : isManager ? (
                 <View style={styles.workerList}>
                   {coordinators.map((coordinator) => {
                     const coordinatedSellers = sellerRows.filter((seller) => seller.supervisorId === coordinator.id);
@@ -326,6 +361,10 @@ const styles = StyleSheet.create({
   sectionTitle: { color: colors.text, fontFamily: typography.serif, fontSize: 21, fontWeight: '600' },
   sectionCount: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 10 },
   workerList: { ...shadows.card, backgroundColor: colors.surface, borderRadius: radii.lg, overflow: 'hidden', paddingHorizontal: spacing.md },
+  unitList: { gap: spacing.lg },
+  unitCard: { ...shadows.card, backgroundColor: colors.surface, borderRadius: radii.lg, overflow: 'hidden', paddingHorizontal: spacing.lg },
+  unitTeams: { borderTopColor: colors.border, borderTopWidth: 1, paddingBottom: spacing.md },
+  unitTeamRow: { alignItems: 'center', borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: 'row', gap: spacing.md, minHeight: 62, paddingVertical: spacing.md },
   workerRow: { alignItems: 'center', flexDirection: 'row', gap: spacing.md, minHeight: 82, paddingVertical: spacing.md },
   workerBorder: { borderBottomColor: colors.border, borderBottomWidth: 1 },
   position: { alignItems: 'center', backgroundColor: colors.softGreen, borderRadius: radii.pill, height: 32, justifyContent: 'center', width: 32 },

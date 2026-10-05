@@ -13,12 +13,12 @@ export interface RegistrationDependencies {
   release: (rut: string, requestId: string) => Promise<void>;
 }
 
-const passwordMessage = 'Usa 10 o más caracteres con mayúscula, minúscula, número y símbolo (máximo 72 bytes).';
+const passwordMessage = 'Usa 8 o más caracteres con mayúscula, minúscula y número (máximo 72 bytes).';
 export function strongPassword(value: unknown): value is string {
   if (typeof value !== 'string') return false;
   try { encodeURIComponent(value); } catch { return false; }
-  return value.length >= 10 && new TextEncoder().encode(value).length <= 72
-    && /[a-z]/.test(value) && /[A-Z]/.test(value) && /\d/.test(value) && /[^A-Za-z0-9]/.test(value);
+  return value.length >= 8 && new TextEncoder().encode(value).length <= 72
+    && /[a-z]/.test(value) && /[A-Z]/.test(value) && /\d/.test(value);
 }
 
 // Public registration never accepts a name, role, permissions or an existing user ID.
@@ -33,7 +33,7 @@ export async function registerAccount(body: unknown, requestId: string, ipHash: 
   if (input.password !== input.confirmPassword) return { status: 400, body: { error: 'Las contraseñas no coinciden.' } };
 
   const reservation = await dependencies.reserve(rut, requestId, ipHash);
-  if (!reservation.ok || !['seller', 'coordinator', 'sales_manager', 'audiovisual'].includes(reservation.role ?? '')) {
+  if (!reservation.ok || !['seller', 'coordinator', 'sales_manager', 'commercial_manager', 'audiovisual'].includes(reservation.role ?? '')) {
     return { status: reservation.status ?? 403, body: { error: reservation.error ?? 'Error al comunicar con el servidor' } };
   }
   try {

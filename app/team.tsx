@@ -20,7 +20,7 @@ export default function TeamScreen() {
   const router = useRouter();
   const [loaded, setLoaded] = useState<{userId:string;data:DashboardData} | null>(null);
   const [error, setError] = useState('');
-  const allowed = ['coordinator','sales_manager','admin'].includes(user?.role ?? '') && (!(kind==='category'||kind==='senior') || user?.role==='coordinator');
+  const allowed = ['coordinator','sales_manager','commercial_manager','admin'].includes(user?.role ?? '') && (!(kind==='category'||kind==='senior') || user?.role==='coordinator');
   useEffect(() => {
     if (!user || !allowed) return;
     let active=true;

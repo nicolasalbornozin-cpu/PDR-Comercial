@@ -1,6 +1,6 @@
 # Primer acceso por RUT
 
-Flujo: **Crear cuenta → RUT → contraseña → confirmar contraseña → cuenta creada → iniciar sesión con RUT y contraseña**. La app muestra coincidencia de contraseñas y permite mostrar/ocultar cada campo. La contraseña debe tener al menos 10 caracteres, mayúscula, minúscula, número y símbolo, y no exceder 72 bytes UTF-8.
+Flujo: **Crear cuenta → RUT → contraseña → confirmar contraseña → cuenta creada → iniciar sesión con RUT y contraseña**. La app muestra coincidencia de contraseñas y permite mostrar/ocultar cada campo. La contraseña debe tener al menos 8 caracteres, mayúscula, minúscula y número, y no exceder 72 bytes UTF-8. El símbolo es opcional.
 
 ## Dotación y permisos
 

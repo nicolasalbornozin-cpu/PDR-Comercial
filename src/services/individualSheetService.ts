@@ -67,7 +67,7 @@ export const individualSheetService={
   const [allWorkers,allMetrics,allUploads]=await Promise.all([allRows<WorkerRow>('commercial_workers'),allRows<MetricRow>('current_worker_metrics'),allRows<UploadRow>('sheet_uploads')]);
   const self=allWorkers.find(w=>w.id===user.id||w.rut===normalizeRut(user.rut));
   if(user.role!=='admin'&&(!self||!self.active||self.status!=='active'))throw Error('Error al comunicar con el servidor');
-  const workers=allWorkers.filter(w=>w.active&&w.status==='active'&&(user.role==='admin'||w.id===self?.id||self?.role==='coordinator'&&w.coordinator_id===self.id||self?.role==='sales_manager'&&w.manager_id===self.id));
+  const workers=allWorkers.filter(w=>w.active&&w.status==='active'&&(user.role==='admin'||self?.role==='commercial_manager'||w.id===self?.id||self?.role==='coordinator'&&w.coordinator_id===self.id||self?.role==='sales_manager'&&w.manager_id===self.id));
   const ids=new Set(workers.map(w=>w.id));
   // Keep the authenticated UUID as the UI's own key, while roster joins use stable worker IDs.
   const uiId=(id:string|null)=>id===self?.id?user.id:id??'';

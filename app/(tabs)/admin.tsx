@@ -16,7 +16,7 @@ import { formatRut } from '@/utils/rut';
 
 type AdminSection = 'uploads' | 'users' | 'resets';
 
-const roles: UserRole[] = ['seller', 'coordinator', 'sales_manager', 'audiovisual', 'admin'];
+const roles: UserRole[] = ['seller', 'coordinator', 'sales_manager', 'commercial_manager', 'audiovisual', 'admin'];
 export default function AdminScreen() {
   const { user } = useAuth();
   const [section, setSection] = useState<AdminSection>('uploads');
@@ -155,7 +155,7 @@ export default function AdminScreen() {
                 <Text style={styles.cardTitle}>Crear cuenta manual (opcional)</Text>
                 <FormField icon="person-outline" label="Nombre completo" onChangeText={setName} placeholder="Nombre y apellido" value={name} />
                 <FormField autoCapitalize="characters" icon="card-outline" label="RUT" onChangeText={setRut} placeholder="12.345.678-9" value={rut} />
-                <FormField icon="lock-closed-outline" label="Contraseña permanente" onChangeText={setPassword} password placeholder="10+ caracteres, mayúscula, número y símbolo" value={password} />
+                <FormField icon="lock-closed-outline" label="Contraseña permanente" onChangeText={setPassword} password placeholder="8+ caracteres, mayúscula, minúscula y número" value={password} />
                 <Text style={styles.label}>Perfil</Text>
                 <View style={styles.chips}>
                   {roles.map((value) => (
@@ -204,7 +204,7 @@ export default function AdminScreen() {
               {resetTarget ? (
                 <View style={styles.resetForm}>
                   <Text style={styles.cardText}>Nueva contraseña permanente para {resetTarget.name}</Text>
-                  <FormField icon="lock-closed-outline" label="Nueva contraseña" onChangeText={setNewPassword} password placeholder="10+ caracteres, mayúscula, número y símbolo" value={newPassword} />
+                  <FormField icon="lock-closed-outline" label="Nueva contraseña" onChangeText={setNewPassword} password placeholder="8+ caracteres, mayúscula, minúscula y número" value={newPassword} />
                   <AppButton disabled={!newPassword} label="Guardar nueva contraseña" loading={busy} onPress={resetPassword} />
                   <AppButton label="Cancelar" onPress={() => setResetTarget(null)} variant="secondary" />
                 </View>

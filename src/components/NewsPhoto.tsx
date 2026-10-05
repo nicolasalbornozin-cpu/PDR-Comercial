@@ -24,7 +24,6 @@ function PhotoContent({ url, fallback, style, resizeMode = 'cover' }: PhotoProps
   useEffect(() => {
     if (!url) return;
     let active = true;
-    setAuthorizedUrl(undefined);
     resolveNewsImageUrl(url).then(next => { if (active) setAuthorizedUrl(next); }).catch(() => { if (active) setStatus('error'); });
     return () => { active = false; };
   }, [url, retryKey]);
@@ -32,6 +31,7 @@ function PhotoContent({ url, fallback, style, resizeMode = 'cover' }: PhotoProps
   useEffect(() => {
     if (status !== 'error' || !url || attempt >= 2) return;
     const timer = setTimeout(() => {
+      setAuthorizedUrl(undefined);
       setRetryKey(String(Date.now()));
       setAttempt((previous) => previous + 1);
       setStatus('loading');
@@ -63,6 +63,7 @@ function PhotoContent({ url, fallback, style, resizeMode = 'cover' }: PhotoProps
               onPress={(event) => {
                 event.stopPropagation();
                 setAttempt(0);
+                setAuthorizedUrl(undefined);
                 setRetryKey(String(Date.now()));
                 setStatus('loading');
               }}

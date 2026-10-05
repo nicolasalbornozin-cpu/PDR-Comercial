@@ -4,16 +4,15 @@ import { createClient, SupabaseClient } from 'npm:@supabase/supabase-js@2.112.3'
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts';
 import { internalEmail, isValidRut, normalizeRut } from '../_shared/rut.ts';
 
-const allowedRoles = new Set(['seller', 'coordinator', 'sales_manager', 'audiovisual', 'admin']);
+const allowedRoles = new Set(['seller', 'coordinator', 'sales_manager', 'commercial_manager', 'audiovisual', 'admin']);
 const allowedEmploymentStatuses = new Set(['active', 'detached', 'medical_leave', 'vacation']);
 
 function hasStrongPassword(password: unknown): password is string {
   return typeof password === 'string'
-    && password.length >= 10
+    && password.length >= 8
     && /[a-z]/.test(password)
     && /[A-Z]/.test(password)
-    && /\d/.test(password)
-    && /[^A-Za-z0-9]/.test(password);
+    && /\d/.test(password);
 }
 
 async function profileIdForRut(admin: SupabaseClient, rutValue: unknown): Promise<string | null> {
@@ -101,7 +100,7 @@ Deno.serve(async (request) => {
       if (name.length < 3 || name.length > 120) return jsonResponse({ error: 'Ingresa el nombre completo.' }, 400);
       if (!allowedRoles.has(role)) return jsonResponse({ error: 'El rol no es válido.' }, 400);
       if (!hasStrongPassword(body.password)) {
-        return jsonResponse({ error: 'La contraseña debe tener 10 caracteres e incluir mayúscula, minúscula, número y símbolo.' }, 400);
+        return jsonResponse({ error: 'La contraseña debe tener al menos 8 caracteres e incluir mayúscula, minúscula y número.' }, 400);
       }
 
       const supervisorId = await profileIdForRut(admin, body.supervisorRut);
@@ -162,7 +161,7 @@ Deno.serve(async (request) => {
     if (body.action === 'resetPassword') {
       const userId = String(body.userId ?? '');
       if (!hasStrongPassword(body.password)) {
-        return jsonResponse({ error: 'La contraseña debe tener 10 caracteres e incluir mayúscula, minúscula, número y símbolo.' }, 400);
+        return jsonResponse({ error: 'La contraseña debe tener al menos 8 caracteres e incluir mayúscula, minúscula y número.' }, 400);
       }
       const { error } = await admin.auth.admin.updateUserById(userId, { password: body.password });
       if (error) throw error;

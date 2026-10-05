@@ -6,11 +6,12 @@ const rut = '18.541.395-0', password = 'Synthetic!927a'; // Test fixture, never 
 assert.equal(registrationValidation(rut, password, password), null);
 assert.match(registrationValidation(rut, password, password + 'x'), /coinciden/);
 assert.match(registrationValidation('185413951', password, password), /RUT/);
-assert.match(registrationValidation(rut, 'same-password', 'same-password'), /10 o más/);
-for (const value of ['short', 'abcdef123456!', 'ABCDEF123456!', 'NoNumbers!abc', 'NoSymbols1234', 'Aa1!' + 'á'.repeat(35), '\ud800Aa1!123456']) {
+assert.equal(registrationValidation(rut, 'Password1', 'Password1'), null);
+assert.match(registrationValidation(rut, 'Aa1abcd', 'Aa1abcd'), /8 o más/);
+for (const value of ['short', 'abcdef123456', 'ABCDEF123456', 'NoNumbersAbc', 'Aa1!' + 'á'.repeat(35), '\ud800Aa1!123456']) {
   assert.equal(isStrongRegistrationPassword(value), false);
 }
-for (const value of [password, 'Aa1!' + 'x'.repeat(68), 'Aa1!' + 'á'.repeat(34)]) {
+for (const value of [password, 'Password1', 'NoSymbols1234', 'Aa1' + 'x'.repeat(69), 'Aa1' + 'á'.repeat(34)]) {
   assert.equal(isStrongRegistrationPassword(value), true);
   assert.equal(strongPassword(value), true);
 }
@@ -42,7 +43,7 @@ for (const value of [password, 'Aa1!' + 'x'.repeat(68), 'Aa1!' + 'á'.repeat(34)
   assert.equal(releases, 2);
   await assert.rejects(registerAccount(input, 'fixture', 'hash', { ...dependencies, create: async () => { throw new Error('transport'); } }));
   assert.equal(releases, 3);
-  for (const role of ['coordinator', 'sales_manager', 'audiovisual']) {
+  for (const role of ['coordinator', 'sales_manager', 'commercial_manager', 'audiovisual']) {
     assert.equal((await registerAccount(input, 'fixture', 'hash', { ...dependencies, reserve: async () => ({ ok: true, role }) })).status, 201);
     assert.equal(attributes.app_metadata.role, role);
   }
