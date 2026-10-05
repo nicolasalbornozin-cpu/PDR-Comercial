@@ -13,6 +13,7 @@ import { snapshotService } from '@/services/snapshotService';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
 import { DashboardData, MetricSnapshot } from '@/types';
 import { formatDate, formatUF, getProgress } from '@/utils/format';
+import { displayPersonName } from '@/utils/personName';
 
 type GoalKind = 'senior' | 'category';
 type GoalVersion = 'current' | 'previous';
@@ -71,7 +72,7 @@ export default function GoalsScreen() {
   const validLevel = (level?:string) => Boolean(level && !/^(no|sin|pendiente|en carrera)/i.test(level));
   const completed = Number(validLevel(metric?.category)) + Number(validLevel(metric?.seniorLevel));
   const available = Number(metric?.categoryUf !== undefined) + Number(metric?.eligibleTotalUf !== undefined);
-  const firstName = (selected?.name ?? user?.name)?.split(' ')[0] ?? '';
+  const firstName = displayPersonName(selected?.name ?? user?.name ?? '', selected?.role ?? user?.role);
   if (worker && data && !selected) return <ScreenContainer><DetailHeader title="Detalle del ejecutivo" /><Text>No tienes acceso a este ejecutivo.</Text></ScreenContainer>;
   return (
     <ScreenContainer contentContainerStyle={styles.page} edges={['top', 'left', 'right', 'bottom']}>
