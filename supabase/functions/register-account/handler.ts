@@ -9,7 +9,7 @@ export interface RegistrationReservation {
 
 export interface RegistrationDependencies {
   reserve: (rut: string, requestId: string, ipHash: string) => Promise<RegistrationReservation>;
-  create: (attributes: { email: string; password: string; email_confirm: true; app_metadata: Record<string, unknown> }) => Promise<{ ok: boolean; duplicate?: boolean }>;
+  create: (attributes: { email: string; password: string; email_confirm: true; app_metadata: Record<string, unknown> }) => Promise<{ ok: boolean; duplicate?: boolean; reason?: 'weak_password' | 'rate_limited' | 'unknown' }>;
   activateExisting: (rut: string, password: string, role: string) => Promise<{ ok: boolean }>;
   release: (rut: string, requestId: string) => Promise<void>;
 }
@@ -42,7 +42,15 @@ export async function registerAccount(body: unknown, requestId: string, ipHash: 
       email: internalEmail(rut), password: input.password, email_confirm: true,
       app_metadata: { role: reservation.role, must_change_password: false, roster_registration: requestId, roster_rut: rut },
     });
-    if (!created.ok && !created.duplicate) return { status: 409, body: { error: 'No fue posible activar el acceso. Inténtalo nuevamente.' } };
+    if (!created.ok && !created.duplicate) {
+      if (created.reason === 'weak_password') {
+        return { status: 400, body: { error: 'La contraseña cumple el formato, pero fue rechazada por seguridad. Usa una contraseña nueva que no hayas utilizado antes.' } };
+      }
+      if (created.reason === 'rate_limited') {
+        return { status: 429, body: { error: 'Supabase recibió demasiadas solicitudes. Espera unos minutos antes de volver a intentar.' } };
+      }
+      return { status: 409, body: { error: 'No fue posible activar el acceso. Inténtalo nuevamente.' } };
+    }
     if (created.duplicate) {
       const activated = await dependencies.activateExisting(rut, input.password, reservation.role!);
       if (!activated.ok) return { status: 409, body: { error: 'No fue posible activar el acceso. Si ya ingresaste antes, inicia sesión o solicita recuperar acceso.' } };

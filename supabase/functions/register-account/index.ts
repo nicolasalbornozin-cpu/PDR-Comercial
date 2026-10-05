@@ -118,7 +118,13 @@ Deno.serve(async (request) => {
         const { data, error } = await admin.auth.admin.createUser(attributes);
         if (!error && data.user) return { ok: true };
         const appearedAfterCreate = await findAuthUserIdByEmail(admin, attributes.email);
-        return { ok: false, duplicate: Boolean(appearedAfterCreate) };
+        const reason = error?.code === 'weak_password'
+          ? 'weak_password'
+          : error?.status === 429
+            ? 'rate_limited'
+            : 'unknown';
+        console.error(`register-account: auth_create_failed:${error?.code ?? 'unknown'}`);
+        return { ok: false, duplicate: Boolean(appearedAfterCreate), reason };
       },
       activateExisting: (rut, password, role) => activateExistingRosterUser(admin, rut, password, role),
       release: async (rut, token) => {
