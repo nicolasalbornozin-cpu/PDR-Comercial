@@ -71,7 +71,7 @@ export interface NewsArticleChanges {
   title?: string;
   summary?: string;
   body?: string;
-  imageUrl?: string;
+  imageUrl?: string | null;
 }
 
 function fallbackContent(): NewsContent {
@@ -172,20 +172,20 @@ export const newsService = {
     const sections: NewsSection[] = (sectionsResult.data as NewsSectionRow[]).map(row=>({id:String(row.id),newsArticleId:String(row.news_article_id),title:row.title,description:row.description,sortOrder:row.sort_order}));
     const activeSections = new Set(sections.map(section=>section.id));
     return {
-      articles: articleRows.length ? articleRows.map(rowToArticle) : fallbackContent().articles,
+      articles: articleRows.map(rowToArticle),
       sections,
-      gallery: (galleryResult.data as GalleryRow[]).filter((row: GalleryRow)=>!row.news_section_id||activeSections.has(String(row.news_section_id))).map((row: GalleryRow) => ({ id: String(row.id), title: row.title, imageUrl: row.image_url, newsArticleId: row.news_article_id ? String(row.news_article_id) : undefined, newsSectionId:row.news_section_id?String(row.news_section_id):undefined, sortOrder: row.sort_order })),
+      gallery: (galleryResult.data as GalleryRow[]).filter(row => (!row.news_article_id || articleRows.some(article => article.id === row.news_article_id)) && (!row.news_section_id || activeSections.has(String(row.news_section_id)))).map((row: GalleryRow) => ({ id: String(row.id), title: row.title, imageUrl: row.image_url, newsArticleId: row.news_article_id ? String(row.news_article_id) : undefined, newsSectionId:row.news_section_id?String(row.news_section_id):undefined, sortOrder: row.sort_order })),
     };
   },
 
   async updateArticle(id: string, changes: NewsArticleChanges): Promise<void> {
     if (!supabase || !/^\d+$/.test(id)) throw Error('Esta noticia aún no está habilitada para edición.');
-    const payload: Record<string, string> = {};
+    const payload: Record<string, string | null> = {};
     if (changes.title !== undefined) payload.title = changes.title.trim();
     if (changes.summary !== undefined) payload.summary = changes.summary.trim();
     if (changes.body !== undefined) payload.body = changes.body.trim();
     if (changes.imageUrl !== undefined) payload.image_url = changes.imageUrl;
-    if (changes.imageUrl !== undefined && !newsMediaPath(changes.imageUrl, supabaseMediaOrigin)) throw Error('Fotografía no autorizada.');
+    if (changes.imageUrl && !newsMediaPath(changes.imageUrl, supabaseMediaOrigin)) throw Error('Fotografía no autorizada.');
     if ((payload.title?.length ?? 0) > 180 || (payload.summary?.length ?? 0) > 2000 || (payload.body?.length ?? 0) > 10000) throw Error('El texto supera el tamaño permitido.');
     const result = await supabase.from('news_articles').update(payload).eq('id', Number(id)).select('id').single();
     if (result.error) throw Error(result.error.message);
@@ -210,9 +210,10 @@ export const newsService = {
     return image.url;
   },
 
-  async createCareer(input: { title: string; summary: string; body: string; imageUrl?: string }): Promise<void> {
+  async createArticle(input: { title: string; summary: string; body: string; imageUrl?: string; category: string }): Promise<string> {
     if (!supabase) throw Error('Supabase no está configurado.');
-    if (!input.title.trim() || !input.summary.trim() || !input.body.trim()) throw Error('Completa el título, resumen y texto de la carrera.');
+    if (!input.title.trim() || !input.summary.trim() || !input.body.trim()) throw Error('Completa el título, resumen y descripción.');
+    if (!['Carreras', 'Novedades', 'Paseos', 'Eventos recientes', 'Reconocimientos', 'Información comercial'].includes(input.category)) throw Error('Tipo de publicación inválido.');
     if (input.title.length > 180 || input.summary.length > 2000 || input.body.length > 10000) throw Error('El texto supera el tamaño permitido.');
     if (input.imageUrl && !newsMediaPath(input.imageUrl, supabaseMediaOrigin)) throw Error('Fotografía no autorizada.');
     const result = await supabase.from('news_articles').insert({
@@ -220,12 +221,19 @@ export const newsService = {
       summary: input.summary.trim(),
       body: input.body.trim(),
       image_url: input.imageUrl ?? null,
-      category: 'Carreras',
+      category: input.category,
       event_month: currentMonthStart(),
       featured: false,
       active: true,
       sort_order: 20,
-    });
+    }).select('id').single();
+    if (result.error) throw Error(result.error.message);
+    return String(result.data.id);
+  },
+
+  async deleteArticle(id: string): Promise<void> {
+    if (!supabase || !/^\d+$/.test(id)) throw Error('Publicación inválida.');
+    const result = await supabase.from('news_articles').update({ active: false }).eq('id', Number(id)).select('id').single();
     if (result.error) throw Error(result.error.message);
   },
 

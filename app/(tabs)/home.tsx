@@ -17,6 +17,7 @@ import { colors, radii, shadows, spacing, typography } from '@/theme';
 import { DashboardData, MetricSnapshot, roleLabels, VisibleProfile } from '@/types';
 import { daysWithoutSale, hasMonthWithoutSale, hasGoalLevel, hasQualifiedSenior, latestGoal, isBirthdayToday, productivityTone } from '@/utils/commercialRules';
 import { formatUF } from '@/utils/format';
+import { displayPersonName } from '@/utils/personName';
 
 function sumMetric(workers: VisibleProfile[], latest: DashboardData['latestByUser'], key: keyof MetricSnapshot): number {
   return workers.reduce((total, worker) => total + Number(latest[worker.id]?.[key] ?? 0), 0);
@@ -97,7 +98,7 @@ export default function HomeScreen() {
   const isSeller = user?.role === 'seller';
   const isManager = user?.role === 'sales_manager';
   const isCommercialManager = user?.role === 'commercial_manager' || user?.role === 'sales_director';
-  const firstName = user?.name.split(' ')[0] ?? '';
+  const firstName = user ? displayPersonName(user.name, user.role) : '';
   const totalAnnualUf = isSeller
     ? Number(data?.annualEmittedUfByUser[user?.id ?? ''] ?? 0)
     : sellerRows.reduce((total, seller) => total + Number(data?.annualEmittedUfByUser[seller.id] ?? 0), 0);
@@ -159,7 +160,7 @@ export default function HomeScreen() {
           {birthdayProfiles.length ? (
             <View style={styles.birthdayCard}>
               <Ionicons color={colors.goldText} name="gift-outline" size={23} />
-              <Text style={styles.birthdayText}>{birthdayProfiles.some((profile) => profile.id === user?.id) ? `¡Feliz cumpleaños, ${firstName}!` : `¡Feliz cumpleaños, ${birthdayProfiles.map((profile) => profile.name.split(' ')[0]).join(', ')}!`}</Text>
+              <Text style={styles.birthdayText}>{birthdayProfiles.some((profile) => profile.id === user?.id) ? `¡Feliz cumpleaños, ${firstName}!` : `¡Feliz cumpleaños, ${birthdayProfiles.map((profile) => displayPersonName(profile.name, profile.role)).join(', ')}!`}</Text>
             </View>
           ) : null}
           {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}

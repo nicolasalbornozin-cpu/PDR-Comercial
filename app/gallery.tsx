@@ -1,6 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { NewsArticleComposer } from '@/components/NewsArticleComposer';
+import { NewsDeleteButton } from '@/components/NewsDeleteButton';
 
 import { DetailHeader } from '@/components/DetailHeader';
 import { NewsPhoto } from '@/components/NewsPhoto';
@@ -13,21 +16,29 @@ import { useNewsContent } from '@/hooks/useNewsContent';
 import { newsService } from '@/services/newsService';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
 import { GalleryPhoto } from '@/types';
+import { seniorTrips, tripPhotos } from '@/utils/newsTrips';
 
 export default function GalleryScreen() {
+  const params = useLocalSearchParams<{ trip?: string }>();
+  const router = useRouter();
   const { authenticatedUser, isPreviewing } = useAuth();
   const { content, loading, refresh } = useNewsContent();
   const [selected, setSelected] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
   const [deletingId, setDeletingId] = useState<string>();
+  const [tripId, setTripId] = useState<string>();
+  const [creating, setCreating] = useState(false);
   const isAdmin = canEditNews(authenticatedUser?.role) && !isPreviewing;
-  const photos = content.gallery.filter((photo) => !photo.newsArticleId);
+  const trips = seniorTrips(content.articles);
+  const trip = trips.find(item => item.id === (tripId ?? params.trip)) ?? trips[0];
+  const photos = tripPhotos(content.articles, content.gallery, trip);
 
   const addPhoto = async () => {
+    if (!trip || uploading) return;
     setUploading(true);
     try {
-      if (await newsService.addGalleryPhotos('Paseo Senior 2026', undefined, (completed, total) => setUploadProgress(`Procesando ${completed} de ${total} fotos…`))) await refresh();
+      if (await newsService.addGalleryPhotos(trip.title, trip.id, (completed, total) => setUploadProgress(`Procesando ${completed} de ${total} fotos…`))) await refresh();
     } catch (cause) {
       await refresh();
       Alert.alert('No se pudo publicar la foto', cause instanceof Error ? cause.message : 'Intenta nuevamente.');
@@ -60,15 +71,23 @@ export default function GalleryScreen() {
           <DetailHeader title="Galería" />
           <View style={styles.titleRow}>
             <View style={styles.titleCopy}>
-              <Text style={styles.title}>Paseo Senior 2026</Text>
-              <Text style={styles.subtitle}>Momentos para celebrar y recordar juntos.</Text>
+              <Text style={styles.title}>{trip?.title ?? 'Galería Paseo Senior'}</Text>
+              <Text style={styles.subtitle}>{trip?.summary ?? 'Crea un paseo para empezar a compartir sus fotografías.'}</Text>
             </View>
-            {isAdmin ? (
-              <Pressable disabled={uploading} onPress={addPhoto} style={[styles.addButton, uploading && styles.disabled]}>
+            {isAdmin && trip ? (
+              <Pressable accessibilityLabel="Subir fotos a este paseo" disabled={uploading} onPress={addPhoto} style={[styles.addButton, uploading && styles.disabled]}>
                 {uploading ? <ActivityIndicator color={colors.surface} size="small" /> : <Ionicons color={colors.surface} name="add" size={22} />}
               </Pressable>
             ) : null}
           </View>
+          <View style={styles.tripHeading}><Text style={styles.tripLabel}>Otros paseos</Text>{isAdmin ? <Pressable accessibilityLabel="Crear otro paseo" disabled={uploading} onPress={() => setCreating(true)} style={styles.newTrip}><Ionicons name="add-circle-outline" size={19} color={colors.primary}/><Text style={styles.tripLabel}>Crear paseo</Text></Pressable> : null}</View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tripList}>
+            {trips.map((item, index) => <View key={item.id} style={[styles.tripChip, item.id === trip?.id && styles.selectedTrip]}>
+              <Pressable disabled={uploading} onPress={() => { setTripId(item.id); setSelected(null); }} style={styles.tripPick}><Text style={[styles.tripText, item.id === trip?.id && styles.selectedText]}>{item.title}{index === 0 ? ' · Último paseo' : ''}</Text></Pressable>
+              {isAdmin ? <NewsDeleteButton label={item.title} onDelete={async () => { await newsService.deleteArticle(item.id); setSelected(null); await refresh(); }}/>:null}
+            </View>)}
+          </ScrollView>
+          {isAdmin && trip ? <Pressable onPress={() => router.push({ pathname: '/news/[id]', params: { id: trip.id, edit: '1' } })} style={styles.newTrip}><Ionicons name="pencil-outline" color={colors.primary} size={18}/><Text style={styles.tripLabel}>Editar título, descripción y portada</Text></Pressable> : null}
         </View>
         {loading ? <ActivityIndicator color={colors.gold} style={styles.loader} /> : null}
         {uploading && uploadProgress ? <Text accessibilityLiveRegion="polite" style={styles.empty}>{uploadProgress}</Text> : null}
@@ -91,6 +110,7 @@ export default function GalleryScreen() {
       </View>
 
       {selected !== null && photos.length ? <NewsPhotoViewer initialIndex={selected} onClose={() => setSelected(null)} photos={photos} /> : null}
+      {creating ? <NewsArticleComposer category="Paseos" onClose={() => setCreating(false)} onPublished={async id => { await refresh(); setTripId(id); setSelected(null); }}/> : null}
     </ScreenContainer>
   );
 }
@@ -115,6 +135,13 @@ const styles = StyleSheet.create({
   empty: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 12, lineHeight: 18, paddingVertical: spacing.xxl, textAlign: 'center', width: '100%' },
   pressed: { opacity: 0.78, transform: [{ scale: 0.985 }] },
   disabled: { opacity: 0.58 },
+  tripHeading: { marginTop: spacing.xl, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 },
+  tripLabel: { color: colors.primary, fontFamily: typography.sans, fontWeight: '700', fontSize: 12 },
+  newTrip: { paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 7 },
+  tripList: { paddingVertical: 10, gap: 10 },
+  tripChip: { flexDirection: 'row', alignItems: 'center', gap: 6, padding: 6, backgroundColor: colors.softGreen, borderRadius: radii.md },
+  selectedTrip: { backgroundColor: colors.primary },
+  tripPick: { padding: 9 }, tripText: { color: colors.primary, fontFamily: typography.sans, fontSize: 12 }, selectedText: { color: colors.surface },
   modal: { alignItems: 'center', backgroundColor: 'rgba(5,23,16,0.96)', flex: 1, justifyContent: 'center' },
   close: { alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: radii.pill, height: 45, justifyContent: 'center', position: 'absolute', right: spacing.xl, top: spacing.xl, width: 45, zIndex: 2 },
   photoPager: { flex: 1, width: '100%' },

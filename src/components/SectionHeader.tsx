@@ -22,7 +22,7 @@ export function SectionHeader({ title, actionLabel, onAction }: SectionHeaderPro
 }
 
 const styles = StyleSheet.create({
-  container: { alignItems: 'center', flexDirection: 'row', gap: 12, justifyContent: 'space-between', minWidth: 0 },
+  container: { alignItems: 'center', flexDirection: 'row', gap: 12, justifyContent: 'space-between', minWidth: 0, flexShrink: 1 },
   title: { color: colors.text, flex: 1, flexShrink: 1, fontFamily: typography.serif, fontSize: 23, fontWeight: '600' },
   action: { color: colors.goldText, flexShrink: 0, fontFamily: typography.sans, fontSize: 12, fontWeight: '700' },
 });

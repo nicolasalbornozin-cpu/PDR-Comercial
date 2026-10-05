@@ -11,6 +11,7 @@ import { images } from '@/data/assets';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
 import { DashboardData, MetricSnapshot, User } from '@/types';
 import { formatUF } from '@/utils/format';
+import { displayPersonName } from '@/utils/personName';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -65,7 +66,7 @@ function CompactGoal({ icon, label, value, progress }: { icon: IconName; label: 
 
 export function SellerHomeDashboard({ data, error, metric, user }: SellerHomeDashboardProps) {
   const router = useRouter();
-  const firstName = user.name.split(/\s+/)[0] || 'Vendedor';
+  const firstName = displayPersonName(user.name, user.role) || 'Vendedor';
   const soldUf = metricUf(metric);
   const eligibleUf = metric?.eligibleTotalUf ?? metric?.quarterTotalUf ?? soldUf;
   const category = metric?.category ?? 'Sin categoría publicada';

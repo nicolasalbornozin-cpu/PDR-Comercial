@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { NewsEditorInput, NewsEditorModal } from '@/components/NewsEditorModal';
 
@@ -10,6 +10,7 @@ import { NewsCard } from '@/components/NewsCard';
 import { NewsPhoto, NewsPhotoBackground } from '@/components/NewsPhoto';
 import { NewsPhotoViewer } from '@/components/NewsPhotoViewer';
 import { NewsEventSections } from '@/components/NewsEventSections';
+import { NewsDeleteButton } from '@/components/NewsDeleteButton';
 import { ScreenContainer } from '@/components/ScreenContainer';
 import { newsImages } from '@/data/assets';
 import { useAuth } from '@/hooks/useAuth';
@@ -19,13 +20,14 @@ import { colors, radii, shadows, spacing, typography } from '@/theme';
 import { GalleryPhoto } from '@/types';
 import { formatDate } from '@/utils/format';
 import { canEditNews } from '@/utils/permissions';
+import { seniorTrips, tripPhotos } from '@/utils/newsTrips';
 
 export default function NewsDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, edit } = useLocalSearchParams<{ id: string; edit?: string }>();
   const router = useRouter();
   const { authenticatedUser, isPreviewing } = useAuth();
   const { content, loading, refresh } = useNewsContent();
-  const article = content.articles.find((item) => item.id === id) ?? content.articles[0];
+  const article = content.articles.find((item) => item.id === id);
   const related = article ? content.articles.find((item) => item.id !== article.id && item.category === article.category) ?? content.articles.find((item) => item.id !== article.id) : undefined;
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState('');
@@ -40,7 +42,15 @@ export default function NewsDetailScreen() {
   const [deletingPhotoId, setDeletingPhotoId] = useState<string>();
   const [selectedPhoto, setSelectedPhoto] = useState<number | null>(null);
   const isAdmin = canEditNews(authenticatedUser?.role) && !isPreviewing;
-  const articleGallery = article ? content.gallery.filter((photo) => photo.newsArticleId === article.id && !photo.newsSectionId) : [];
+  const isTrip = seniorTrips(content.articles).some(trip => trip.id === article?.id);
+  const articleGallery = article ? isTrip ? tripPhotos(content.articles, content.gallery, article).filter(photo => !photo.newsSectionId) : content.gallery.filter((photo) => photo.newsArticleId === article.id && !photo.newsSectionId) : [];
+  const openedEditor = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (edit !== '1' || !article || !isAdmin || openedEditor.current === article.id) return;
+    openedEditor.current = article.id;
+    setTitle(article.title); setSummary(article.summary); setBody(article.body);
+    setImageUrl(article.imageUrl); setCoverSaved(false); setEditing(true);
+  }, [article, edit, isAdmin]);
 
   const openEditor = () => {
     if (!article) return;
@@ -74,7 +84,7 @@ export default function NewsDetailScreen() {
     if (!article || uploadingCover) return;
     setSaving(true);
     try {
-      await newsService.updateArticle(article.id, { title, summary, body, imageUrl });
+      await newsService.updateArticle(article.id, { title, summary, body, imageUrl: imageUrl ?? null });
       await refresh();
       setEditing(false);
     } catch (cause) {
@@ -130,6 +140,7 @@ export default function NewsDetailScreen() {
               <View style={styles.titleRow}>
                 <Text style={styles.title}>{article.title}</Text>
                 {isAdmin ? <Pressable accessibilityLabel="Editar título" onPress={openEditor} style={styles.pencil}><Ionicons color={colors.primary} name="pencil" size={18} /></Pressable> : null}
+                {isAdmin ? <NewsDeleteButton label={article.title} onDelete={async () => { await newsService.deleteArticle(article.id); await refresh(); }} onDeleted={() => router.replace('/(tabs)/news')}/> : null}
               </View>
               <Text style={styles.date}>{formatDate(article.date)}</Text>
             </View>
@@ -141,6 +152,7 @@ export default function NewsDetailScreen() {
             <Text style={styles.summary}>{article.summary}</Text>
             <View style={styles.goldLine} />
             <Text style={styles.body}>{article.body}</Text>
+            {isTrip ? <Pressable onPress={() => router.push({ pathname: '/gallery', params: { trip: article.id } })} style={styles.bottomEdit}><Ionicons name="images-outline" color={colors.primary} size={20}/><Text style={styles.bottomEditText}>Ver galería de este paseo</Text></Pressable> : null}
             <View style={styles.galleryHeading}>
               <Text style={styles.galleryTitle}>Fotografías</Text>
               {isAdmin ? (
@@ -170,7 +182,7 @@ export default function NewsDetailScreen() {
             ) : null}
           </View>
 
-          {article.category === 'Eventos recientes' ? <NewsEventSections articleId={article.id} sections={content.sections.filter(section=>section.newsArticleId===article.id)} photos={content.gallery} canEdit={isAdmin} refresh={refresh}/> : null}
+          <NewsEventSections articleId={article.id} sections={content.sections.filter(section=>section.newsArticleId===article.id)} photos={content.gallery} canEdit={isAdmin} refresh={refresh}/>
 
           {related ? (
             <View style={styles.relatedSection}>
@@ -191,6 +203,7 @@ export default function NewsDetailScreen() {
             <NewsEditorInput accessibilityLabel="Texto completo de la noticia" maxLength={10000} multiline onChangeText={setBody} placeholder="Texto completo" placeholderTextColor={colors.textMuted} style={[styles.input, styles.bodyInput]} value={body} />
             <NewsPhoto fallback={newsImages[article.image as keyof typeof newsImages] ?? newsImages.park} resizeMode="contain" style={styles.imagePreview} url={imageUrl} />
             <Pressable disabled={uploadingCover || saving} onPress={pickImage} style={styles.photoButton}>{uploadingCover ? <ActivityIndicator color={colors.primary} /> : <Ionicons color={colors.primary} name="image-outline" size={19} />}<Text style={styles.photoText}>{uploadingCover ? 'Publicando fotografía…' : 'Cambiar fotografía'}</Text></Pressable>
+            {imageUrl ? <Pressable disabled={uploadingCover || saving} onPress={() => setImageUrl(undefined)} style={styles.photoButton}><Ionicons name="trash-outline" color={colors.danger} size={18}/><Text style={styles.photoText}>Quitar portada al guardar</Text></Pressable> : null}
             <Text accessibilityLiveRegion="polite" style={styles.photoEmpty}>{coverSaved ? 'Portada guardada para todos.' : 'La portada se publica al seleccionarla. Usa Guardar para los cambios de texto.'}</Text>
             <Pressable disabled={saving || uploadingCover} onPress={save} style={[styles.saveButton, (saving || uploadingCover) && styles.disabled]}>
               {saving ? <ActivityIndicator color={colors.surface} /> : <><Ionicons color={colors.surface} name="checkmark" size={20} /><Text style={styles.saveText}>Guardar para todos</Text></>}

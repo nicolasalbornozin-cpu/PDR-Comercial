@@ -22,7 +22,13 @@ const storage = {
 const supabase = {
   storage: { from: () => storage },
   from: (table) => ({
-    insert: async (row) => { inserted.push({ table, ...row }); return {}; },
+    insert: (row) => {
+      inserted.push({ table, ...row });
+      return {
+        then: (resolve, reject) => Promise.resolve({}).then(resolve, reject),
+        select: () => ({ single: async () => ({ data: { id: 12 }, error: null }) }),
+      };
+    },
     update: (row) => ({ eq: (_, id) => ({ select: () => ({ single: async () => {
       if (denied) return { data: null, error: { message: 'Sin permisos' } };
       updates.push({ id, ...row }); return { data: { id } };
@@ -74,5 +80,17 @@ const makePhotos = () => Array.from({ length: 6 }, (_, i) => ({ name: `photo-${i
   assets = [];
   assert.equal(await service.replaceArticleImage('4'), null);
   assert.equal(await service.addGalleryPhotos('Evento'), 0);
+  for (const category of ['Novedades', 'Paseos', 'Eventos recientes', 'Reconocimientos', 'Carreras']) {
+    assert.equal(await service.createArticle({ title: 'Nuevo apartado', summary: 'Resumen', body: 'Descripción', category }), '12');
+    assert.equal(inserted.at(-1).category, category);
+  }
+  await assert.rejects(service.createArticle({ title: 'X', summary: 'Y', body: 'Z', category: 'admin' }), /Tipo/);
+  denied = false;
+  await service.updateArticle('4', { imageUrl: null });
+  assert.equal(updates.at(-1).image_url, null);
+  await service.deleteArticle('4');
+  assert.equal(updates.at(-1).active, false);
+  denied = true;
+  await assert.rejects(service.deleteArticle('4'), /Sin permisos/);
   console.log('PASS: 6 photos, progress, failed fourth photo does not block fifth/sixth, immediate cover persistence, denied update cleanup, cancellation.');
 })().catch((error) => { console.error(error); process.exitCode = 1; });
