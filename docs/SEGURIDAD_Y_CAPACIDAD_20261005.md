@@ -9,6 +9,7 @@
 - Las fotografías de Noticias pasan a un bucket privado y la aplicación usa enlaces firmados de diez minutos, disponibles solo para personal vigente.
 - Se agregó una lista cerrada de campos admitidos a `sheet_metrics` y a las reglas de metas. Una escritura directa con campos desconocidos o estructuras anidadas queda rechazada por la base.
 - Las noticias y fotografías quedan protegidas además por estado laboral y dotación vigente. Al cerrar sesión se eliminan las cachés de textos y enlaces firmados.
+- Se consolidaron las políticas duplicadas de secciones de Noticias y registro de cuentas, conservando los mismos permisos con menos evaluaciones por consulta.
 - No hay archivos Excel, `.env`, certificados ni claves privadas versionados en Git. La clave administrativa de Supabase continúa solo en las funciones del servidor.
 
 ## Dependencias
@@ -28,6 +29,7 @@ El primer cuello de botella esperado no es la tabla de métricas, sino las fotog
 - El registro inicial solo con RUT y contraseña permite que quien conozca un RUT vigente intente registrar primero una cuenta ajena. Este funcionamiento fue aceptado expresamente; la mitigación recomendada sigue siendo un código inicial entregado por la empresa.
 - La sesión móvil se guarda mediante el almacenamiento estándar de React Native. Una futura versión nativa debería migrarla a almacenamiento cifrado del dispositivo.
 - El contenido libre que un administrador publique en Noticias podría incluir información personal. Los controles técnicos evitan datos de clientes en las cargas comerciales, pero no pueden determinar el contenido visual o textual de una fotografía/noticia.
+- La protección de Supabase contra contraseñas conocidas como filtradas permanece desactivada. El sistema ya exige nueve caracteres y combinación de mayúsculas, minúsculas, números y símbolos; conviene activar también la comprobación de contraseñas filtradas cuando esté disponible en el plan y panel del proyecto.
 - Antes de ampliar significativamente la dotación o usar Noticias como galería masiva, se recomienda una prueba de carga en un entorno de prueba y revisar consumo real de egreso.
 
 Fuentes de límites y controles: [Supabase Pricing](https://supabase.com/pricing), [Supabase Performance](https://supabase.com/docs/guides/platform/performance), [Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security), [Storage privado y URLs firmadas](https://supabase.com/docs/guides/storage/buckets/fundamentals).
