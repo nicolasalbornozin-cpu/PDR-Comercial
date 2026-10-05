@@ -42,12 +42,18 @@ for (const value of [password, 'Password1', 'NoSymbols1234', 'Aa1' + 'x'.repeat(
   assert.equal(creates, 1);
   assert.equal((await registerAccount(input, 'fixture', 'hash', { ...dependencies, create: async () => ({ ok: false }) })).status, 409);
   assert.equal(releases, 2);
-  assert.equal((await registerAccount(input, 'fixture', 'hash', { ...dependencies, create: async () => ({ ok: false, duplicate: true }) })).status, 201);
-  assert.equal(activations, 1); assert.equal(releases, 3);
-  assert.equal((await registerAccount(input, 'fixture', 'hash', { ...dependencies, create: async () => ({ ok: false, duplicate: true }), activateExisting: async () => ({ ok: false }) })).status, 409);
+  const weakPassword = await registerAccount(input, 'fixture', 'hash', { ...dependencies, create: async () => ({ ok: false, reason: 'weak_password' }) });
+  assert.equal(weakPassword.status, 400); assert.match(weakPassword.body.error, /rechazada por seguridad/);
+  assert.equal(releases, 3);
+  const authRateLimit = await registerAccount(input, 'fixture', 'hash', { ...dependencies, create: async () => ({ ok: false, reason: 'rate_limited' }) });
+  assert.equal(authRateLimit.status, 429); assert.match(authRateLimit.body.error, /demasiadas solicitudes/);
   assert.equal(releases, 4);
+  assert.equal((await registerAccount(input, 'fixture', 'hash', { ...dependencies, create: async () => ({ ok: false, duplicate: true }) })).status, 201);
+  assert.equal(activations, 1); assert.equal(releases, 5);
+  assert.equal((await registerAccount(input, 'fixture', 'hash', { ...dependencies, create: async () => ({ ok: false, duplicate: true }), activateExisting: async () => ({ ok: false }) })).status, 409);
+  assert.equal(releases, 6);
   await assert.rejects(registerAccount(input, 'fixture', 'hash', { ...dependencies, create: async () => { throw new Error('transport'); } }));
-  assert.equal(releases, 5);
+  assert.equal(releases, 7);
   for (const role of ['coordinator', 'sales_manager', 'commercial_manager', 'sales_director', 'audiovisual']) {
     assert.equal((await registerAccount(input, 'fixture', 'hash', { ...dependencies, reserve: async () => ({ ok: true, role }) })).status, 201);
     assert.equal(attributes.app_metadata.role, role);
