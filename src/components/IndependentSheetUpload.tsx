@@ -49,7 +49,8 @@ export function IndependentSheetUpload(){
  }
  return <View style={styles.card}>
   <Text style={styles.title}>Actualizar por hoja</Text>
-  <Text style={styles.copy}>Selecciona el origen y su Excel. Solo se carga la hoja indicada, sin alterar los otros indicadores. Los contratos y datos de clientes no se envían.</Text>
+  <Text style={styles.copy}>Selecciona el origen y su Excel. Solo se carga la hoja indicada. Dotacion controla nombres, equipos y acceso; las demás cargas no habilitan personas. Los contratos y datos de clientes no se envían.</Text>
+  {source==='dotacion'?<Text style={styles.copy}>Sube la nómina completa: reemplaza la anterior. Quienes falten, estén con licencia o vacaciones no podrán ingresar (Error 444). Se mantienen Benjamín Hernández, Gabriel De Luca y Tomás Espinoza, y el acceso de administrador.</Text>:null}
   <View style={styles.choices}>{(Object.keys(sheetSources) as SheetSource[]).filter(key=>key!=='ranking_annual').map(key=><Pressable disabled={busy} key={key} onPress={()=>{setSource(key);setParsed(null);setAnnualRanking(null);setFilename('');setLabel('');setStart('');setEnd('');setError('');setMessage('');setClosed(false);}} style={[styles.chip,source===key&&styles.selected]}><Text style={{color:source===key?colors.surface:colors.primary}}>{sheetSources[key].label}</Text></Pressable>)}</View>
   <Text style={styles.sheet}>{source==='ranking_monthly'?'Archivo: Ranking Plataforma.xlsx · hojas anual total, anual, mes y mes emitido':`Hoja: ${sheetSources[source].sheet}`}</Text>
   <FormField label="Nombre del período" icon="calendar-outline" value={label} onChangeText={setLabel} placeholder="Ej.: Catego julio-agosto 2026"/>

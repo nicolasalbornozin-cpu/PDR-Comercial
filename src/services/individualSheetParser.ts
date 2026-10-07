@@ -1,7 +1,9 @@
 import type { WorkBook } from 'xlsx';
 import { isValidRut, normalizeRut } from '../utils/rut';
+import {parseDotacion} from './dotacionParser';
 
 export const sheetSources = {
+  dotacion: { label: 'Dotacion · nómina y accesos', sheet: 'Dotacion (o DOTACION VIG)' },
   category: { label: 'Catego', sheet: 'Carga Catego' },
   production_sellers: { label: 'Producción · vendedores', sheet: 'Resumen Vendedores' },
   production_coordinators: { label: 'Producción · coordinadores', sheet: 'Resumen Coordinadores' },
@@ -15,7 +17,7 @@ export const sheetSources = {
 } as const;
 export type SheetSource = keyof typeof sheetSources;
 export type SheetMetrics = Record<string, string | number>;
-export interface SheetRecord { rut?: string; name: string; role: 'seller' | 'coordinator'; values: SheetMetrics; row: number }
+export interface SheetRecord { rut?: string; name: string; role: 'seller' | 'coordinator' | 'sales_manager'; values: SheetMetrics; row: number }
 export interface SheetImport { source: SheetSource; sheet: string; records: SheetRecord[]; errors: string[]; warnings: string[]; rules: { label: string; uf: number; smad: number; prize: number }[] }
 export function searchName(value: unknown): string {
   return String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\([^)]*\)/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -41,6 +43,7 @@ const sheetAliases: Partial<Record<SheetSource, string[]>> = {
 
 // Only aggregate worker results are published; no operation or client rows are uploaded.
 export function parseIndividualSheet(book: WorkBook, source: SheetSource, period?: {start:string;end:string}): SheetImport {
+  if (source === 'dotacion') return parseDotacion(book);
   if (source === 'ranking_annual' || source === 'ranking_monthly') return parsePreparedRanking(book, source, period) ?? parseCantoRanking(book,source,period);
   const expectedSheets = sheetAliases[source] ?? [sheetSources[source].sheet];
   const sheet = expectedSheets.map(expected => book.SheetNames.find(n => searchName(n) === searchName(expected))).find(Boolean);
@@ -66,6 +69,7 @@ export function parseIndividualSheet(book: WorkBook, source: SheetSource, period
     result.errors.push(`No se reconoce el encabezado ${col} de «${sheet}». Conserva las columnas originales.`); return -1;
   };
   const debt = ['titanes', 'rbh', 'msc'].includes(source);
+  const debtWithoutContract=debt&&searchName(ws.B1?.v)==='fecha contrato'&&searchName(ws.D1?.v)==='valor venta uf';
   // Several source versions retain old headings while moving actual data.
   const debtRutCol = ['L', 'M', 'N'].find(c => debt && Array.from({ length: Math.min(maxRow - 1, 12) }, (_, i) => i + 2)
     .filter(r => isValidRut(normalizeRut(ws[`${c}${r}`]?.v))).length >= 2) ?? 'L';
@@ -76,7 +80,7 @@ export function parseIndividualSheet(book: WorkBook, source: SheetSource, period
   const sauceLoad = source === 'sauce' && searchName(sheet).startsWith('carga sau');
   const first = source === 'category' ? header('G', ['ejecutivo']) : source === 'senior' ? header('D', ['rut vendedor'])
     : source === 'production_sellers' ? header('A', ['rut vendedor']) : source === 'production_coordinators' ? header('A', ['coordinador'])
-    : debt ? header('L', ['rut']) : source === 'sauce' ? header(sauceLoad ? 'B' : 'A', ['rut agente']) : header('A', ['puesto']);
+    : debt ? debtWithoutContract ? 1 : header('L', ['rut']) : source === 'sauce' ? header(sauceLoad ? 'B' : 'A', ['rut agente']) : header('A', ['puesto']);
   if (first < 0) return result;
   const seen = new Set<string>(); const aggregated = new Map<string, SheetRecord>(); const contracts = new Map<string, string>();
   const seniorEmission = new Map<string, number>();
@@ -157,20 +161,22 @@ export function parseIndividualSheet(book: WorkBook, source: SheetSource, period
       const days = get(coord ? shiftedCoordinator ? 'L' : 'K' : 'N', r); if (number(days) !== undefined) values.daysWithoutSale = number(days)!;
       else if (text(days)) values.daysWithoutSaleText = text(days);
     } else if (debt) {
-      const contract = text(get('B', r));
+      // New exports omit the operation identifier. Dates are NOT unique contract IDs.
+      const contract = debtWithoutContract ? `row:${r}` : text(get('B', r));
       if (!contract) { result.errors.push(`${sheet}, fila ${r}: falta contrato para evitar duplicados.`); continue; }
-      const status = searchName(get(rowDebtRutCol === 'L' ? 'G' : 'H', r));
-      const fingerprint = JSON.stringify([rut,number(get('E',r)),text(get('F',r)),status]);
+      const ufCol=debtWithoutContract?'D':'E',quotaCol=debtWithoutContract?'E':'F';
+      const status = searchName(get(debtWithoutContract?'G':rowDebtRutCol === 'L' ? 'G' : 'H', r));
+      const fingerprint = JSON.stringify([rut,number(get(ufCol,r)),text(get(quotaCol,r)),status]);
       if (contracts.has(contract)) { if (contracts.get(contract) !== fingerprint) result.errors.push(`${sheet}, fila ${r}: contrato repetido con valores distintos.`); continue; }
       contracts.set(contract, fingerprint);
       const a = aggregated.get(rut!) ?? { rut, name, role: 'seller' as const, row: r, values: { debtSales: 0, debtUf: 0, debtInstallments: 0, debtUf08: 0, debtSales08: 0 } };
       if (status === 'mora') {
-        const uf = number(get('E', r)); if (uf === undefined || uf < 0) { result.errors.push(`${sheet}!E${r}: UF inválida.`); continue; }
+        const uf = number(get(ufCol, r)); if (uf === undefined || uf < 0) { result.errors.push(`${sheet}!${ufCol}${r}: UF inválida.`); continue; }
         a.values.debtSales = Number(a.values.debtSales) + 1; a.values.debtUf = Number(a.values.debtUf) + uf;
-        const q = number(get('F',r));
-        if (/^0\s*[-–]\s*8\s*%?$/.test(text(get('F',r)))) {
+        const q = number(get(quotaCol,r));
+        if (/^0\s*[-–]\s*8\s*%?$/.test(text(get(quotaCol,r)))) {
           a.values.debtUf08 = Number(a.values.debtUf08) + uf; a.values.debtSales08 = Number(a.values.debtSales08) + 1;
-        } else if (q === undefined || q < 0 || !Number.isInteger(q)) result.errors.push(`${sheet}!F${r}: cuotas morosas inválidas.`);
+        } else if (q === undefined || q < 0 || !Number.isInteger(q)) result.errors.push(`${sheet}!${quotaCol}${r}: cuotas morosas inválidas.`);
         else a.values.debtInstallments = Number(a.values.debtInstallments) + q;
       }
       aggregated.set(rut!, a); continue;
@@ -198,7 +204,8 @@ export function parseIndividualSheet(book: WorkBook, source: SheetSource, period
   if (debt) {
     result.records = [...aggregated.values()];
     result.warnings.push('Se agrupa por RUT. No se suben contratos, compromisos ni fechas de clientes. UF 0–8% es un único total.');
-    if (shiftedDebt) result.warnings.push(`Formato detectado: RUT en ${debtRutCol}, vendedor en ${debtNameCol} y mora en H; grupo 0–8% en F.`);
+    if(debtWithoutContract)result.warnings.push('Formato sin número de operación: cada fila de mora cuenta como un contrato. UF en D, cuotas/grupo 0–8% en E y mora en G; no se deduplica por fecha.');
+    else if (shiftedDebt) result.warnings.push(`Formato detectado: RUT en ${debtRutCol}, vendedor en ${debtNameCol} y mora en H; grupo 0–8% en F.`);
   }
   if (source === 'category') {
     result.warnings.push('Catego: UF bruta emitida se toma directamente de la columna M de Carga Catego; sin emitir es UF bruta menos UF emitida, con mínimo cero.');

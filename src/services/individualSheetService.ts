@@ -46,6 +46,11 @@ export const individualSheetService={
   if(!supabase)throw Error('Supabase no está configurado.');
   if(parsed.errors.length)throw Error('Corrige los errores del archivo antes de publicar.');
   if(!/^\d{4}-\d{2}-\d{2}$/.test(start)||!/^\d{4}-\d{2}-\d{2}$/.test(end)||end<start)throw Error('Revisa las fechas del período.');
+  if(parsed.source==='dotacion'){
+   const records=parsed.records.map(row=>({rut:row.rut,name:row.name,role:row.role,status:row.values.status,birth_date:row.values.birth_date??null,join_date:row.values.join_date??null,coordinator_rut:row.values.coordinator_rut??null,manager_rut:row.values.manager_rut??null}));
+   const r=await supabase.rpc('publish_dotacion',{p_upload:{filename,sheet_name:parsed.sheet,label,period_start:start,period_end:end},p_records:records});
+   if(r.error)throw Error(r.error.message);return {id:r.data as string,published:records.length,skipped:[] as string[]};
+  }
   const workers=await allRows<WorkerRow>('commercial_workers');
   const skipped:string[]=[];
   const records=parsed.records.flatMap(row=>{
@@ -66,7 +71,7 @@ export const individualSheetService={
  async dashboard(user:User):Promise<DashboardData>{
   const [allWorkers,allMetrics,allUploads]=await Promise.all([allRows<WorkerRow>('commercial_workers'),allRows<MetricRow>('current_worker_metrics'),allRows<UploadRow>('sheet_uploads')]);
   const self=allWorkers.find(w=>w.id===user.id||w.rut===normalizeRut(user.rut));
-  if(user.role!=='admin'&&(!self||!self.active||self.status!=='active'))throw Error('Error al comunicar con el servidor');
+  if(user.role!=='admin'&&(!self||!self.active||self.status!=='active'))throw Error('Error 444');
   const workers=allWorkers.filter(w=>w.active&&w.status==='active'&&(user.role==='admin'||self?.role==='commercial_manager'||self?.role==='sales_director'||w.id===self?.id||self?.role==='coordinator'&&w.coordinator_id===self.id||self?.role==='sales_manager'&&w.manager_id===self.id));
   const ids=new Set(workers.map(w=>w.id));
   // Keep the authenticated UUID as the UI's own key, while roster joins use stable worker IDs.
