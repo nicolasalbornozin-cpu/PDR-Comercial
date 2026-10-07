@@ -26,7 +26,7 @@ assert.equal(exportsObject.remainingUfTarget(500,'Pendiente'),undefined);
  assert.deepEqual(Array.from(commercial.profiles,p=>p.id).sort(),['chief','commercial','coord','director','other','seller']);
  const director=await service.dashboard({id:'director',rut:'director',role:'sales_director'});
  assert.deepEqual(Array.from(director.profiles,p=>p.id).sort(),['chief','commercial','coord','director','other','seller']);
- await assert.rejects(()=>service.dashboard({id:'inactive',rut:'inactive',role:'seller'}),/Error al comunicar/);
+ await assert.rejects(()=>service.dashboard({id:'inactive',rut:'inactive',role:'seller'}),/Error 444/);
  metrics.find(m=>m.source==='senior').period_end='2020-10-05';
  const closed=await service.dashboard({id:'seller',rut:'seller',role:'seller'});
  assert.equal(closed.latestByUser.seller.eligibleTotalUf,undefined);assert.match(closed.latestByUser.seller.seniorRemaining,/cierre/);

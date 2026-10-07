@@ -56,18 +56,21 @@ function mapProfile(profile: ProfileRow): User {
 
 async function getProfile(userId: string): Promise<User> {
   if (!supabase) throw new Error('Supabase no está configurado.');
+  const access=await supabase.rpc('session_access_allowed');
+  if(access.error)throw new Error('No fue posible comprobar el acceso. Inténtalo nuevamente.');
+  if(access.data!==true){await supabase.auth.signOut();throw new Error('Error 444');}
   const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
   if (error) throw new Error('Error al comunicar con el servidor');
   const user = mapProfile(data as ProfileRow);
   if (isEmploymentBlocked(user.employmentStatus, user.active)) {
     await supabase.auth.signOut();
-    throw new Error('Error al comunicar con el servidor');
+    throw new Error('Error 444');
   }
   if (user.role !== 'admin' && user.role !== 'audiovisual') {
     const roster = await supabase.from('commercial_workers').select('*').eq('rut', normalizeRut(user.rut)).maybeSingle();
     if (roster.error || !roster.data || !roster.data.active || roster.data.status !== 'active') {
       await supabase.auth.signOut();
-      throw new Error('Error al comunicar con el servidor');
+      throw new Error('Error 444');
     }
     // Login UUID and account settings remain intact; role/status come from the authoritative roster.
     const worker = workerUser(roster.data as WorkerRow);
@@ -97,7 +100,7 @@ export const authService = {
           if (typeof payload.error === 'string') message = payload.error;
         }
       } catch { /* Do not expose transport details or credentials. */ }
-      throw new Error(message);
+      throw new Error(message==='Error al comunicar con el servidor'?'Error 444':message);
     }
     if (!data?.ok) throw new Error(data?.error ?? 'No fue posible crear la cuenta.');
   },
