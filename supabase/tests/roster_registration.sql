@@ -1,5 +1,7 @@
 -- Run after the new migration, inside the same BEGIN/ROLLBACK transaction.
 -- Synthetic fixtures only: no passwords, sessions or persistent accounts.
+-- Legacy cases supply final metadata on INSERT; flush immediately for assertions.
+set constraints auth.on_auth_user_created immediate;
 insert into public.commercial_workers(id,rut,name,role,active,status) values
  ('__reg_qa_seller','990000010','Registro QA Vendedor','seller',true,'active'),
  ('__reg_qa_coord','990000029','Registro QA Coordinador','coordinator',true,'active'),
