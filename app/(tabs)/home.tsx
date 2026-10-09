@@ -18,6 +18,7 @@ import { DashboardData, MetricSnapshot, roleLabels, VisibleProfile } from '@/typ
 import { daysWithoutSale, hasMonthWithoutSale, hasGoalLevel, hasQualifiedSenior, latestGoal, isBirthdayToday, productivityTone } from '@/utils/commercialRules';
 import { formatUF } from '@/utils/format';
 import { displayPersonName } from '@/utils/personName';
+import { teamDaysWithoutSale } from '@/utils/teamOverview';
 
 function sumMetric(workers: VisibleProfile[], latest: DashboardData['latestByUser'], key: keyof MetricSnapshot): number {
   return workers.reduce((total, worker) => total + Number(latest[worker.id]?.[key] ?? 0), 0);
@@ -33,16 +34,16 @@ function sellerDays(metric?: Partial<MetricSnapshot>): string {
   return days === null ? 'Sin fecha' : `${days} día${days === 1 ? '' : 's'}`;
 }
 
-function ScopeCard({ title, subtitle, sellers, data, monthlyTarget }: { title: string; subtitle: string; sellers: VisibleProfile[]; data: DashboardData; monthlyTarget: number }) {
+function ScopeCard({ title, subtitle, sellers, data, monthlyTarget, onPress }: { title: string; subtitle: string; sellers: VisibleProfile[]; data: DashboardData; monthlyTarget: number; onPress: () => void }) {
   const annual = sellers.reduce((total, seller) => total + Number(data.annualEmittedUfByUser[seller.id] ?? 0), 0);
   const monthly = sellers.reduce((total, seller) => total + Number(data.monthlyEmittedUfByUser[seller.id] ?? 0), 0);
   const mora = sumMetric(sellers, data.latestByUser, 'debtSalesCount');
   const hasMora = sellers.some(w=>data.latestByUser[w.id]?.debtSalesCount !== undefined);
   const hasProductivity = sellers.some(w=>data.latestByUser[w.id]?.productivity !== undefined);
   const productivity = averageMetric(sellers, data.latestByUser, 'productivity');
-  const cancellations = sumMetric(sellers, data.latestByUser, 'cancellationUf');
+  const teamDays = teamDaysWithoutSale(sellers,data);
   return (
-    <View style={styles.scopeCard}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`Ver equipo de ${title}`} onPress={onPress} style={styles.scopeCard}>
       <View style={styles.scopeHeading}>
         <View style={styles.flex}>
           <Text numberOfLines={1} style={styles.workerName}>{title}</Text>
@@ -54,11 +55,11 @@ function ScopeCard({ title, subtitle, sellers, data, monthlyTarget }: { title: s
         <Text style={styles.scopeStat}>Mes <Text style={styles.scopeStrong}>{formatUF(monthly)} UF</Text></Text>
         <Text style={[styles.scopeStat, { color: hasMora ? mora > 0 ? colors.danger : colors.success : colors.textMuted }]}>Mora total <Text style={styles.scopeStrong}>{hasMora ? `${mora} contratos` : '—'}</Text></Text>
         <Text style={[styles.scopeStat, hasProductivity && productivity < 1 && styles.dangerText]}>Prod. <Text style={styles.scopeStrong}>{hasProductivity ? productivity.toFixed(2) : '—'}</Text></Text>
-        <Text style={styles.scopeStat}>Anul. <Text style={styles.scopeStrong}>{formatUF(cancellations)} UF</Text></Text>
+        <Text style={styles.scopeStat}>Equipo sin vender <Text style={styles.scopeStrong}>{teamDays === null ? 'Sin fecha' : `${teamDays} días`}</Text></Text>
       </View>
       <ProgressBar color={colors.secondary} height={7} progress={monthlyTarget ? monthly / monthlyTarget : 0} />
       <Text style={styles.progressCaption}>{monthlyTarget ? `${Math.round((monthly / monthlyTarget) * 100)}% del mejor resultado visible` : 'Sin ventas emitidas este mes'}</Text>
-    </View>
+    </Pressable>
   );
 }
 
@@ -105,9 +106,13 @@ export default function HomeScreen() {
   const totalMonthlyUf = isSeller
     ? Number(data?.monthlyEmittedUfByUser[user?.id ?? ''] ?? 0)
     : sellerRows.reduce((total, seller) => total + Number(data?.monthlyEmittedUfByUser[seller.id] ?? 0), 0);
+  const totalAnnualGrossUf = isSeller ? Number(data?.annualTotalUfByUser[user?.id ?? ''] ?? 0)
+    : sellerRows.reduce((total,seller)=>total+Number(data?.annualTotalUfByUser[seller.id]??0),0);
+  const teamDays = data ? teamDaysWithoutSale(sellerRows,data) : null;
   const moraContracts = isSeller ? Number(ownMetric?.debtSalesCount ?? 0) : sumMetric(sellerRows, data?.latestByUser ?? {}, 'debtSalesCount');
   const productivity = ownMetric?.productivity ?? averageMetric(sellerRows, data?.latestByUser ?? {}, 'productivity');
-  const cancellations = isSeller ? Number(ownMetric?.cancellationUf ?? 0) : sumMetric(sellerRows, data?.latestByUser ?? {}, 'cancellationUf');
+  const hasAnnualCancellations = isSeller ? ownMetric?.annualCancellationUf !== undefined : sellerRows.length > 0 && sellerRows.every(s=>data?.latestByUser[s.id]?.annualCancellationUf !== undefined);
+  const cancellations = isSeller ? Number(ownMetric?.annualCancellationUf ?? 0) : sumMetric(sellerRows, data?.latestByUser ?? {}, 'annualCancellationUf');
   const hasMora = isSeller ? ownMetric?.debtSalesCount !== undefined : sellerRows.some(w=>data?.latestByUser[w.id]?.debtSalesCount !== undefined);
   const hasProductivity = ownMetric?.productivity !== undefined || (!isSeller && sellerRows.some(w=>data?.latestByUser[w.id]?.productivity !== undefined));
   const hasSalesforce = isSeller ? ownMetric?.salesforceRecords !== undefined : sellerRows.some(w=>data?.latestByUser[w.id]?.salesforceRecords !== undefined);
@@ -146,7 +151,7 @@ export default function HomeScreen() {
             <View style={styles.titleIdentity}>
               <View style={styles.titleIcon}><Ionicons color={colors.secondary} name="leaf-outline" size={24} /></View>
               <View style={styles.flex}>
-              <Text style={styles.screenTitle}>{isSeller ? 'Mi avance' : user?.role === 'coordinator' ? 'Mi equipo' : isManager ? 'Mis coordinaciones' : isCommercialManager ? 'Mis jefaturas' : 'Vista general'}</Text>
+              <Text style={styles.screenTitle}>{isSeller ? 'Mi avance' : user?.role === 'coordinator' ? 'Mi equipo' : isManager ? 'Mis coordinadores' : isCommercialManager ? 'Canal Santa Clara' : 'Vista general'}</Text>
               <Text style={styles.period}>{data?.periodLabel ?? 'Cargando última actualización…'}</Text>
               </View>
             </View>
@@ -168,34 +173,38 @@ export default function HomeScreen() {
 
           <View style={styles.salesCard}>
             <Ionicons color="rgba(255,255,255,0.07)" name="leaf-outline" size={120} style={styles.leaf} />
-            <Text style={styles.salesLabel}>VENTAS EMITIDAS ACUMULADAS DEL AÑO</Text>
-            <Text style={styles.salesValue}>{formatUF(totalAnnualUf)} <Text style={styles.salesUnit}>UF</Text></Text>
+            <Text style={styles.salesLabel}>VENTAS ACUMULADAS DEL AÑO{isCommercialManager ? ' · CANAL SANTA CLARA' : ''}</Text>
+            <View style={styles.salesSplit}>
+              <View style={styles.salesHalf}><Text style={styles.salesLabel}>EMITIDO</Text><Text adjustsFontSizeToFit numberOfLines={1} style={styles.salesValue}>{formatUF(totalAnnualUf)} <Text style={styles.salesUnit}>UF</Text></Text></View>
+              <View style={styles.salesDivider}/>
+              <View style={styles.salesHalf}><Text style={styles.salesLabel}>BRUTO</Text><Text adjustsFontSizeToFit numberOfLines={1} style={styles.salesValue}>{formatUF(totalAnnualGrossUf)} <Text style={styles.salesUnit}>UF</Text></Text></View>
+            </View>
             <Text style={styles.updated}>Mes comercial: {formatUF(totalMonthlyUf)} UF · {data?.periodLabel ?? 'sin datos publicados'}</Text>
           </View>
 
           <View style={styles.metricsRow}>
-            <MetricCard onPress={!isSeller ? () => router.push({pathname:'/team',params:{kind:'debt'}}) : undefined} detail={hasMora ? isSeller ? 'contratos en mora' : 'total · ver vendedores' : 'sin mora cargada'} icon="alert-circle-outline" label="MORA" tone={hasMora && moraContracts > 0 ? 'red' : 'green'} value={hasMora ? `${moraContracts}` : '—'} />
+            <MetricCard onPress={!isSeller ? () => router.push({pathname:'/team',params:{kind:'debt'}}) : undefined} detail={hasMora ? isSeller ? 'contratos en mora' : isCommercialManager ? 'total · ver jefes de venta' : isManager ? 'total · ver coordinadores' : 'total · ver vendedores' : 'sin mora cargada'} icon="alert-circle-outline" label="MORA" tone={hasMora && moraContracts > 0 ? 'red' : 'green'} value={hasMora ? `${moraContracts}` : '—'} />
             <MetricCard onPress={!isSeller ? () => router.push({pathname:'/team',params:{kind:'productivity'}}) : undefined} detail={hasProductivity?isSeller?'según Producción':'ver productividad del equipo':'sin datos cargados'} icon="briefcase-outline" label="PRODUCTIVIDAD" tone={hasProductivity?productivityTone(productivity):'gold'} value={hasProductivity?productivity.toFixed(2):'—'} />
             <MetricCard detail={isSeller ? 'posición anual' : 'personas visibles'} icon="trophy-outline" label={isSeller ? 'RANKING' : 'EQUIPO'} tone="gold" value={isSeller ? rankingPosition !== undefined ? `#${rankingPosition}` : '—' : `${sellerRows.length}`} />
-            <MetricCard detail={hasSalesforce?'registros':'sin datos cargados'} icon="cloud-outline" label="SALESFORCE" value={hasSalesforce?`${salesforceRecords}`:'—'} />
+            <MetricCard onPress={!isSeller?()=>router.push({pathname:'/team',params:{kind:'zero'}}):undefined} detail={isSeller?'días desde última venta':`${noSaleCount} personas · 1 mes sin vender`} icon="calendar-outline" label="SIN VENDER" value={isSeller?sellerDays(ownMetric):teamDays===null?'Sin fecha':`${teamDays} días`} />
           </View>
 
           {isSeller ? <View style={styles.secondaryMetrics}><View style={styles.secondaryMetric}><View style={[styles.secondaryIcon, ownMetric?.sauceRisk !== undefined && ownMetric.sauceRisk > 30 ? styles.dangerBackground : undefined]}><Ionicons name="shield-checkmark-outline" color={ownMetric?.sauceRisk !== undefined && ownMetric.sauceRisk > 30 ? colors.danger : colors.goldText} size={20}/></View><View><Text style={styles.secondaryLabel}>Riesgo Sauce</Text><Text style={[styles.secondaryValue, ownMetric?.sauceRisk !== undefined && ownMetric.sauceRisk > 30 ? styles.dangerText : undefined]}>{ownMetric?.sauceRisk === undefined ? 'Sin dato' : `${ownMetric.sauceRisk.toFixed(1)}%`}</Text></View></View></View> : null}
           <View style={styles.secondaryMetrics}>
             <View style={styles.secondaryMetric}>
               <View style={[styles.secondaryIcon, { backgroundColor: cancellations ? '#FBECE9' : colors.softGreen }]}><Ionicons color={cancellations ? colors.danger : colors.success} name="close-circle-outline" size={19} /></View>
-              <View><Text style={styles.secondaryLabel}>Anulaciones del período</Text><Text style={[styles.secondaryValue, cancellations ? styles.dangerText : styles.successText]}>{formatUF(cancellations)} UF</Text></View>
+              <View><Text style={styles.secondaryLabel}>Anulaciones del año</Text><Text style={[styles.secondaryValue, cancellations ? styles.dangerText : styles.successText]}>{hasAnnualCancellations?`${formatUF(cancellations)} UF`:'Pendiente de carga anual'}</Text></View>
             </View>
             <View style={styles.secondaryDivider} />
-            <Pressable disabled={isSeller} onPress={() => router.push({pathname:'/team',params:{kind:'zero'}})} style={styles.secondaryMetric}>
+            <View style={styles.secondaryMetric}>
               <View style={[styles.secondaryIcon, { backgroundColor: noSaleCount >= 3 ? '#FBECE9' : colors.softGreen }]}><Ionicons color={noSaleCount >= 3 ? colors.danger : colors.success} name="calendar-outline" size={19} /></View>
-              <View><Text style={styles.secondaryLabel}>{isSeller ? 'Días sin vender' : 'Sin ventas · 1 mes'}</Text><Text style={[styles.secondaryValue, noSaleCount >= 3 ? styles.dangerText : styles.successText]}>{isSeller ? sellerDays(ownMetric) : `${noSaleCount} personas  ›`}</Text></View>
-            </Pressable>
+              <View><Text style={styles.secondaryLabel}>Salesforce</Text><Text style={styles.secondaryValue}>{hasSalesforce?`${salesforceRecords} registros`:'Sin datos cargados'}</Text></View>
+            </View>
           </View>
 
           {user?.role === 'coordinator' ? <View style={styles.metricsRow}>
-            <MetricCard label="CATEGORIZANDO" icon="star-outline" value={`${categoryCount}`} detail="ejecutivos · ver detalle" onPress={() => router.push({pathname:'/team',params:{kind:'category'}})} />
-            <MetricCard label="SENIORS" icon="diamond-outline" value={`${seniorCount}`} detail="ejecutivos · ver detalle" onPress={() => router.push({pathname:'/team',params:{kind:'senior'}})} />
+            <MetricCard label="CATEGO" icon="star-outline" value={`${categoryCount}`} detail={`cumplen · ver los ${sellerRows.length}`} onPress={() => router.push({pathname:'/team',params:{kind:'category'}})} />
+            <MetricCard label="SENIOR" icon="diamond-outline" value={`${seniorCount}`} detail={`cumplen · ver los ${sellerRows.length}`} onPress={() => router.push({pathname:'/team',params:{kind:'senior'}})} />
           </View> : null}
 
           {isSeller ? (
@@ -205,10 +214,10 @@ export default function HomeScreen() {
                 <Pressable onPress={() => router.push('/goals')}><Text style={styles.detailLink}>Ver detalle  ›</Text></Pressable>
               </View>
               <Pressable onPress={() => router.push({ pathname: '/goals', params: { focus: 'senior' } })} style={({ pressed }) => pressed && styles.pressed}>
-                <GoalCard icon="diamond-outline" badge={`${ownMetric?.smadCount ?? '—'} SMAD`} insight={ownMetric?.seniorRemaining ?? 'Toca para ver UF brutas y emitidas'} progress={seniorTarget ? seniorUf / seniorTarget : 0} title={ownMetric?.seniorLevel ?? 'Senior'} value={ownMetric?.eligibleTotalUf !== undefined ? `${formatUF(seniorUf)} UF` : 'Sin datos'} />
+                <GoalCard icon="diamond-outline" badge={`${ownMetric?.seniorSmadCount ?? '—'} SMAD`} insight={ownMetric?.seniorRemaining ?? 'Toca para ver UF brutas y emitidas'} progress={seniorTarget ? seniorUf / seniorTarget : 0} title={ownMetric?.seniorLabel ?? 'Senior'} value={ownMetric?.eligibleTotalUf !== undefined ? `${formatUF(seniorUf)} UF` : 'Sin carga vigente'} />
               </Pressable>
               <Pressable onPress={() => router.push({ pathname: '/goals', params: { focus: 'category' } })} style={({ pressed }) => pressed && styles.pressed}>
-                <GoalCard badge={ownMetric?.category ?? 'Sin categoría'} icon="star" insight="UF pendientes de emisión · toca para ver ambos períodos" progress={ownMetric?.categoryTargetUf ? (ownMetric.categoryUf??0)/ownMetric.categoryTargetUf : 0} title={ownMetric?.categoryLabel??'Catego'} tone="green" value={ownMetric?.categoryNotEmittedUf!==undefined?`${formatUF(ownMetric.categoryNotEmittedUf)} UF`:'Sin datos'} />
+                <GoalCard badge={ownMetric?.category ?? 'Sin categoría'} icon="star" insight={ownMetric?.categoryRemaining??'Toca para ver ambos períodos'} progress={ownMetric?.categoryTargetUf ? (ownMetric.categoryUf??0)/ownMetric.categoryTargetUf : 0} title={ownMetric?.categoryLabel??'Catego'} tone="green" value={ownMetric?.categoryUf!==undefined?`${formatUF(ownMetric.categoryUf)} UF brutas`:'Sin datos'} />
               </Pressable>
             </View>
           ) : null}
@@ -239,18 +248,18 @@ export default function HomeScreen() {
                     const bestManagement = Math.max(...salesManagers.map((item) => sellerRows.filter((seller) => seller.salesManagerId === item.id).reduce((total, seller) => total + Number(data.monthlyEmittedUfByUser[seller.id] ?? 0), 0)), managerMonthly);
                     return (
                       <View key={manager.id} style={styles.unitCard}>
-                        <ScopeCard data={data} monthlyTarget={bestManagement} sellers={managerSellers} subtitle={`${managerCoordinators.length} coordinadores · ${managerSellers.length} vendedores`} title={manager.name} />
+                        <ScopeCard onPress={() => router.push({pathname:'/team',params:{kind:'productivity',scope:manager.id}})} data={data} monthlyTarget={bestManagement} sellers={managerSellers} subtitle={`${managerCoordinators.length} coordinadores · ${managerSellers.length} vendedores`} title={manager.name} />
                         <View style={styles.unitTeams}>
                           {managerCoordinators.map((coordinator) => {
                             const coordinatedSellers = managerSellers.filter((seller) => seller.supervisorId === coordinator.id);
                             return (
-                              <View key={coordinator.id} style={styles.unitTeamRow}>
+                              <Pressable accessibilityRole="button" onPress={() => router.push({pathname:'/team',params:{kind:'productivity',scope:coordinator.id}})} key={coordinator.id} style={styles.unitTeamRow}>
                                 <View style={styles.flex}>
                                   <Text numberOfLines={1} style={styles.workerName}>{coordinator.name}</Text>
                                   <Text style={styles.workerMeta}>{coordinatedSellers.length} vendedores · Mora {sumMetric(coordinatedSellers, data.latestByUser, 'debtSalesCount')} contratos</Text>
                                 </View>
                                 <Text style={styles.workerUf}>{formatUF(coordinatedSellers.reduce((total, seller) => total + Number(data.monthlyEmittedUfByUser[seller.id] ?? 0), 0))} UF mes</Text>
-                              </View>
+                              </Pressable>
                             );
                           })}
                           {!managerCoordinators.length ? <Text style={styles.empty}>Sin coordinadores activos asignados.</Text> : null}
@@ -266,7 +275,7 @@ export default function HomeScreen() {
                     const coordinatedSellers = sellerRows.filter((seller) => seller.supervisorId === coordinator.id);
                     const coordinatorMonthly = coordinatedSellers.reduce((total, seller) => total + Number(data.monthlyEmittedUfByUser[seller.id] ?? 0), 0);
                     const bestCoordination = Math.max(...coordinators.map((item) => sellerRows.filter((seller) => seller.supervisorId === item.id).reduce((total, seller) => total + Number(data.monthlyEmittedUfByUser[seller.id] ?? 0), 0)), coordinatorMonthly);
-                    return <ScopeCard data={data} key={coordinator.id} monthlyTarget={bestCoordination} sellers={coordinatedSellers} subtitle={`${coordinatedSellers.length} vendedores`} title={coordinator.name} />;
+                    return <ScopeCard onPress={() => router.push({pathname:'/team',params:{kind:'productivity',scope:coordinator.id}})} data={data} key={coordinator.id} monthlyTarget={bestCoordination} sellers={coordinatedSellers} subtitle={`${coordinatedSellers.length} vendedores`} title={coordinator.name} />;
                   })}
                   {!coordinators.length ? <Text style={styles.empty}>Aún no hay coordinadores asignados.</Text> : null}
                 </View>
@@ -297,7 +306,7 @@ export default function HomeScreen() {
 
           <View style={styles.privacyNote}>
             <Ionicons color={colors.secondary} name="shield-checkmark-outline" size={21} />
-            <Text style={styles.privacyText}>Ranking por ventas totales. El ranking mensual permite comparar emitidas y sin emitir. Producción, Catego y Senior conservan los resultados de sus hojas cargadas.</Text>
+            <Text style={styles.privacyText}>Ranking por ventas totales del Excel cargado. Puedes comparar emitidas y sin emitir en mensual y anual. Producción, Catego y Senior conservan los resultados de sus hojas cargadas.</Text>
           </View>
           <RecentAchievements data={data} />
         </View>
@@ -331,6 +340,9 @@ const styles = StyleSheet.create({
   leaf: { bottom: -34, position: 'absolute', right: -13 },
   salesLabel: { color: 'rgba(255,255,255,0.67)', fontFamily: typography.sans, fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
   salesValue: { color: colors.surface, fontFamily: typography.serif, fontSize: 40, fontWeight: '600', marginTop: spacing.md },
+  salesSplit: { flexDirection: 'row',gap:spacing.md,marginTop:spacing.lg },
+  salesHalf: { flex:1,minWidth:0 },
+  salesDivider: { width:1,backgroundColor:'rgba(255,255,255,0.2)' },
   salesUnit: { color: colors.goldOnDark, fontFamily: typography.sans, fontSize: 15, fontWeight: '800' },
   updated: { color: 'rgba(255,255,255,0.57)', fontFamily: typography.sans, fontSize: 9, marginTop: spacing.sm },
   metricsRow: { flexDirection: 'row', gap: 7 },

@@ -14,6 +14,7 @@ import { colors, radii, shadows, spacing, typography } from '@/theme';
 import { DashboardData, MetricSnapshot } from '@/types';
 import { formatDate, formatUF, getProgress } from '@/utils/format';
 import { displayPersonName } from '@/utils/personName';
+import { goalRemainingUf } from '@/utils/goalProgress';
 
 type GoalKind = 'senior' | 'category';
 type GoalVersion = 'current' | 'previous';
@@ -53,7 +54,7 @@ export default function GoalsScreen() {
     return () => { active = false; };
   }, [isPreviewing, user]);
 
-  const selected = worker && ['coordinator','sales_manager','admin'].includes(user?.role ?? '') ? data?.profiles.find(p => p.id === worker && p.role === 'seller') : undefined;
+  const selected = worker && ['coordinator','sales_manager','commercial_manager','sales_director','admin'].includes(user?.role ?? '') ? data?.profiles.find(p => p.id === worker && p.role === 'seller') : undefined;
   const targetId = worker ? selected?.id : user?.id;
   const metric = targetId && data ? data.latestByUser[targetId] : undefined;
   const snapshotsFor = (kind: GoalKind) => targetId ? (data?.snapshots.filter((snapshot) => snapshot.userId === targetId && snapshot.kind === kind).sort((left, right) => right.periodEnd.localeCompare(left.periodEnd) || right.publishedAt.localeCompare(left.publishedAt)) ?? []) : [];
@@ -64,11 +65,6 @@ export default function GoalsScreen() {
   const seniorValue = Number(metric?.eligibleTotalUf ?? metric?.quarterTotalUf ?? 0);
   const categoryValue = Number(metric?.categoryUf ?? 0);
   const categoryTarget = metric?.categoryTargetUf ?? 0;
-  const categoryPending = metric?.categoryNotEmittedUf !== undefined
-    ? metric.categoryNotEmittedUf
-    : metric?.categoryUf !== undefined && metric?.categoryEmittedUf !== undefined
-      ? Math.max(metric.categoryUf - metric.categoryEmittedUf, 0)
-      : undefined;
   const validLevel = (level?:string) => Boolean(level && !/^(no|sin|pendiente|en carrera)/i.test(level));
   const completed = Number(validLevel(metric?.category)) + Number(validLevel(metric?.seniorLevel));
   const available = Number(metric?.categoryUf !== undefined) + Number(metric?.eligibleTotalUf !== undefined);
@@ -109,7 +105,7 @@ export default function GoalsScreen() {
 
           {!data ? <ActivityIndicator color={colors.gold} style={styles.loader} /> : null}
           <Pressable accessibilityRole="button" accessibilityState={{ expanded: openGoal === 'senior' }} onPress={() => setOpenGoal((current) => current === 'senior' ? null : 'senior')} style={({ pressed }) => [styles.goalButton, pressed && styles.pressed]}>
-            <GoalCard badge={`Senior ${data?.seniorOpen ? 'abierto' : 'cerrado'} · ${metric?.smadCount ?? '—'} SMAD`} icon="diamond-outline" insight={openGoal === 'senior' ? 'Toca para ocultar el detalle' : metric?.seniorRemaining ? `${metric.seniorRemaining} · Toca para ver detalle` : 'Sin carga Senior publicada'} progress={getProgress(seniorValue,metric?.seniorTargetUf??0)} title={metric?.seniorLevel ?? 'Senior'} value={metric?.eligibleTotalUf !== undefined ? `${formatUF(seniorValue)} UF` : 'Sin datos'} />
+            <GoalCard badge={`${metric?.seniorSmadCount ?? '—'} SMAD`} icon="diamond-outline" insight={openGoal === 'senior' ? 'Toca para ocultar el detalle' : metric?.seniorRemaining ?? 'Sin carga Senior publicada'} progress={getProgress(seniorValue,metric?.seniorTargetUf??0)} title={metric?.seniorLabel ?? 'Senior'} value={metric?.eligibleTotalUf !== undefined ? `${formatUF(seniorValue)} UF brutas` : 'Sin carga vigente'} />
           </Pressable>
           {openGoal === 'senior' ? (
             <View style={[styles.goalDetail, styles.seniorDetail]}>
@@ -121,7 +117,7 @@ export default function GoalsScreen() {
                 <View style={styles.detailIconGold}><Ionicons color={colors.goldText} name="diamond-outline" size={22} /></View>
                 <View style={styles.detailHeading}>
                   <Text style={styles.detailEyebrow}>PERÍODO SENIOR</Text>
-                  <Text style={styles.detailTitle}>{seniorSnapshot ? `${formatDate(seniorSnapshot.periodStart)} al ${formatDate(seniorSnapshot.periodEnd)}` : 'Sin período publicado'}</Text>
+                  <Text style={styles.detailTitle}>{seniorSnapshot?.seniorLabel ?? 'Sin período publicado'}</Text>
                 </View>
               </View>
               <View style={styles.ufComparison}>
@@ -131,7 +127,8 @@ export default function GoalsScreen() {
               </View>
               <View style={styles.requirementsSection}>
                 {selected ? <Text style={styles.detailNote}>Tiene {seniorSnapshot?.smadCount ?? '—'} SMAD · {seniorSnapshot?.restCount ?? '—'} descansos · {seniorSnapshot?.ssffCount ?? '—'} SSFF</Text> : null}
-                <Text style={styles.requirementsTitle}>Solo falta para cumplir</Text>
+                <Text style={styles.detailNote}>Tramo cumplido: {seniorSnapshot?.seniorLevel ?? 'Sin dato'}</Text>
+                <Text style={styles.requirementsTitle}>{seniorSnapshot?.nextGoalLevel ? `Solo falta para ${seniorSnapshot.nextGoalLevel}` : 'Solo falta para cumplir'}</Text>
                 <View style={styles.requirementsGrid}>
                   {([
                     { icon: 'ribbon-outline' as const, label: 'SMAD', value: missingSmad(seniorSnapshot, 'senior') },
@@ -144,17 +141,18 @@ export default function GoalsScreen() {
                       <Text style={styles.requirementLabel}>{item.label}</Text>
                     </View>
                   ))}
-                  {![missingSmad(seniorSnapshot, 'senior'), seniorSnapshot?.restRemaining, seniorSnapshot?.ssffRemaining].some((value) => (value ?? 0) > 0) ? (
+                  {!seniorSnapshot?.goalPending && seniorSnapshot?.smadCount !== undefined && ![missingSmad(seniorSnapshot, 'senior'), seniorSnapshot?.restRemaining, seniorSnapshot?.ssffRemaining].some((value) => (value ?? 0) > 0) ? (
                     <View style={styles.requirementsComplete}><Ionicons color={colors.success} name="checkmark-circle" size={20} /><Text style={styles.requirementsCompleteText}>Requisitos complementarios cumplidos</Text></View>
                   ) : null}
                 </View>
               </View>
-              <Text style={styles.detailNote}>{seniorSnapshot?.seniorRemaining ?? 'Sin detalle de tramo publicado.'}</Text>
+              <Text style={styles.detailNote}>{goalRemainingUf(seniorSnapshot,'senior')!==undefined?`Faltan ${formatUF(goalRemainingUf(seniorSnapshot,'senior')!)} UF. `:''}{seniorSnapshot?.seniorRemaining ?? 'Sin detalle de tramo publicado.'}</Text>
+              {seniorSnapshot?.goalPending?<Text style={styles.emissionNote}>El cuarto trimestre todavía no tiene una carga. Los resultados del tercer trimestre están en «Pasada».</Text>:null}
             </View>
           ) : null}
 
           <Pressable accessibilityRole="button" accessibilityState={{ expanded: openGoal === 'category' }} onPress={() => setOpenGoal((current) => current === 'category' ? null : 'category')} style={({ pressed }) => [styles.goalButton, pressed && styles.pressed]}>
-            <GoalCard badge={`${metric?.category ?? 'Sin categoría'} · sin emitir`} icon="star" insight={openGoal === 'category' ? 'Toca para ocultar el detalle' : 'Toca para ver el período y la emisión'} progress={getProgress(categoryValue,categoryTarget)} title={metric?.categoryLabel ?? 'Catego'} tone="green" value={categoryPending !== undefined ? `${formatUF(categoryPending)} UF` : 'Sin datos'} />
+            <GoalCard badge={metric?.category ?? 'Sin categoría'} icon="star" insight={openGoal === 'category' ? 'Toca para ocultar el detalle' : metric?.categoryRemaining ?? 'Toca para ver el período y la emisión'} progress={getProgress(categoryValue,categoryTarget)} title={metric?.categoryLabel ?? 'Catego'} tone="green" value={metric?.categoryUf !== undefined ? `${formatUF(categoryValue)} UF brutas` : 'Sin datos'} />
           </Pressable>
           {openGoal === 'category' ? (
             <View style={[styles.goalDetail, styles.categoryDetail]}>
@@ -167,7 +165,7 @@ export default function GoalsScreen() {
                 <View style={styles.detailHeading}>
                   <Text style={styles.detailEyebrow}>PERÍODO DE CATEGO</Text>
                   <Text style={styles.detailTitle}>{categorySnapshot?.categoryLabel ?? 'Período de Catego sin publicar'}</Text>
-                  {categorySnapshot ? <Text style={styles.detailDates}>{formatDate(categorySnapshot.periodStart)} al {formatDate(categorySnapshot.periodEnd)}</Text> : null}
+                  {categorySnapshot && !categorySnapshot.goalPending ? <Text style={styles.detailDates}>{formatDate(categorySnapshot.periodStart)} al {formatDate(categorySnapshot.periodEnd)}</Text> : null}
                 </View>
               </View>
               <View style={styles.ufComparison}>
@@ -181,6 +179,7 @@ export default function GoalsScreen() {
                 <View><Text style={styles.detailMetricLabel}>SMAD que faltan</Text><Text style={styles.smadValue}>{missingSmad(categorySnapshot, 'category') ?? 'Sin dato'}</Text></View>
               </View>
               <Text style={styles.detailNote}>{categorySnapshot?.categoryRemaining ?? 'Sin detalle de tramo publicado.'}</Text>
+              {categorySnapshot?.goalPending?<Text style={styles.emissionNote}>Septiembre–Octubre comienza en 0 por indicación del administrador. Los tramos se confirmarán con su nueva Carga Catego. Agosto–Septiembre está en «Anterior».</Text>:null}
               {categorySnapshot?.emittedUf === undefined ? <Text style={styles.emissionNote}>El desglose aparecerá al publicar Carga Catego con CANTO y Base TRIO dentro del mismo archivo.</Text> : null}
             </View>
           ) : null}

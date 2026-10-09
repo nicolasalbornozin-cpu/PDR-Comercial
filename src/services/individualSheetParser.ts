@@ -1,6 +1,7 @@
 import type { WorkBook } from 'xlsx';
 import { isValidRut, normalizeRut } from '../utils/rut';
 import {parseDotacion} from './dotacionParser';
+import type {GoalRule} from '../utils/goalProgress';
 
 export const sheetSources = {
   dotacion: { label: 'Dotacion · nómina y accesos', sheet: 'Dotacion (o DOTACION VIG)' },
@@ -18,7 +19,7 @@ export const sheetSources = {
 export type SheetSource = keyof typeof sheetSources;
 export type SheetMetrics = Record<string, string | number>;
 export interface SheetRecord { rut?: string; name: string; role: 'seller' | 'coordinator' | 'sales_manager'; values: SheetMetrics; row: number }
-export interface SheetImport { source: SheetSource; sheet: string; records: SheetRecord[]; errors: string[]; warnings: string[]; rules: { label: string; uf: number; smad: number; prize: number }[] }
+export interface SheetImport { source: SheetSource; sheet: string; records: SheetRecord[]; errors: string[]; warnings: string[]; rules: GoalRule[] }
 export function searchName(value: unknown): string {
   return String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\([^)]*\)/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
@@ -212,6 +213,17 @@ export function parseIndividualSheet(book: WorkBook, source: SheetSource, period
     for (let r = 1; r < first; r++) {
       const uf = number(get('C',r)), smad = number(get('E',r)), prize = number(get('F',r));
       if (uf !== undefined && smad !== undefined && prize !== undefined) result.rules.push({ label: text(get('B',r)).replace(/^[^A-Za-zÁÉÍÓÚÑ]+/u,''), uf, smad, prize });
+    }
+  }
+  if(source==='senior'){
+    const tramos=book.Sheets[book.SheetNames.find(n=>searchName(n)==='tramos')??''];
+    if(tramos&&searchName(tramos.E4?.v)==='categoria'&&searchName(tramos.G4?.v)==='smad'){
+      let label='';
+      for(let r=5;r<=30;r++){
+        if(tramos[`E${r}`]?.v)label=text(tramos[`E${r}`].v);
+        const uf=number(tramos[`F${r}`]?.v),smad=number(tramos[`G${r}`]?.v),rest=number(tramos[`H${r}`]?.v),ssff=number(tramos[`I${r}`]?.v),prize=number(tramos[`J${r}`]?.v);
+        if(label&&uf!==undefined&&smad!==undefined&&rest!==undefined&&ssff!==undefined&&prize!==undefined&&prize>0)result.rules.push({label,uf,smad,rest,ssff,prize});
+      }
     }
   }
   if (!result.records.length) result.errors.push('No hay trabajadores válidos en la hoja seleccionada.');

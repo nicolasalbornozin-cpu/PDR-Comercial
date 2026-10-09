@@ -11,6 +11,7 @@ import { authService } from '@/services/authService';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
 import { formatRut, isValidRut } from '@/utils/rut';
 import { isStrongRegistrationPassword, registrationValidation } from '@/utils/registration';
+import { CONDITIONS_VERSION } from '../../supabase/functions/_shared/platformConditions';
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -20,6 +21,7 @@ export default function RegisterScreen() {
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState(false);
   const [error, setError] = useState('');
+  const [acceptedConditions, setAcceptedConditions] = useState(false);
   const validRut = isValidRut(rut);
   const matching = password.length > 0 && password === confirmation;
   const strong = isStrongRegistrationPassword(password);
@@ -28,10 +30,11 @@ export default function RegisterScreen() {
     if (busy) return;
     const validation = registrationValidation(rut, password, confirmation);
     if (validation) { setError(validation); return; }
+    if (!acceptedConditions) { setError('Lee y acepta las condiciones de uso antes de activar tu cuenta.'); return; }
     setBusy(true);
     setError('');
     try {
-      await authService.register(rut, password, confirmation);
+      await authService.register(rut, password, confirmation, CONDITIONS_VERSION);
       setPassword(''); setConfirmation('');
       setCreated(true);
     } catch (registrationError) {
@@ -68,8 +71,11 @@ export default function RegisterScreen() {
               <Text accessibilityLiveRegion="polite" style={[styles.check, strong ? styles.checkOk : styles.checkPending]}>{strong ? '✓' : '○'} 8+ caracteres, mayúscula, minúscula y número</Text>
               <FormField autoCapitalize="none" autoComplete="new-password" editable={!busy} icon="lock-closed-outline" label="Confirmar contraseña" maxLength={72} onChangeText={(value) => { setConfirmation(value); setError(''); }} password placeholder="Repite tu contraseña" value={confirmation} />
               {confirmation ? <Text accessibilityLiveRegion="polite" style={[styles.check, matching ? styles.checkOk : styles.error]}>{matching ? '✓ Las contraseñas coinciden' : 'Las contraseñas no coinciden'}</Text> : null}
+              <Pressable accessibilityRole="checkbox" accessibilityState={{checked:acceptedConditions}} disabled={busy} onPress={()=>setAcceptedConditions(value=>!value)} style={styles.acceptance}><Ionicons name={acceptedConditions?'checkbox':'square-outline'} color={colors.primary} size={25}/><Text style={styles.acceptanceText}>Acepto las condiciones de uso y he leído el aviso sobre mis datos laborales y sus indicadores referenciales.</Text></Pressable>
+              <Pressable onPress={()=>router.push('/conditions')}><Text style={styles.checkOk}>Leer condiciones y aviso sobre datos personales</Text></Pressable>
+              <Text style={styles.check}>Aviso pendiente de aprobación institucional. No autoriza la publicación de fotografías ni renuncia a tus derechos.</Text>
               {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
-              <AppButton disabled={busy} label="Crear contraseña y activar" loading={busy} onPress={createAccount} />
+              <AppButton disabled={busy||!acceptedConditions} label="Crear contraseña y activar" loading={busy} onPress={createAccount} />
               <AppButton disabled={busy} label="Ya tengo cuenta · Iniciar sesión" onPress={() => router.replace('/(auth)/login')} variant="secondary" />
             </>
           )}
@@ -94,4 +100,6 @@ const styles = StyleSheet.create({
   checkPending: { color: colors.danger },
   error: { color: colors.danger, fontFamily: typography.sans, fontSize: 13, lineHeight: 19 },
   created: { alignItems: 'center', gap: spacing.lg },
+  acceptance: {flexDirection:'row',gap:spacing.md,alignItems:'flex-start'},
+  acceptanceText: {flex:1,fontFamily:typography.sans,fontSize:13,lineHeight:20,color:colors.text},
 });

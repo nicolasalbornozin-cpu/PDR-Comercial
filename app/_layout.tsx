@@ -22,7 +22,7 @@ function RootNavigator() {
   useEffect(() => {
     if (isLoading) return;
     const inAuthGroup = segments[0] === '(auth)';
-    if (!user && !inAuthGroup) router.replace('/(auth)/login');
+    if (!user && !inAuthGroup && segments[0] !== 'conditions') router.replace('/(auth)/login');
     if (user && inAuthGroup) router.replace(user.role === 'audiovisual' ? '/(tabs)/news' : '/(tabs)/home');
   }, [isLoading, router, segments, user]);
 
@@ -35,7 +35,7 @@ function RootNavigator() {
     );
   }
 
-  const newsOnlyAllowed = segments[0] === 'news' || segments[0] === 'gallery' || (segments[0] === '(tabs)' && (segments[1] === 'news' || segments[1] === 'profile'));
+  const newsOnlyAllowed = segments[0] === 'conditions' || segments[0] === 'news' || segments[0] === 'gallery' || (segments[0] === '(tabs)' && (segments[1] === 'news' || segments[1] === 'profile'));
   if (user?.role === 'audiovisual' && !newsOnlyAllowed) return <Redirect href="/(tabs)/news" />;
 
   return (
@@ -49,6 +49,7 @@ function RootNavigator() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="goals" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="team" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="conditions" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="notifications" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="gallery" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="news/[id]" options={{ animation: 'slide_from_right' }} />

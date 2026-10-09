@@ -9,9 +9,9 @@ Primera versión completa de la aplicación móvil comercial de Parque del Recue
 - Paneles separados para vendedor, coordinador, jefe de ventas y administrador; Audiovisual tiene acceso exclusivamente a Noticias.
 - Panel administrativo para cuentas, accesos y cargas CSV exportadas desde Excel.
 - Fotos publicables de ventas emitidas, emisión, avance comercial, Senior, categorización, Mora, Sauce y Salesforce.
-- Acumulado anual y mes comercial calculados solo con ventas emitidas; Senior abierto es la única excepción y usa ventas cantadas hasta su cierre.
+- Acumulado anual con UF emitidas y brutas por separado. Ranking por totales del Excel con comparación de emisión en mensual y anual; el mensual conserva las resciliaciones ya descontadas en su fuente.
 - Semáforo de mora (verde bajo 20%, amarillo desde 20% y rojo desde 30%) y productividad en rojo bajo 1.
-- Rankings anual y mensual por rol: vendedores contra vendedores, coordinadores contra equipos y jefes dentro de sus coordinaciones.
+- Rankings anual y mensual por rol: vendedores contra vendedores, coordinadores contra equipos y jefes dentro de sus coordinadores. Detalle jerárquico por equipo autorizado.
 - Inicio ampliado con anulaciones, cumpleaños, días sin vender y cuotas en deuda (UF a 0% y 8%) según alcance del cargo.
 - Bloqueo genérico para estados de dotación desvinculado, licencia o vacaciones.
 - Noticias, detalle de artículos y galería fotográfica navegable.
@@ -71,7 +71,9 @@ El esquema reproducible está en `supabase/migrations/`. Incluye perfiles vincul
 - Cada vendedor solo lee sus datos; coordinadores y jefes ven únicamente su jerarquía; el administrador gestiona el conjunto.
 - Los roles nunca se aceptan desde el cliente: el registro obtiene el cargo de la dotación habilitada en el servidor; las operaciones de gestión requieren un administrador.
 - Las funciones de administración usan la clave de servicio únicamente en el servidor; esa clave nunca entra a la app.
-- El ranking comparte solo nombre, equipo, posición y UF emitidas, sin RUT ni correo.
+- El ranking comparte solo nombre, equipo, posición y UF totales/emitidas, sin RUT ni correo ni otros detalles personales.
+
+Las condiciones operativas se consultan en Perfil y se aceptan al activar el acceso. Su versión y hora se registran de forma privada en el servidor. La revisión institucional, los riesgos residuales y las fuentes de datos pendientes se describen en [docs/REVISION_20261008.md](docs/REVISION_20261008.md); este apartado no constituye una certificación legal o de seguridad.
 
 El procedimiento y las columnas permitidas para las cargas están en [docs/IMPORTACION_DATOS.md](docs/IMPORTACION_DATOS.md).
 

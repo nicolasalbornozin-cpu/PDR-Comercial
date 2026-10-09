@@ -1,4 +1,5 @@
 import { internalEmail, isValidRut, normalizeRut } from '../_shared/rut.ts';
+import { CONDITIONS_VERSION } from '../_shared/platformConditions.ts';
 
 export interface RegistrationReservation {
   ok?: boolean;
@@ -27,11 +28,12 @@ export function strongPassword(value: unknown): value is string {
 export async function registerAccount(body: unknown, requestId: string, ipHash: string, dependencies: RegistrationDependencies) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return { status: 400, body: { error: 'Solicitud inválida.' } };
   const input = body as Record<string, unknown>;
-  if (Object.keys(input).some((key) => !['rut', 'password', 'confirmPassword'].includes(key))) return { status: 400, body: { error: 'Solicitud inválida.' } };
+  if (Object.keys(input).some((key) => !['rut', 'password', 'confirmPassword','acceptedConditions','conditionsVersion'].includes(key))) return { status: 400, body: { error: 'Solicitud inválida.' } };
   const rut = normalizeRut(input.rut);
   if (!isValidRut(rut)) return { status: 400, body: { error: 'Ingresa un RUT válido.' } };
   if (!strongPassword(input.password)) return { status: 400, body: { error: passwordMessage } };
   if (input.password !== input.confirmPassword) return { status: 400, body: { error: 'Las contraseñas no coinciden.' } };
+  if(input.acceptedConditions !== true || input.conditionsVersion !== CONDITIONS_VERSION) return {status:400,body:{error:'Actualiza la app, lee y acepta las condiciones de uso antes de activar tu cuenta.'}};
 
   const reservation = await dependencies.reserve(rut, requestId, ipHash);
   if (!reservation.ok || !['seller', 'coordinator', 'sales_manager', 'commercial_manager', 'sales_director', 'audiovisual'].includes(reservation.role ?? '')) {
@@ -40,7 +42,7 @@ export async function registerAccount(body: unknown, requestId: string, ipHash: 
   try {
     const created = await dependencies.create({
       email: internalEmail(rut), password: input.password, email_confirm: true,
-      app_metadata: { role: reservation.role, must_change_password: false, roster_registration: requestId, roster_rut: rut },
+      app_metadata: { role: reservation.role, must_change_password: false, roster_registration: requestId, roster_rut: rut, conditions_version:CONDITIONS_VERSION },
     });
     if (!created.ok && !created.duplicate) {
       if (created.reason === 'weak_password') {

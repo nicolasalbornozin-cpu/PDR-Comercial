@@ -159,6 +159,7 @@ export default function ProfileScreen() {
             </View>
           </View>
 
+          <AppButton icon="document-text-outline" label="Condiciones y datos personales" onPress={()=>router.push('/conditions')} variant="secondary" />
           <AppButton icon="log-out-outline" label="Cerrar sesión" loading={isLoading} onPress={handleSignOut} variant="secondary" />
           <Text style={styles.version}>PDR Comercial · Versión 1.1.2</Text>
         </View>

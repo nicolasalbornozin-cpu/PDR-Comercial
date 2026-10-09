@@ -23,8 +23,8 @@ for (const value of [password, 'Password1', 'NoSymbols1234', 'Aa1' + 'x'.repeat(
     activateExisting: async () => { activations++; return { ok: true }; },
     release: async () => { releases++; },
   };
-  const input = { rut, password, confirmPassword: password };
-  for (const invalid of [{ ...input, role: 'admin' }, { ...input, name: 'Override' }, { ...input, userId: 'existing' }, { ...input, confirmPassword: 'wrong' }, { ...input, password: 'short' }, []]) {
+  const input = { rut, password, confirmPassword: password,acceptedConditions:true,conditionsVersion:'2026-10-08-uso-v1' };
+  for (const invalid of [{ ...input, role: 'admin' }, { ...input, name: 'Override' }, { ...input, userId: 'existing' }, { ...input, confirmPassword: 'wrong' }, { ...input, password: 'short' }, {...input,acceptedConditions:false},{...input,conditionsVersion:'obsolete'}, []]) {
     assert.equal((await registerAccount(invalid, 'fixture-request', 'hash', dependencies)).status, 400);
   }
   assert.equal(reserves, 0);
@@ -35,6 +35,7 @@ for (const value of [password, 'Password1', 'NoSymbols1234', 'Aa1' + 'x'.repeat(
   assert.equal(attributes.app_metadata.role, 'seller');
   assert.equal(attributes.app_metadata.roster_registration, 'fixture-request');
   assert.equal(attributes.app_metadata.roster_rut, '185413950');
+  assert.equal(attributes.app_metadata.conditions_version,'2026-10-08-uso-v1');
   assert.equal(attributes.email_confirm, true);
   for (const blocked of [{ error: 'Error al comunicar con el servidor', status: 403 }, { error: 'Ya tiene cuenta', status: 409 }, { error: 'Demasiados intentos', status: 429 }, { ok: true, role: 'admin' }]) {
     await registerAccount(input, 'fixture', 'hash', { ...dependencies, reserve: async () => blocked });
