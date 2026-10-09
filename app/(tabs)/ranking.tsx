@@ -14,7 +14,7 @@ import { formatUF } from '@/utils/format';
 
 function rankingCopy(role?: string) {
   if (role === 'coordinator') return { title: 'Ranking de equipos', subtitle: 'Tu equipo frente a los demás equipos', position: 'POSICIÓN DE TU EQUIPO' };
-  if (role === 'sales_manager') return { title: 'Mis coordinaciones', subtitle: 'Comparación de los equipos de tu jefatura', position: 'MEJOR COORDINACIÓN' };
+  if (role === 'sales_manager') return { title: 'Mis coordinadores', subtitle: 'Comparación de los equipos de tu jefatura', position: 'MEJOR EQUIPO' };
   if (role === 'commercial_manager') return { title: 'Ranking por jefatura', subtitle: 'Comparación de las tres unidades comerciales', position: 'MEJOR JEFATURA' };
   if (role === 'sales_director') return { title: 'Ranking por jefatura', subtitle: 'Comparación de las tres unidades comerciales', position: 'MEJOR JEFATURA' };
   return { title: 'Ranking general', subtitle: 'Tu avance frente al resto de vendedores', position: 'TU POSICIÓN' };
@@ -62,7 +62,7 @@ export default function RankingScreen() {
             <View style={styles.globalItem}>
               <Ionicons color={colors.gold} name="people-outline" size={20} />
               <Text style={styles.globalValue}>{entries.length}</Text>
-              <Text style={styles.globalLabel}>{user?.role === 'seller' ? 'Vendedores' : user?.role === 'coordinator' ? 'Equipos' : user?.role === 'commercial_manager' || user?.role === 'sales_director' ? 'Jefaturas' : 'Coordinaciones'}</Text>
+              <Text style={styles.globalLabel}>{user?.role === 'seller' ? 'Vendedores' : user?.role === 'coordinator' ? 'Equipos' : user?.role === 'commercial_manager' || user?.role === 'sales_director' ? 'Jefaturas' : 'Coordinadores'}</Text>
             </View>
             <View style={styles.globalDivider} />
             <View style={styles.globalItemWide}>
@@ -74,7 +74,7 @@ export default function RankingScreen() {
 
           <RankingTabs onChange={setPeriod} value={period} />
           <Text style={styles.period}>{period === 'annual' ? 'Acumulado del año calendario 2026' : periodLabel} · ventas totales</Text>
-          {period==='monthly'?<Pressable accessibilityRole="button" accessibilityState={{expanded:showEmission}} onPress={()=>setShowEmission(current=>!current)} style={styles.emissionToggle}><Ionicons name="swap-horizontal" size={19} color={colors.primary}/><Text style={styles.emissionText}>{showEmission?'Ocultar':'Ver'} emitidas vs. sin emitir</Text></Pressable>:null}
+          <Pressable accessibilityRole="button" accessibilityState={{expanded:showEmission}} onPress={()=>setShowEmission(current=>!current)} style={styles.emissionToggle}><Ionicons name="swap-horizontal" size={19} color={colors.primary}/><Text style={styles.emissionText}>{showEmission?'Ocultar':'Ver'} emitidas vs. sin emitir</Text></Pressable>
           {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
 
           {currentEntry ? (
@@ -101,7 +101,7 @@ export default function RankingScreen() {
               <View style={styles.liveBadge}><View style={styles.liveDot} /><Text style={styles.liveText}>TOTALES</Text></View>
             </View>
             <View style={styles.list}>
-              {entries.map((entry) => <View key={entry.userId}><RankingRow entry={entry}/>{period==='monthly'&&showEmission?<View style={styles.comparison}><Text style={styles.emissionText}>Emitidas: {entry.emittedValue===undefined?'Sin dato':`${formatUF(entry.emittedValue)} UF`}</Text><Text style={styles.emissionText}>Sin emitir: {entry.notEmittedValue===undefined?'Sin dato':`${formatUF(entry.notEmittedValue)} UF`}</Text></View>:null}</View>)}
+              {entries.map((entry) => <View key={entry.userId}><RankingRow entry={entry}/>{showEmission?<View style={styles.comparison}><Text style={styles.emissionText}>Emitidas: {entry.emittedValue===undefined?'Sin dato':`${formatUF(entry.emittedValue)} UF`}</Text><Text style={styles.emissionText}>Sin emitir: {entry.notEmittedValue===undefined?'Sin dato':`${formatUF(entry.notEmittedValue)} UF`}</Text></View>:null}</View>)}
               {!entries.length ? <Text style={styles.empty}>Aún no hay un ranking total publicado para este período.</Text> : null}
             </View>
           </View>

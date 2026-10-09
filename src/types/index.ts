@@ -71,6 +71,14 @@ export const snapshotRefreshCadence: Record<SnapshotKind, string> = {
 };
 
 export interface MetricSnapshot {
+  seniorLabel?: string;
+  goalPending?: boolean;
+  nextGoalLevel?: string;
+  categorySmadCount?: number;
+  categorySmadRemaining?: number;
+  seniorSmadCount?: number;
+  seniorSmadRemaining?: number;
+  annualCancellationUf?: number;
   categoryUf?: number;
   categoryTargetUf?: number;
   categoryRemaining?: string;

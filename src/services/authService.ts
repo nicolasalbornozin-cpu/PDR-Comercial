@@ -84,12 +84,12 @@ async function getProfile(userId: string): Promise<User> {
 export const authService = {
   mode: authMode,
 
-  async register(rut: string, password: string, confirmPassword: string): Promise<void> {
+  async register(rut: string, password: string, confirmPassword: string, conditionsVersion: string): Promise<void> {
     const validation = registrationValidation(rut, password, confirmPassword);
     if (validation) throw new Error(validation);
     if (!supabase) throw new Error('Crear cuenta requiere conexión con la plataforma.');
     const { data, error } = await supabase.functions.invoke('register-account', {
-      body: { rut: normalizeRut(rut), password, confirmPassword },
+      body: { rut: normalizeRut(rut), password, confirmPassword, acceptedConditions: true, conditionsVersion },
     });
     if (error) {
       let message = 'No fue posible crear la cuenta. Inténtalo nuevamente.';

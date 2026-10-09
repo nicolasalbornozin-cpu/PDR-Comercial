@@ -2,6 +2,7 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.112.3';
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts';
 import { registerAccount } from './handler.ts';
+import { CONDITIONS_VERSION } from '../_shared/platformConditions.ts';
 
 async function findAuthUserIdByEmail(admin: ReturnType<typeof createClient>, email: string) {
   for (let page = 1; page <= 20; page += 1) {
@@ -57,7 +58,7 @@ async function activateExistingRosterUser(admin: ReturnType<typeof createClient>
   const { error: authError } = await admin.auth.admin.updateUserById(existingId, {
     password,
     email_confirm: true,
-    app_metadata: { role, must_change_password: false },
+    app_metadata: { role, must_change_password: false, conditions_version:CONDITIONS_VERSION },
   });
   if (authError) return { ok: false };
 
@@ -69,7 +70,6 @@ async function activateExistingRosterUser(admin: ReturnType<typeof createClient>
     role,
     must_change_password: false,
     join_date: identity.joinDate ?? new Date().toISOString().slice(0, 10),
-    birth_date: identity.birthDate,
     supervisor_id: supervisorId,
     sales_manager_id: salesManagerId,
     employment_status: 'active',

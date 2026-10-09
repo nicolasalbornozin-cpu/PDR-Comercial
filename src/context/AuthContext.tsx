@@ -1,4 +1,6 @@
 import { createContext, PropsWithChildren, useCallback, useEffect, useMemo, useState } from 'react';
+import { AppState } from 'react-native';
+import { supabase } from '@/services/supabase';
 
 import { authService } from '@/services/authService';
 import { clearNewsImageCache } from '@/services/newsService';
@@ -24,6 +26,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [authenticatedUser, setAuthenticatedUser] = useState<User | null>(null);
   const [previewUser, setPreviewUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const authenticatedId = authenticatedUser?.id;
 
   useEffect(() => {
     let mounted = true;
@@ -39,6 +42,28 @@ export function AuthProvider({ children }: PropsWithChildren) {
       mounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!authenticatedId || !supabase) return;
+    let active = true, checking = false;
+    const clearAccess = () => {
+      if (!active) return;
+      clearNewsImageCache(); resetNewsContentCache();
+      setPreviewUser(null); setAuthenticatedUser(null);
+    };
+    const verify = async () => {
+      if (checking || AppState.currentState !== 'active') return;
+      checking = true;
+      try {
+        const restored = await authService.restoreSession();
+        if (active) { if (!restored) clearAccess(); else setAuthenticatedUser(restored); }
+      } catch { clearAccess(); } finally { checking = false; }
+    };
+    const listener = AppState.addEventListener('change',state=>{if(state==='active')void verify();});
+    const timer = setInterval(()=>void verify(),60_000);
+    const {data:{subscription}} = supabase.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT')clearAccess();});
+    return ()=>{active=false;clearInterval(timer);listener.remove();subscription.unsubscribe();};
+  },[authenticatedId]);
 
   const signIn = useCallback(async (rut: string, password: string) => {
     setIsLoading(true);

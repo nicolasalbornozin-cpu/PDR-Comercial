@@ -2,6 +2,7 @@ import {supabase} from './supabase';
 import {searchName,SheetImport,SheetMetrics,SheetSource} from './individualSheetParser';
 import {DashboardData,EmploymentStatus,MetricSnapshot,User,UserRole} from '@/types';
 import {normalizeRut} from '@/utils/rut';
+import {categoryProgress,GoalRule,seniorPeriodLabel,seniorProgress} from '@/utils/goalProgress';
 
 export interface WorkerRow {
  id:string;rut:string|null;name:string;aliases:string[];role:Exclude<UserRole,'admin'|'audiovisual'>;active:boolean;status:EmploymentStatus;
@@ -14,8 +15,11 @@ export function remainingUfTarget(uf:number|undefined,remaining:unknown):number|
  if(uf===undefined)return undefined;
  const text=String(remaining??'');
  if(/tramo m[aá]ximo/i.test(text))return Math.max(uf,0);
- const match=/faltan\s+([\d]+(?:[.,]\d+)?)\s*UF\b/i.exec(text);
- return match?Math.max(uf,0)+Number(match[1].replace(',','.')):undefined;
+ const match=/faltan\s+([\d]+(?:[.,]\d+)*)\s*UF\b/i.exec(text);
+ if(!match)return undefined;
+ const value=match[1].includes(',')?match[1].replaceAll('.','').replace(',','.'):match[1];
+ const missing=Number(value);
+ return Number.isFinite(missing)?Math.round((Math.max(uf,0)+missing)*100)/100:undefined;
 }
 export function workerUser(w:WorkerRow):User {
  return {id:String(w.id??''),rut:String(w.rut??''),name:String(w.name??''),role:w.role,active:w.active,employmentStatus:w.status,teamId:String(w.coordinator_id??''),supervisorId:String(w.coordinator_id??''),salesManagerId:String(w.manager_id??''),avatar:'',email:'',joinDate:String(w.join_date??''),birthDate:w.birth_date?String(w.birth_date):undefined,mustChangePassword:false};
@@ -30,12 +34,15 @@ async function historicalMetrics(uploadIds:string[],workerIds:string[]):Promise<
  const rows:HistoricalMetricRow[]=[];
  for(let start=0;;start+=500){const r=await supabase.from('sheet_metrics').select('upload_id,worker_id,metrics,source_row').in('upload_id',uploadIds).in('worker_id',workerIds).order('worker_id').order('upload_id').range(start,start+499);if(r.error)throw Error(r.error.message);rows.push(...r.data as HistoricalMetricRow[]);if(r.data.length<500)return rows;}
 }
-function goalFields(source:'category'|'senior',v:SheetMetrics,seniorOpen:boolean):Partial<MetricSnapshot>{
+function goalFields(source:'category'|'senior',v:SheetMetrics,seniorOpen:boolean,rules:GoalRule[]=[]):Partial<MetricSnapshot>{
  const num=(k:string)=>typeof v[k]==='number'?v[k] as number:undefined;
- if(source==='category')return {category:String(v.level),categoryUf:num('uf'),categoryRemaining:String(v.remaining),categoryTargetUf:remainingUfTarget(num('uf'),v.remaining),estimatedPrizeClp:num('prize'),emittedUf:num('emittedUf'),notEmittedUf:num('notEmittedUf'),categoryEmittedUf:num('emittedUf'),categoryNotEmittedUf:num('notEmittedUf'),smadCount:num('smad'),smadRemaining:num('smadRemaining')};
+ if(source==='category'){
+  const progress=categoryProgress(num('uf'),num('smad'),rules);
+  return {category:String(v.level),categoryUf:num('uf'),categoryRemaining:String(v.remaining),categoryTargetUf:remainingUfTarget(num('uf'),v.remaining),estimatedPrizeClp:num('prize'),emittedUf:num('emittedUf'),notEmittedUf:num('notEmittedUf'),categoryEmittedUf:num('emittedUf'),categoryNotEmittedUf:num('notEmittedUf'),smadCount:num('smad'),smadRemaining:num('smadRemaining'),...progress,categorySmadCount:num('smad'),categorySmadRemaining:progress.smadRemaining??num('smadRemaining')};
+ }
  const requirements=String(v.potentialLevel??'');
  const missing=(label:string)=>Number(new RegExp(`FALTA(?:N)?\\s+(\\d+)\\s+${label}\\b`,'i').exec(requirements)?.[1]??0);
- return {cancellationUf:num('cancellationUf'),smadCount:num('smad'),smadRemaining:num('smadRemaining')??missing('SMAD'),restCount:num('rest'),restRemaining:missing('DESCANSO'),ssffCount:num('ssff'),ssffRemaining:missing('SSFF'),tenureMonths:num('tenureMonths'),seniorStatus:seniorOpen?'open':'closed',eligibleTotalUf:num('uf'),emittedUf:num('emittedUf'),notEmittedUf:num('notEmittedUf'),seniorEmittedUf:num('emittedUf'),seniorNotEmittedUf:num('notEmittedUf'),seniorLevel:String(v.level),seniorRemaining:String(v.remaining),seniorTargetUf:remainingUfTarget(num('uf'),v.remaining)};
+ return {cancellationUf:num('cancellationUf'),smadCount:num('smad'),smadRemaining:num('smadRemaining')??missing('SMAD'),seniorSmadCount:num('smad'),seniorSmadRemaining:num('smadRemaining')??missing('SMAD'),restCount:num('rest'),restRemaining:missing('DESCANSO'),ssffCount:num('ssff'),ssffRemaining:missing('SSFF'),tenureMonths:num('tenureMonths'),seniorStatus:seniorOpen?'open':'closed',eligibleTotalUf:num('uf'),emittedUf:num('emittedUf'),notEmittedUf:num('notEmittedUf'),seniorEmittedUf:num('emittedUf'),seniorNotEmittedUf:num('notEmittedUf'),seniorLevel:String(v.level),seniorRemaining:String(v.remaining),seniorTargetUf:remainingUfTarget(num('uf'),v.remaining),...seniorProgress(num('uf'),num('smad'),num('rest'),num('ssff'),rules)};
 }
 export const individualSheetService={
  async search(query:string,role:string):Promise<WorkerRow[]>{
@@ -84,15 +91,10 @@ export const individualSheetService={
    const id=uiId(row.worker_id),v=row.metrics;
    const m:Partial<MetricSnapshot>={};
    const num=(k:string)=>typeof v[k]==='number'?v[k] as number:undefined;
-   if(row.source==='category')Object.assign(m,goalFields('category',v,seniorOpen),{categoryLabel:row.label});
+   if(row.source==='category')Object.assign(m,goalFields('category',v,seniorOpen,row.rules),{categoryLabel:row.label});
    if(row.source==='senior'){
-    Object.assign(m,goalFields('senior',v,seniorOpen));
-    // An open-canto file cannot silently become an emitted-only final result after closing.
-    if(seniorOpen||row.senior_status==='closed'){m.eligibleTotalUf=num('uf');m.seniorLevel=String(v.level);m.seniorRemaining=String(v.remaining);m.seniorTargetUf=remainingUfTarget(num('uf'),v.remaining);}
-    else{
-     delete m.eligibleTotalUf; delete m.emittedUf; delete m.notEmittedUf; delete m.seniorEmittedUf; delete m.seniorNotEmittedUf; delete m.seniorLevel; delete m.seniorTargetUf;
-     m.seniorRemaining='Pendiente de carga de cierre con ventas emitidas';
-    }
+    // Preserve uploaded Q3 figures as historical, never silently erase or relabel them as Q4.
+    Object.assign(m,goalFields('senior',v,seniorOpen,row.rules),{seniorLabel:seniorPeriodLabel(row.period_start)});
    }
    if(row.source.startsWith('production_')){m.productivity=num('productivity');m.productionUf=num('uf');m.lastSaleDate=typeof v.lastSaleDate==='string'?v.lastSaleDate:undefined;m.daysWithoutSale=num('daysWithoutSale');m.daysWithoutSaleText=typeof v.daysWithoutSaleText==='string'?v.daysWithoutSaleText:undefined;}
    if(['titanes','rbh','msc'].includes(row.source)){m.debtInstallmentsCount=num('debtInstallments');m.debtUf08=num('debtUf08');m.debtSalesCount=num('debtSales');m.delinquentClientsCount=num('debtSales');}
@@ -108,7 +110,23 @@ export const individualSheetService={
   const currentGoalUploadIds=new Set(rows.filter(row=>row.source==='category'||row.source==='senior').map(row=>row.id));
   const previousGoalUploads=(['category','senior'] as const).flatMap(source=>{const current=rows.find(r=>r.source===source);return allUploads.filter(upload=>upload.source===source&&!currentGoalUploadIds.has(upload.id)&&(!current||upload.period_end<current.period_end)).sort((a,b)=>b.period_end.localeCompare(a.period_end)||b.published_at.localeCompare(a.published_at)).slice(0,1);});
   const historical=await historicalMetrics(previousGoalUploads.map(upload=>upload.id),[...ids]);
-  for(const row of historical){const upload=previousGoalUploads.find(item=>item.id===row.upload_id);if(!upload)continue;const id=uiId(row.worker_id);const fields=goalFields(upload.source as 'category'|'senior',row.metrics,upload.senior_status==='open');snapshots.push({id:snapshots.length,batchId:upload.id,userId:id,kind:upload.source as 'category'|'senior',periodStart:upload.period_start,periodEnd:upload.period_end,sourceName:upload.sheet_name,publishedAt:upload.published_at,...fields,...(upload.source==='category'?{categoryLabel:upload.label}:{})});}
+  for(const row of historical){const upload=previousGoalUploads.find(item=>item.id===row.upload_id);if(!upload)continue;const id=uiId(row.worker_id);const fields=goalFields(upload.source as 'category'|'senior',row.metrics,upload.senior_status==='open',upload.rules);snapshots.push({id:snapshots.length,batchId:upload.id,userId:id,kind:upload.source as 'category'|'senior',periodStart:upload.period_start,periodEnd:upload.period_end,sourceName:upload.sheet_name,publishedAt:upload.published_at,...fields,...(upload.source==='category'?{categoryLabel:upload.label}:{seniorLabel:seniorPeriodLabel(upload.period_start)})});}
+  // Explicit campaign rollover requested by the administrator. These are display placeholders,
+  // not fabricated database imports. The first new upload replaces them automatically.
+  for(const w of workers.filter(w=>w.role==='seller')){
+   const id=uiId(w.id);
+   for(const kind of ['category','senior'] as const){
+    const current=rows.find(r=>r.worker_id===w.id&&r.source===kind);
+    const cutoff=kind==='category'?'2026-09-24':'2026-10-05';
+    if(current&&current.period_end>cutoff)continue;
+    const fields:Partial<MetricSnapshot>=kind==='category'
+      ?{categoryLabel:'Catego · Septiembre–Octubre',category:'Sin categoría',categoryUf:0,emittedUf:0,notEmittedUf:0,smadCount:0,smadRemaining:undefined,categoryEmittedUf:0,categoryNotEmittedUf:0,categorySmadCount:0,categorySmadRemaining:undefined,categoryTargetUf:undefined,categoryRemaining:'Pendiente de cargar el nuevo período y sus tramos'}
+      :{seniorLabel:'Senior · cuarto trimestre 2026',seniorLevel:'Sin carga vigente',eligibleTotalUf:undefined,seniorEmittedUf:undefined,seniorNotEmittedUf:undefined,seniorSmadCount:undefined,seniorSmadRemaining:undefined,seniorTargetUf:undefined,seniorRemaining:'Pendiente de cargar el cuarto trimestre y sus condiciones'};
+    const marker=kind==='category'?'2026-09-25':'2026-10-06';
+    snapshots.push({id:snapshots.length,batchId:`pending-${kind}`,userId:id,kind,periodStart:marker,periodEnd:marker,sourceName:'Sin carga vigente',publishedAt:marker,goalPending:true,...fields});
+    latest[id]={...latest[id],...fields};
+   }
+  }
   if(self&&Object.keys(annualTotal).length&&supabase){const ranking=await supabase.rpc('individual_sheet_ranking',{p_period:'annual',p_target:self.id});if(ranking.error)throw Error(ranking.error.message);const own=ranking.data?.find((entry:{userId:string})=>entry.userId===self.id);if(own)latest[user.id]={...latest[user.id],rankingPosition:own.position};}
   return {profiles:workers.map(w=>({...workerUser(w),id:uiId(w.id),supervisorId:uiId(w.coordinator_id),salesManagerId:uiId(w.manager_id)})),snapshots,latestByUser:latest,annualEmittedUfByUser:annual,monthlyEmittedUfByUser:monthly,annualTotalUfByUser:annualTotal,monthlyTotalUfByUser:monthlyTotal,periodLabel:rows.find(r=>r.source==='ranking_monthly')?.label??'Cargas independientes',seniorOpen};
  }
