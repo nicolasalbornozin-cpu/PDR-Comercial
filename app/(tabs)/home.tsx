@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ImageBackground, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { AppHeader } from '@/components/AppHeader';
 import { GoalCard } from '@/components/GoalCard';
@@ -64,6 +64,7 @@ function ScopeCard({ title, subtitle, sellers, data, monthlyTarget, onPress }: {
 }
 
 export default function HomeScreen() {
+  const compactSales = useWindowDimensions().width < 480;
   const router = useRouter();
   const { isPreviewing, user } = useAuth();
   const [loaded, setLoaded] = useState<{userId:string;data:DashboardData}|null>(null);
@@ -103,9 +104,6 @@ export default function HomeScreen() {
   const totalAnnualUf = isSeller
     ? Number(data?.annualEmittedUfByUser[user?.id ?? ''] ?? 0)
     : sellerRows.reduce((total, seller) => total + Number(data?.annualEmittedUfByUser[seller.id] ?? 0), 0);
-  const totalMonthlyUf = isSeller
-    ? Number(data?.monthlyEmittedUfByUser[user?.id ?? ''] ?? 0)
-    : sellerRows.reduce((total, seller) => total + Number(data?.monthlyEmittedUfByUser[seller.id] ?? 0), 0);
   const totalAnnualGrossUf = isSeller ? Number(data?.annualTotalUfByUser[user?.id ?? ''] ?? 0)
     : sellerRows.reduce((total,seller)=>total+Number(data?.annualTotalUfByUser[seller.id]??0),0);
   const teamDays = data ? teamDaysWithoutSale(sellerRows,data) : null;
@@ -151,8 +149,7 @@ export default function HomeScreen() {
             <View style={styles.titleIdentity}>
               <View style={styles.titleIcon}><Ionicons color={colors.secondary} name="leaf-outline" size={24} /></View>
               <View style={styles.flex}>
-              <Text style={styles.screenTitle}>{isSeller ? 'Mi avance' : user?.role === 'coordinator' ? 'Mi equipo' : isManager ? 'Mis coordinadores' : isCommercialManager ? 'Canal Santa Clara' : 'Vista general'}</Text>
-              <Text style={styles.period}>{data?.periodLabel ?? 'Cargando última actualización…'}</Text>
+              <Text style={styles.screenTitle}>Vista general</Text>
               </View>
             </View>
             {user?.role === 'admin' ? (
@@ -174,12 +171,11 @@ export default function HomeScreen() {
           <View style={styles.salesCard}>
             <Ionicons color="rgba(255,255,255,0.07)" name="leaf-outline" size={120} style={styles.leaf} />
             <Text style={styles.salesLabel}>VENTAS ACUMULADAS DEL AÑO{isCommercialManager ? ' · CANAL SANTA CLARA' : ''}</Text>
-            <View style={styles.salesSplit}>
+            <View style={[styles.salesSplit, compactSales && styles.salesStack]}>
               <View style={styles.salesHalf}><Text style={styles.salesLabel}>EMITIDO</Text><Text adjustsFontSizeToFit numberOfLines={1} style={styles.salesValue}>{formatUF(totalAnnualUf)} <Text style={styles.salesUnit}>UF</Text></Text></View>
-              <View style={styles.salesDivider}/>
+              <View style={[styles.salesDivider, compactSales && styles.salesDividerHorizontal]}/>
               <View style={styles.salesHalf}><Text style={styles.salesLabel}>BRUTO</Text><Text adjustsFontSizeToFit numberOfLines={1} style={styles.salesValue}>{formatUF(totalAnnualGrossUf)} <Text style={styles.salesUnit}>UF</Text></Text></View>
             </View>
-            <Text style={styles.updated}>Mes comercial: {formatUF(totalMonthlyUf)} UF · {data?.periodLabel ?? 'sin datos publicados'}</Text>
           </View>
 
           <View style={styles.metricsRow}>
@@ -189,16 +185,16 @@ export default function HomeScreen() {
             <MetricCard onPress={!isSeller?()=>router.push({pathname:'/team',params:{kind:'zero'}}):undefined} detail={isSeller?'días desde última venta':`${noSaleCount} personas · 1 mes sin vender`} icon="calendar-outline" label="SIN VENDER" value={isSeller?sellerDays(ownMetric):teamDays===null?'Sin fecha':`${teamDays} días`} />
           </View>
 
-          {isSeller ? <View style={styles.secondaryMetrics}><View style={styles.secondaryMetric}><View style={[styles.secondaryIcon, ownMetric?.sauceRisk !== undefined && ownMetric.sauceRisk > 30 ? styles.dangerBackground : undefined]}><Ionicons name="shield-checkmark-outline" color={ownMetric?.sauceRisk !== undefined && ownMetric.sauceRisk > 30 ? colors.danger : colors.goldText} size={20}/></View><View><Text style={styles.secondaryLabel}>Riesgo Sauce</Text><Text style={[styles.secondaryValue, ownMetric?.sauceRisk !== undefined && ownMetric.sauceRisk > 30 ? styles.dangerText : undefined]}>{ownMetric?.sauceRisk === undefined ? 'Sin dato' : `${ownMetric.sauceRisk.toFixed(1)}%`}</Text></View></View></View> : null}
+          {isSeller ? <View style={styles.secondaryMetrics}><View style={styles.secondaryMetric}><View style={[styles.secondaryIcon, ownMetric?.sauceRisk !== undefined && ownMetric.sauceRisk > 30 ? styles.dangerBackground : undefined]}><Ionicons name="shield-checkmark-outline" color={ownMetric?.sauceRisk !== undefined && ownMetric.sauceRisk > 30 ? colors.danger : colors.goldText} size={20}/></View><View style={styles.secondaryText}><Text style={styles.secondaryLabel}>Riesgo Sauce</Text><Text style={[styles.secondaryValue, ownMetric?.sauceRisk !== undefined && ownMetric.sauceRisk > 30 ? styles.dangerText : undefined]}>{ownMetric?.sauceRisk === undefined ? 'Sin dato' : `${ownMetric.sauceRisk.toFixed(1)}%`}</Text></View></View></View> : null}
           <View style={styles.secondaryMetrics}>
             <View style={styles.secondaryMetric}>
               <View style={[styles.secondaryIcon, { backgroundColor: cancellations ? '#FBECE9' : colors.softGreen }]}><Ionicons color={cancellations ? colors.danger : colors.success} name="close-circle-outline" size={19} /></View>
-              <View><Text style={styles.secondaryLabel}>Anulaciones del año</Text><Text style={[styles.secondaryValue, cancellations ? styles.dangerText : styles.successText]}>{hasAnnualCancellations?`${formatUF(cancellations)} UF`:'Pendiente de carga anual'}</Text></View>
+              <View style={styles.secondaryText}><Text style={styles.secondaryLabel}>Anulaciones del año</Text><Text style={[styles.secondaryValue, cancellations ? styles.dangerText : styles.successText]}>{hasAnnualCancellations?`${formatUF(cancellations)} UF`:'Pendiente de carga anual'}</Text></View>
             </View>
             <View style={styles.secondaryDivider} />
             <View style={styles.secondaryMetric}>
               <View style={[styles.secondaryIcon, { backgroundColor: noSaleCount >= 3 ? '#FBECE9' : colors.softGreen }]}><Ionicons color={noSaleCount >= 3 ? colors.danger : colors.success} name="calendar-outline" size={19} /></View>
-              <View><Text style={styles.secondaryLabel}>Salesforce</Text><Text style={styles.secondaryValue}>{hasSalesforce?`${salesforceRecords} registros`:'Sin datos cargados'}</Text></View>
+              <View style={styles.secondaryText}><Text style={styles.secondaryLabel}>Salesforce</Text><Text style={styles.secondaryValue}>{hasSalesforce?`${salesforceRecords} registros`:'Sin datos cargados'}</Text></View>
             </View>
           </View>
 
@@ -341,14 +337,17 @@ const styles = StyleSheet.create({
   salesLabel: { color: 'rgba(255,255,255,0.67)', fontFamily: typography.sans, fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
   salesValue: { color: colors.surface, fontFamily: typography.serif, fontSize: 40, fontWeight: '600', marginTop: spacing.md },
   salesSplit: { flexDirection: 'row',gap:spacing.md,marginTop:spacing.lg },
+  salesStack: { flexDirection: 'column' },
+  salesDividerHorizontal: { height: 1, width: '100%' },
   salesHalf: { flex:1,minWidth:0 },
   salesDivider: { width:1,backgroundColor:'rgba(255,255,255,0.2)' },
   salesUnit: { color: colors.goldOnDark, fontFamily: typography.sans, fontSize: 15, fontWeight: '800' },
   updated: { color: 'rgba(255,255,255,0.57)', fontFamily: typography.sans, fontSize: 9, marginTop: spacing.sm },
   metricsRow: { flexDirection: 'row', gap: 7 },
-  secondaryMetrics: { ...shadows.card, alignItems: 'center', backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.lg, borderWidth: 1, flexDirection: 'row', minHeight: 76, paddingHorizontal: spacing.md },
-  secondaryMetric: { alignItems: 'center', flex: 1, flexDirection: 'row', gap: spacing.sm },
-  secondaryIcon: { alignItems: 'center', borderRadius: 12, height: 38, justifyContent: 'center', width: 38 },
+  secondaryMetrics: { ...shadows.card, alignItems: 'center', backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.lg, borderWidth: 1, flexDirection: 'row', minHeight: 76, paddingVertical: spacing.md, paddingHorizontal: spacing.md },
+  secondaryText: { flex: 1, minWidth: 0 },
+  secondaryMetric: { alignItems: 'center', flex: 1, minWidth: 0, flexDirection: 'row', gap: spacing.sm },
+  secondaryIcon: { flexShrink: 0, alignItems: 'center', borderRadius: 12, height: 38, justifyContent: 'center', width: 38 },
   dangerBackground: { backgroundColor: '#FBECE9' },
   secondaryLabel: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 9 },
   secondaryValue: { color: colors.primary, fontFamily: typography.sans, fontSize: 12, fontWeight: '800', marginTop: 2 },

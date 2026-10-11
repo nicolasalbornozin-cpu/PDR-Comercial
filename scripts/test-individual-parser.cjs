@@ -49,3 +49,15 @@ const rankingOctober={SheetNames:['Ranking Octubre','Ranking Octubre emitido'],S
 parsed=parseIndividualSheet(rankingOctober,'ranking_monthly',{start:'2026-10-06',end:'2026-11-05'});
 assert.deepEqual(parsed.errors,[]);assert.equal(parsed.sheet,'Ranking Octubre');assert.equal(parsed.records[0].values.notEmittedUf,100);
 console.log('PASS: the monthly sheets can change from September to October (and other Spanish months).');
+
+const multiMonth={SheetNames:[...prepared.SheetNames,...rankingOctober.SheetNames],Sheets:{...prepared.Sheets,...rankingOctober.Sheets}};
+parsed=parseIndividualSheet(multiMonth,'ranking_monthly',{start:'2026-10-06',end:'2026-11-05'});
+assert.deepEqual(parsed.errors,[]);assert.equal(parsed.sheet,'Ranking Octubre');
+assert.ok(parseIndividualSheet(rankingOctober,'ranking_monthly',{start:'2026-09-06',end:'2026-10-05'}).errors.length);
+const {importPeriod,validDate}=require('../src/utils/importPeriod.ts');
+assert.deepEqual(importPeriod('dotacion','','','','','2026-10-11'),{label:'Actualización 2026-10-11',start:'2026-10-11',end:'2026-10-11'});
+assert.equal(importPeriod('ranking_annual','','','','2025','2026-10-11').end,'2025-12-31');
+assert.throws(()=>importPeriod('senior','','2026-02-30','2026-03-31','','2026-10-11'));
+assert.throws(()=>importPeriod('category','','2026-10-31','2026-10-01','','2026-10-11'));
+assert.equal(validDate('2028-02-29'),true);assert.equal(validDate('2026-02-29'),false);
+console.log('PASS: snapshot dates, annual year, invalid dates and correct month selection.');

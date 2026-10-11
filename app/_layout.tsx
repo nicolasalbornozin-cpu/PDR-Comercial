@@ -13,7 +13,7 @@ import { colors } from '@/theme';
 function RootNavigator() {
   const { isLoading, user } = useAuth();
   const router = useRouter();
-  const segments = useSegments();
+  const segments: readonly string[] = useSegments();
 
   useEffect(() => {
     if (Platform.OS === 'web') document.title = 'PDR Comercial';
