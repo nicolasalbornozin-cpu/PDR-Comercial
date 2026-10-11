@@ -127,7 +127,7 @@ export const individualSheetService={
     latest[id]={...latest[id],...fields};
    }
   }
-  if(self&&Object.keys(annualTotal).length&&supabase){const ranking=await supabase.rpc('individual_sheet_ranking',{p_period:'annual',p_target:self.id});if(ranking.error)throw Error(ranking.error.message);const own=ranking.data?.find((entry:{userId:string})=>entry.userId===self.id);if(own)latest[user.id]={...latest[user.id],rankingPosition:own.position};}
+  if(self&&Object.keys(annualTotal).length&&supabase){const ranking=await supabase.rpc('individual_sheet_ranking',{p_period:'annual',p_target:self.id});if(ranking.error)throw Error(ranking.error.message);const own=ranking.data?.find((entry:{isCurrentUser:boolean})=>entry.isCurrentUser);if(own)latest[user.id]={...latest[user.id],rankingPosition:own.position};}
   return {profiles:workers.map(w=>({...workerUser(w),id:uiId(w.id),supervisorId:uiId(w.coordinator_id),salesManagerId:uiId(w.manager_id)})),snapshots,latestByUser:latest,annualEmittedUfByUser:annual,monthlyEmittedUfByUser:monthly,annualTotalUfByUser:annualTotal,monthlyTotalUfByUser:monthlyTotal,periodLabel:rows.find(r=>r.source==='ranking_monthly')?.label??'Cargas independientes',seniorOpen};
  }
 };

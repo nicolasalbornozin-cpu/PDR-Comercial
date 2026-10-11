@@ -13,8 +13,8 @@ export const sheetSources = {
   rbh: { label: 'Mora RBH · Rodolfo', sheet: 'Carga RBH' },
   msc: { label: 'Mora MSC · Mauricio', sheet: 'Carga MSC' },
   sauce: { label: 'Riesgo Sauce', sheet: 'Carga Sauce' },
-  ranking_monthly: { label: 'Ranking Plataforma · anual y mensual', sheet: 'Ranking del mes + emitido' },
-  ranking_annual: { label: 'Ranking anual · ventas totales', sheet: 'BASE ANUAL' },
+  ranking_monthly: { label: 'Ranking Plataforma · mensual', sheet: 'Ranking del mes + emitido' },
+  ranking_annual: { label: 'Ranking anual · ventas totales', sheet: 'Ranking Anual Total + Ranking Anual (o BASE ANUAL)'  },
 } as const;
 export type SheetSource = keyof typeof sheetSources;
 export type SheetMetrics = Record<string, string | number>;
@@ -236,10 +236,16 @@ export function parseIndividualSheet(book: WorkBook, source: SheetSource, period
 // No client/contract column or raw worksheet is included in these records.
 function parsePreparedRanking(book: WorkBook, source: 'ranking_annual'|'ranking_monthly', period?: {start:string;end:string}): SheetImport | undefined {
   const names = book.SheetNames.map(name => ({ name, key: searchName(name) }));
+  const monthlyNames = names.filter(sheet => /^ranking (enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)$/.test(sheet.key));
+  const monthNames = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  const expectedMonth = monthNames[Number(period?.start.slice(5,7))-1];
   const total = source === 'ranking_annual'
     ? names.find(sheet => sheet.key === 'ranking anual total')
-    : names.find(sheet => /^ranking (enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)$/.test(sheet.key));
-  if (!total) return undefined;
+    : monthlyNames.find(sheet => sheet.key === `ranking ${expectedMonth}`);
+  if (!total) {
+    if (source === 'ranking_monthly' && monthlyNames.length) return {source,sheet:sheetSources[source].sheet,records:[],rules:[],warnings:[],errors:[`No existe Ranking ${expectedMonth ?? 'del mes indicado'}. Revisa el inicio del período y las hojas del Excel.`]};
+    return undefined;
+  }
   const emitted = names.find(sheet => source === 'ranking_annual' ? sheet.key === 'ranking anual' : sheet.key === `${total.key} emitido`);
   const result: SheetImport = { source, sheet: total.name, records: [], errors: [], warnings: [], rules: [] };
   if (!period || !/^\d{4}-\d{2}-\d{2}$/.test(period.start) || !/^\d{4}-\d{2}-\d{2}$/.test(period.end) || period.end < period.start) {
@@ -285,7 +291,8 @@ function parsePreparedRanking(book: WorkBook, source: 'ranking_annual'|'ranking_
 // Canto can have several UF movements for an operation (e.g. an increase).
 // They all contribute to total UF. The TRIO join never multiplies these rows.
 function parseCantoRanking(book: WorkBook, source: 'ranking_annual'|'ranking_monthly', period?: {start:string;end:string}): SheetImport {
-  const expected=source==='ranking_annual'?['BASE ANUAL']:['Septiembre Comercial 26','BASE ANUAL'];
+  const month=period?.start?new Date(`${period.start}T12:00:00Z`).toLocaleDateString('es-CL',{month:'long',timeZone:'UTC'}):'';
+  const expected=source==='ranking_annual'?['BASE ANUAL']:[`${month} Comercial ${period?.start.slice(2,4)}`,'BASE ANUAL'];
   const sheet=expected.map(name=>book.SheetNames.find(n=>searchName(n)===searchName(name))).find(Boolean);
   const result:SheetImport={source,sheet:sheet??sheetSources[source].sheet,records:[],errors:[],warnings:[],rules:[]};
   if(!sheet){result.errors.push(`Falta la base de canto «${result.sheet}».`);return result;}
