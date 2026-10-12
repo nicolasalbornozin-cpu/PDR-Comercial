@@ -8,9 +8,7 @@ export interface WorkerRow {
  id:string;rut:string|null;name:string;aliases:string[];role:Exclude<UserRole,'admin'|'audiovisual'>;active:boolean;status:EmploymentStatus;
  coordinator_id:string|null;manager_id:string|null;birth_date:string|null;join_date:string|null;
 }
-interface MetricRow {id:string;worker_id:string;source:SheetSource;metrics:SheetMetrics;label:string;period_start:string;period_end:string;published_at:string;sheet_name:string;senior_status:'open'|'closed'|null;rules:{label:string;uf:number;smad:number;prize:number}[]}
-interface UploadRow {id:string;source:SheetSource;label:string;period_start:string;period_end:string;published_at:string;sheet_name:string;senior_status:'open'|'closed'|null;rules:{label:string;uf:number;smad:number;prize:number}[]}
-interface HistoricalMetricRow {upload_id:string;worker_id:string;metrics:SheetMetrics;source_row:number}
+interface MetricRow {goal_slot?:'current'|'previous'|null;id:string;worker_id:string;source:SheetSource;metrics:SheetMetrics;label:string;period_start:string;period_end:string;published_at:string;sheet_name:string;senior_status:'open'|'closed'|null;rules:{label:string;uf:number;smad:number;prize:number}[]}
 export function remainingUfTarget(uf:number|undefined,remaining:unknown):number|undefined {
  if(uf===undefined)return undefined;
  const text=String(remaining??'');
@@ -27,12 +25,7 @@ export function workerUser(w:WorkerRow):User {
 async function allRows<T>(table:string):Promise<T[]> {
  if(!supabase)throw Error('Supabase no está configurado.');
  const rows:T[]=[];
- for(let start=0;;start+=500){let query=supabase.from(table).select('*').order(table==='current_worker_metrics'?'worker_id':'id');if(table==='current_worker_metrics')query=query.order('source');const r=await query.range(start,start+499);if(r.error)throw Error(r.error.message);rows.push(...r.data as T[]);if(r.data.length<500)return rows;}
-}
-async function historicalMetrics(uploadIds:string[],workerIds:string[]):Promise<HistoricalMetricRow[]> {
- if(!supabase||!uploadIds.length||!workerIds.length)return [];
- const rows:HistoricalMetricRow[]=[];
- for(let start=0;;start+=500){const r=await supabase.from('sheet_metrics').select('upload_id,worker_id,metrics,source_row').in('upload_id',uploadIds).in('worker_id',workerIds).order('worker_id').order('upload_id').range(start,start+499);if(r.error)throw Error(r.error.message);rows.push(...r.data as HistoricalMetricRow[]);if(r.data.length<500)return rows;}
+ for(let start=0;;start+=500){let query=supabase.from(table).select('*').order(table==='active_worker_metrics'?'worker_id':'id');if(table==='active_worker_metrics')query=query.order('source').order('id');const r=await query.range(start,start+499);if(r.error)throw Error(r.error.message);rows.push(...r.data as T[]);if(r.data.length<500)return rows;}
 }
 function goalFields(source:'category'|'senior',v:SheetMetrics,seniorOpen:boolean,rules:GoalRule[]=[]):Partial<MetricSnapshot>{
  const num=(k:string)=>typeof v[k]==='number'?v[k] as number:undefined;
@@ -49,7 +42,7 @@ export const individualSheetService={
   if(!supabase)throw Error('Conecta Supabase para ver trabajadores reales.');
   const r=await supabase.rpc('search_commercial_workers',{p_query:query,p_role:role});if(r.error)throw Error(r.error.message);return r.data??[];
  },
- async publish(parsed:SheetImport,filename:string,label:string,start:string,end:string,status?:'open'|'closed'){
+ async publish(parsed:SheetImport,filename:string,label:string,start:string,end:string,status?:'open'|'closed',goalSlot?:'current'|'previous'){
   if(!supabase)throw Error('Supabase no está configurado.');
   if(parsed.errors.length)throw Error('Corrige los errores del archivo antes de publicar.');
   if(!/^\d{4}-\d{2}-\d{2}$/.test(start)||!/^\d{4}-\d{2}-\d{2}$/.test(end)||end<start)throw Error('Revisa las fechas del período.');
@@ -59,9 +52,12 @@ export const individualSheetService={
    if(r.error)throw Error(r.error.message);return {id:r.data as string,published:records.length,skipped:[] as string[]};
   }
   const workers=await allRows<WorkerRow>('commercial_workers');
+  const byRut=new Map<string,WorkerRow[]>(),byName=new Map<string,WorkerRow[]>();
+  const add=(map:Map<string,WorkerRow[]>,key:string,w:WorkerRow)=>map.set(key,[...(map.get(key)??[]),w]);
+  for(const w of workers){if(w.rut)add(byRut,w.rut,w);for(const name of new Set([w.name,...(w.aliases??[])].map(searchName)))add(byName,w.role+':'+name,w);}
   const skipped:string[]=[];
   const records=parsed.records.flatMap(row=>{
-   const found=workers.filter(w=>row.rut?w.rut===row.rut:w.role===row.role&&[w.name,...(w.aliases??[])].some(n=>searchName(n)===searchName(row.name)));
+   const found=(row.rut?byRut.get(row.rut):byName.get(row.role+':'+searchName(row.name)))??[];
    if(found.length===0&&parsed.source==='sauce'){skipped.push(row.name);return [];}
    if(found.length!==1)throw Error(`No hay una identidad única en dotación para ${row.name}. Revisa su RUT o nombre antes de cargar.`);
    return [{worker_id:found[0].id,metrics:row.values,source_row:row.row}];
@@ -72,11 +68,11 @@ export const individualSheetService={
   const manager=workers.find(w=>w.role==='sales_manager'&&w.rut===debtManagerRut[parsed.source]);
   if(manager){const included=new Set(records.map(r=>r.worker_id));for(const w of workers){if(w.role==='seller'&&w.active&&w.status==='active'&&w.manager_id===manager.id&&!included.has(w.id))records.push({worker_id:w.id,source_row:1,metrics:{debtSales:0,debtUf:0,debtInstallments:0,debtUf08:0,debtSales08:0}});}}
   if(!records.length)throw Error('No hay trabajadores de esta hoja en la dotación de la plataforma.');
-  const r=await supabase.rpc('publish_individual_sheet',{p_upload:{source:parsed.source,filename,sheet_name:parsed.sheet,label,period_start:start,period_end:end,senior_status:parsed.source==='senior'?status:null,rules:parsed.rules},p_records:records});
+  const r=await supabase.rpc('publish_individual_sheet',{p_upload:{source:parsed.source,filename,sheet_name:parsed.sheet,label,period_start:start,period_end:end,goal_slot:goalSlot,senior_status:parsed.source==='senior'?status:null,rules:parsed.rules},p_records:records});
   if(r.error)throw Error(r.error.message);return {id:r.data as string,published:records.length,skipped};
  },
  async dashboard(user:User):Promise<DashboardData>{
-  const [allWorkers,allMetrics,allUploads]=await Promise.all([allRows<WorkerRow>('commercial_workers'),allRows<MetricRow>('current_worker_metrics'),allRows<UploadRow>('sheet_uploads')]);
+  const [allWorkers,allMetrics]=await Promise.all([allRows<WorkerRow>('commercial_workers'),allRows<MetricRow>('active_worker_metrics')]);
   const self=allWorkers.find(w=>w.id===user.id||w.rut===normalizeRut(user.rut));
   if(user.role!=='admin'&&(!self||!self.active||self.status!=='active'))throw Error('Error 444');
   const workers=allWorkers.filter(w=>w.active&&w.status==='active'&&(user.role==='admin'||self?.role==='commercial_manager'||self?.role==='sales_director'||w.id===self?.id||self?.role==='coordinator'&&w.coordinator_id===self.id||self?.role==='sales_manager'&&w.manager_id===self.id));
@@ -85,7 +81,7 @@ export const individualSheetService={
   const uiId=(id:string|null)=>id===self?.id?user.id:id??'';
   const rows=allMetrics.filter(m=>ids.has(m.worker_id));
   const latest:DashboardData['latestByUser']={},annual:Record<string,number>={},monthly:Record<string,number>={},annualTotal:Record<string,number>={},monthlyTotal:Record<string,number>={},snapshots:MetricSnapshot[]=[];
-  const senior=rows.find(m=>m.source==='senior');
+  const senior=rows.find(m=>m.source==='senior'&&m.goal_slot==='current');
   const seniorOpen=Boolean(senior&&senior.senior_status==='open'&&new Date().toLocaleDateString('en-CA',{timeZone:'America/Santiago'})<=senior.period_end);
   for(const [index,row]of rows.entries()){
    const id=uiId(row.worker_id),v=row.metrics;
@@ -94,36 +90,31 @@ export const individualSheetService={
    if(row.source==='category')Object.assign(m,goalFields('category',v,seniorOpen,row.rules),{categoryLabel:row.label});
    if(row.source==='senior'){
     // Preserve uploaded Q3 figures as historical, never silently erase or relabel them as Q4.
-    Object.assign(m,goalFields('senior',v,seniorOpen,row.rules),{seniorLabel:seniorPeriodLabel(row.period_start)});
+    Object.assign(m,goalFields('senior',v,row.goal_slot==='previous'?row.senior_status==='open':seniorOpen,row.rules),{seniorLabel:seniorPeriodLabel(row.period_start)});
    }
    if(row.source.startsWith('production_')){m.productivity=num('productivity');m.productionUf=num('uf');m.lastSaleDate=typeof v.lastSaleDate==='string'?v.lastSaleDate:undefined;m.daysWithoutSale=num('daysWithoutSale');m.daysWithoutSaleText=typeof v.daysWithoutSaleText==='string'?v.daysWithoutSaleText:undefined;}
    if(['titanes','rbh','msc'].includes(row.source)){m.debtInstallmentsCount=num('debtInstallments');m.debtUf08=num('debtUf08');m.debtSalesCount=num('debtSales');m.delinquentClientsCount=num('debtSales');}
    if(row.source==='sauce')m.sauceRisk=num('risk');
    if(row.source==='ranking_annual'){annual[id]=num('emittedUf')??0;if(num('totalUf')!==undefined)annualTotal[id]=num('totalUf')!;m.rankingPosition=num('position');}
    if(row.source==='ranking_monthly'){monthly[id]=num('emittedUf')??0;if(num('totalUf')!==undefined)monthlyTotal[id]=num('totalUf')!;m.businessCount=num('businesses');}
-   const snap:MetricSnapshot={id:index,batchId:row.id,userId:id,kind:row.source==='category'?'category':row.source==='senior'?'senior':row.source==='sauce'?'sauce':row.source.startsWith('ranking_')?'ranking':'commercial',periodStart:row.period_start,periodEnd:row.period_end,sourceName:row.sheet_name,publishedAt:row.published_at,...m};
+   const snap:MetricSnapshot={goalSlot:row.goal_slot??undefined,id:index,batchId:row.id,userId:id,kind:row.source==='category'?'category':row.source==='senior'?'senior':row.source==='sauce'?'sauce':row.source.startsWith('ranking_')?'ranking':'commercial',periodStart:row.period_start,periodEnd:row.period_end,sourceName:row.sheet_name,publishedAt:row.published_at,...m};
    snapshots.push(snap);
+   if(row.goal_slot==='previous')continue;
    const merged={...latest[id],...Object.fromEntries(Object.entries(m).filter(([,value])=>value!==undefined))};
    if(['titanes','rbh','msc'].includes(row.source))for(const key of ['debtInstallmentsCount','debtUf08','debtSalesCount','delinquentClientsCount'] as const){if(m[key]!==undefined)merged[key]=(latest[id]?.[key]??0)+m[key]!;}
    latest[id]=merged;
   }
-  const currentGoalUploadIds=new Set(rows.filter(row=>row.source==='category'||row.source==='senior').map(row=>row.id));
-  const previousGoalUploads=(['category','senior'] as const).flatMap(source=>{const current=rows.find(r=>r.source===source);return allUploads.filter(upload=>upload.source===source&&!currentGoalUploadIds.has(upload.id)&&(!current||upload.period_end<current.period_end)).sort((a,b)=>b.period_end.localeCompare(a.period_end)||b.published_at.localeCompare(a.published_at)).slice(0,1);});
-  const historical=await historicalMetrics(previousGoalUploads.map(upload=>upload.id),[...ids]);
-  for(const row of historical){const upload=previousGoalUploads.find(item=>item.id===row.upload_id);if(!upload)continue;const id=uiId(row.worker_id);const fields=goalFields(upload.source as 'category'|'senior',row.metrics,upload.senior_status==='open',upload.rules);snapshots.push({id:snapshots.length,batchId:upload.id,userId:id,kind:upload.source as 'category'|'senior',periodStart:upload.period_start,periodEnd:upload.period_end,sourceName:upload.sheet_name,publishedAt:upload.published_at,...fields,...(upload.source==='category'?{categoryLabel:upload.label}:{seniorLabel:seniorPeriodLabel(upload.period_start)})});}
-  // Explicit campaign rollover requested by the administrator. These are display placeholders,
-  // not fabricated database imports. The first new upload replaces them automatically.
+  // Only the two explicitly selected goal slots are queried, never the archive.
+  const currentGoals=new Set(rows.filter(r=>r.goal_slot==='current').map(r=>r.worker_id+':'+r.source));
   for(const w of workers.filter(w=>w.role==='seller')){
    const id=uiId(w.id);
    for(const kind of ['category','senior'] as const){
-    const current=rows.find(r=>r.worker_id===w.id&&r.source===kind);
-    const cutoff=kind==='category'?'2026-09-24':'2026-10-05';
-    if(current&&current.period_end>cutoff)continue;
+    if(currentGoals.has(w.id+':'+kind))continue;
     const fields:Partial<MetricSnapshot>=kind==='category'
-      ?{categoryLabel:'Catego · Septiembre–Octubre',category:'Sin categoría',categoryUf:0,emittedUf:0,notEmittedUf:0,smadCount:0,smadRemaining:undefined,categoryEmittedUf:0,categoryNotEmittedUf:0,categorySmadCount:0,categorySmadRemaining:undefined,categoryTargetUf:undefined,categoryRemaining:'Pendiente de cargar el nuevo período y sus tramos'}
-      :{seniorLabel:'Senior · cuarto trimestre 2026',seniorLevel:'Sin carga vigente',eligibleTotalUf:undefined,seniorEmittedUf:undefined,seniorNotEmittedUf:undefined,seniorSmadCount:undefined,seniorSmadRemaining:undefined,seniorTargetUf:undefined,seniorRemaining:'Pendiente de cargar el cuarto trimestre y sus condiciones'};
-    const marker=kind==='category'?'2026-09-25':'2026-10-06';
-    snapshots.push({id:snapshots.length,batchId:`pending-${kind}`,userId:id,kind,periodStart:marker,periodEnd:marker,sourceName:'Sin carga vigente',publishedAt:marker,goalPending:true,...fields});
+      ?{categoryLabel:'Catego vigente',category:'Sin categoría',categoryUf:0,emittedUf:0,notEmittedUf:0,smadCount:0,smadRemaining:undefined,categoryEmittedUf:0,categoryNotEmittedUf:0,categorySmadCount:0,categorySmadRemaining:undefined,categoryTargetUf:undefined,categoryRemaining:'Pendiente de cargar el nuevo período y sus tramos'}
+      :{seniorLabel:'Senior vigente',seniorLevel:'Sin carga vigente',eligibleTotalUf:undefined,seniorEmittedUf:undefined,seniorNotEmittedUf:undefined,seniorSmadCount:undefined,seniorSmadRemaining:undefined,seniorTargetUf:undefined,seniorRemaining:'Pendiente de cargar el período vigente y sus condiciones'};
+    const marker='';
+    snapshots.push({id:snapshots.length,batchId:`pending-${kind}`,userId:id,kind,periodStart:marker,periodEnd:marker,sourceName:'Sin carga vigente',publishedAt:marker,goalPending:true,goalSlot:'current',...fields});
     latest[id]={...latest[id],...fields};
    }
   }

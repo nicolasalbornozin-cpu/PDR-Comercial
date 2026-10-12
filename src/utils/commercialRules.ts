@@ -63,9 +63,14 @@ export function hasQualifiedSenior(goal?: Partial<MetricSnapshot>): boolean {
   return hasGoalLevel(goal?.seniorLevel) && (goal?.smadCount ?? 0) >= 10 && (goal?.eligibleTotalUf ?? 0) >= 1350;
 }
 
+export function compareGoalSnapshots(a: MetricSnapshot,b: MetricSnapshot): number {
+  const priority=(s:MetricSnapshot)=>s.goalSlot==='current'?2:s.goalSlot==='previous'?0:1;
+  return priority(b)-priority(a)||b.periodEnd.localeCompare(a.periodEnd)||b.publishedAt.localeCompare(a.publishedAt);
+}
+
 export function latestGoal(data: { snapshots: MetricSnapshot[] }, userId: string, kind: 'category' | 'senior'): MetricSnapshot | undefined {
   return data.snapshots.filter(s => s.userId === userId && s.kind === kind)
-    .sort((a, b) => b.periodEnd.localeCompare(a.periodEnd) || b.publishedAt.localeCompare(a.publishedAt))[0];
+    .sort(compareGoalSnapshots)[0];
 }
 
 export function isBirthdayToday(birthDate?: string, now = new Date()): boolean {

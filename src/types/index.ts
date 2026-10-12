@@ -71,6 +71,7 @@ export const snapshotRefreshCadence: Record<SnapshotKind, string> = {
 };
 
 export interface MetricSnapshot {
+  goalSlot?: 'current' | 'previous';
   seniorLabel?: string;
   goalPending?: boolean;
   nextGoalLevel?: string;

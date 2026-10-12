@@ -1,7 +1,8 @@
+import { compareGoalSnapshots } from '@/utils/commercialRules';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { DetailHeader } from '@/components/DetailHeader';
@@ -45,23 +46,23 @@ export default function GoalsScreen() {
   const [periodView, setPeriodView] = useState<Record<GoalKind, GoalVersion>>({ senior: 'current', category: 'current' });
   const data = loaded?.userId === user?.id ? loaded?.data ?? null : null;
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     if (!user) return;
     let active = true;
     snapshotService.getDashboard(user, { preview: isPreviewing }).then((result) => {
       if (active) setLoaded({userId:user.id,data:result});
     }).catch(() => undefined);
     return () => { active = false; };
-  }, [isPreviewing, user]);
+  }, [isPreviewing, user]));
 
   const selected = worker && ['coordinator','sales_manager','commercial_manager','sales_director','admin'].includes(user?.role ?? '') ? data?.profiles.find(p => p.id === worker && p.role === 'seller') : undefined;
   const targetId = worker ? selected?.id : user?.id;
   const metric = targetId && data ? data.latestByUser[targetId] : undefined;
-  const snapshotsFor = (kind: GoalKind) => targetId ? (data?.snapshots.filter((snapshot) => snapshot.userId === targetId && snapshot.kind === kind).sort((left, right) => right.periodEnd.localeCompare(left.periodEnd) || right.publishedAt.localeCompare(left.publishedAt)) ?? []) : [];
+  const snapshotsFor = (kind: GoalKind) => targetId ? (data?.snapshots.filter((snapshot) => snapshot.userId === targetId && snapshot.kind === kind).sort(compareGoalSnapshots) ?? []) : [];
   const seniorSnapshots = snapshotsFor('senior');
   const categorySnapshots = snapshotsFor('category');
-  const seniorSnapshot = periodView.senior === 'previous' && seniorSnapshots[1] ? seniorSnapshots[1] : seniorSnapshots[0];
-  const categorySnapshot = periodView.category === 'previous' && categorySnapshots[1] ? categorySnapshots[1] : categorySnapshots[0];
+  const seniorSnapshot = seniorSnapshots.some(s=>s.goalSlot) ? seniorSnapshots.find(s=>s.goalSlot===periodView.senior) : seniorSnapshots[periodView.senior==='previous'?1:0];
+  const categorySnapshot = categorySnapshots.some(s=>s.goalSlot) ? categorySnapshots.find(s=>s.goalSlot===periodView.category) : categorySnapshots[periodView.category==='previous'?1:0];
   const seniorValue = Number(metric?.eligibleTotalUf ?? metric?.quarterTotalUf ?? 0);
   const categoryValue = Number(metric?.categoryUf ?? 0);
   const categoryTarget = metric?.categoryTargetUf ?? 0;
@@ -147,7 +148,7 @@ export default function GoalsScreen() {
                 </View>
               </View>
               <Text style={styles.detailNote}>{goalRemainingUf(seniorSnapshot,'senior')!==undefined?`Faltan ${formatUF(goalRemainingUf(seniorSnapshot,'senior')!)} UF. `:''}{seniorSnapshot?.seniorRemaining ?? 'Sin detalle de tramo publicado.'}</Text>
-              {seniorSnapshot?.goalPending?<Text style={styles.emissionNote}>El cuarto trimestre todavía no tiene una carga. Los resultados del tercer trimestre están en «Pasada».</Text>:null}
+              {seniorSnapshot?.goalPending?<Text style={styles.emissionNote}>Todavía no hay una carga vigente. La carga anterior se conserva en «Anterior».</Text>:null}
             </View>
           ) : null}
 
@@ -179,7 +180,7 @@ export default function GoalsScreen() {
                 <View><Text style={styles.detailMetricLabel}>SMAD que faltan</Text><Text style={styles.smadValue}>{missingSmad(categorySnapshot, 'category') ?? 'Sin dato'}</Text></View>
               </View>
               <Text style={styles.detailNote}>{categorySnapshot?.categoryRemaining ?? 'Sin detalle de tramo publicado.'}</Text>
-              {categorySnapshot?.goalPending?<Text style={styles.emissionNote}>Septiembre–Octubre comienza en 0 por indicación del administrador. Los tramos se confirmarán con su nueva Carga Catego. Agosto–Septiembre está en «Anterior».</Text>:null}
+              {categorySnapshot?.goalPending?<Text style={styles.emissionNote}>Todavía no hay una carga vigente. Los tramos y resultados se mostrarán al publicarla; la carga anterior se conserva.</Text>:null}
               {categorySnapshot?.emittedUf === undefined ? <Text style={styles.emissionNote}>El desglose aparecerá al publicar Carga Catego con CANTO y Base TRIO dentro del mismo archivo.</Text> : null}
             </View>
           ) : null}

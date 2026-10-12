@@ -1,12 +1,12 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
 const worker=(id,role,coordinator_id,manager_id,active=true)=>({id,rut:id,name:id,aliases:[],role,coordinator_id,manager_id,active,status:active?'active':'detached'});
 const workers=[worker('seller','seller','coord','chief'),worker('other','seller','other-coord','other-chief'),worker('coord','coordinator',null,'chief'),worker('chief','sales_manager'),worker('commercial','commercial_manager'),worker('director','sales_director'),worker('inactive','seller','coord','chief',false)];
-const row=(worker_id,source,metrics)=>({id:source,worker_id,source,metrics,label:source,period_start:'2026-01-01',period_end:'2099-10-05',published_at:'2026-09-10T12:00:00Z',sheet_name:source,senior_status:'open',rules:[]});
+const row=(worker_id,source,metrics)=>({goal_slot:['category','senior'].includes(source)?'current':null,id:source,worker_id,source,metrics,label:source,period_start:'2026-01-01',period_end:'2099-10-05',published_at:'2026-09-10T12:00:00Z',sheet_name:source,senior_status:'open',rules:[]});
 const metrics=[row('seller','ranking_annual',{emittedUf:450,position:7}),row('seller','ranking_monthly',{emittedUf:20,position:2,businesses:1}),row('seller','category',{uf:500,emittedUf:320,notEmittedUf:180,level:'Bronce'}),row('seller','senior',{uf:310,emittedUf:100,notEmittedUf:210,cancellationUf:42,level:'Junior',remaining:'Faltan 100 UF',potentialLevel:'FALTAN 2 DESCANSO, FALTAN 1 SSFF'}),row('seller','sauce',{}),row('seller','production_sellers',{uf:9999,productivity:1.18}),row('other','ranking_annual',{emittedUf:500})];
 const db={from(table){return {select(){return this;},order(){return this;},async range(a,b){return {data:(table==='commercial_workers'?workers:metrics).slice(a,b+1),error:null};}};}};
 const code=ts.transpileModule(fs.readFileSync('src/services/individualSheetService.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 require.extensions['.ts']=(module,file)=>module._compile(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,file);
-const exportsObject={};vm.runInNewContext(code,{exports:exportsObject,require(name){if(name==='./supabase')return {supabase:db};if(name.includes('individualSheetParser'))return {searchName:s=>s.toLowerCase()};if(name.includes('utils/rut'))return {normalizeRut:s=>s};if(name.includes('utils/goalProgress'))return require('../src/utils/goalProgress.ts');throw Error(name);},console});
+const exportsObject={};vm.runInNewContext(code,{exports:exportsObject,require(name){if(name==='./supabase')return {supabase:db};if(name.includes('individualSheetParser'))return {searchName:s=>s.toLowerCase()};if(name.includes('utils/rut'))return {normalizeRut:s=>s};if(name.includes('utils/goalProgress'))return require('../src/utils/goalProgress.ts');throw Error(name);},console,performance});
 const service=exportsObject.individualSheetService;
 assert.equal(exportsObject.remainingUfTarget(1873.61,'FALTAN 76.39 UF PARA SUPER SENIOR MULTIPRODUCTO'),1950);
 assert.equal(exportsObject.remainingUfTarget(900,'FALTAN 50,5 UF PARA SENIOR'),950.5);
@@ -29,9 +29,17 @@ assert.equal(exportsObject.remainingUfTarget(500,'Pendiente'),undefined);
  assert.deepEqual(Array.from(director.profiles,p=>p.id).sort(),['chief','commercial','coord','director','other','seller']);
  await assert.rejects(()=>service.dashboard({id:'inactive',rut:'inactive',role:'seller'}),/Error 444/);
  metrics.find(m=>m.source==='senior').period_end='2020-10-05';
+ metrics.find(m=>m.source==='senior').goal_slot='previous';
  const closed=await service.dashboard({id:'seller',rut:'seller',role:'seller'});
- assert.equal(closed.latestByUser.seller.eligibleTotalUf,undefined);assert.match(closed.latestByUser.seller.seniorRemaining,/cuarto trimestre/);
+ assert.equal(closed.latestByUser.seller.eligibleTotalUf,undefined);assert.match(closed.latestByUser.seller.seniorRemaining,/período vigente/);
  assert.equal(closed.snapshots.find(s=>s.kind==='senior'&&!s.goalPending).eligibleTotalUf,310);
  assert.equal(closed.snapshots.find(s=>s.kind==='senior'&&s.goalPending).goalPending,true);
+ const originalWorkers=workers.splice(0),originalMetrics=metrics.splice(0);
+ for(let i=0;i<1000;i++){workers.push(worker('load-'+i,'seller','coord','chief'));metrics.push(row('load-'+i,'ranking_annual',{emittedUf:i}));}
+ const started=performance.now();
+ const results=await Promise.all(Array.from({length:50},()=>service.dashboard({id:'admin',rut:'',role:'admin'})));
+ for(const result of results){assert.equal(result.profiles.length,1000);assert.equal(Object.keys(result.annualEmittedUfByUser).length,1000);assert.equal(result.annualEmittedUfByUser['load-999'],999);}
+ console.log('PASS: 1000 synthetic sellers, paginated data, 50 concurrent local dashboard computations ('+Math.round(performance.now()-started)+' ms). Not a database/network load benchmark.');
+ workers.splice(0,workers.length,...originalWorkers);metrics.splice(0,metrics.length,...originalMetrics);
  console.log('PASS: dashboard scope, identities, annual vs monthly, historical UF separation, missing data, cancellations and Senior close.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

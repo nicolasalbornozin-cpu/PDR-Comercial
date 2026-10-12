@@ -1,3 +1,4 @@
+import { displayPersonName } from '@/utils/personName';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { UserAvatar } from '@/components/UserAvatar';
@@ -13,9 +14,9 @@ export function RankingRow({ entry }: { entry: RankingEntry }) {
       <View style={styles.positionBox}>
         <Text style={medals[entry.position] ? styles.medal : styles.position}>{medals[entry.position] ?? entry.position}</Text>
       </View>
-      <UserAvatar highlighted={entry.isCurrentUser} name={entry.name} size={46} />
+      <UserAvatar highlighted={entry.isCurrentUser} name={displayPersonName(entry.name)} size={46} />
       <View style={styles.content}>
-        <Text numberOfLines={1} style={styles.name}>{entry.name}{entry.isCurrentUser ? ' · Tú' : ''}</Text>
+        <Text numberOfLines={1} style={styles.name}>{displayPersonName(entry.name)}{entry.isCurrentUser ? ' · Tú' : ''}</Text>
         <Text numberOfLines={1} style={styles.subtitle}>{entry.subtitle}</Text>
       </View>
       <Text style={styles.value}>{formatUF(entry.value)} <Text style={styles.unit}>UF</Text></Text>

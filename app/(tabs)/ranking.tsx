@@ -1,6 +1,7 @@
+import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader } from '@/components/AppHeader';
 import { RankingRow } from '@/components/RankingRow';
@@ -29,17 +30,17 @@ export default function RankingScreen() {
   const { isPreviewing, user } = useAuth();
   const entries = useMemo(() => loaded?.userId === user?.id && loaded?.period === period ? loaded.entries : [], [loaded, period, user?.id]);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     if (!user) return;
     let active = true;
     Promise.all([
       snapshotService.getRanking(user, period, { preview: isPreviewing }),
-      snapshotService.getDashboard(user, { preview: isPreviewing }),
+      snapshotService.getRankingPeriod(user, period, { preview: isPreviewing }),
     ])
-      .then(([result, dashboard]) => { if (active) { setLoaded({userId:user.id,period,entries:result}); setPeriodLabel(dashboard.periodLabel); setError(''); } })
+      .then(([result, label]) => { if (active) { setLoaded({userId:user.id,period,entries:result}); setPeriodLabel(label); setError(''); } })
       .catch(() => { if (active) setError('Error al comunicar con el servidor'); });
     return () => { active = false; };
-  }, [isPreviewing, period, user]);
+  }, [isPreviewing, period, user]));
 
   const copy = rankingCopy(user?.role);
   const totalUf = useMemo(() => entries.reduce((total, entry) => total + entry.value, 0), [entries]);
@@ -48,8 +49,12 @@ export default function RankingScreen() {
   const gap = currentEntry && nextEntry ? Math.max(nextEntry.value - currentEntry.value, 0) : 0;
 
   return (
-    <ScreenContainer contentContainerStyle={styles.page} edges={['top', 'left', 'right']}>
-      <View style={styles.mobileFrame}>
+    <ScreenContainer scroll={false} edges={['top', 'left', 'right']}>
+      <FlatList
+        data={entries} keyExtractor={entry=>entry.userId} extraData={showEmission}
+        initialNumToRender={12} maxToRenderPerBatch={12} windowSize={7}
+        contentContainerStyle={styles.page}
+        ListHeaderComponent={      <View style={styles.mobileFrame}>
         <View style={styles.header}>
           <AppHeader />
           <Text style={styles.title}>{copy.title}</Text>
@@ -73,7 +78,7 @@ export default function RankingScreen() {
           </View>
 
           <RankingTabs onChange={setPeriod} value={period} />
-          <Text style={styles.period}>{period === 'annual' ? 'Acumulado del año calendario 2026' : periodLabel} · ventas totales</Text>
+          <Text style={styles.period}>{periodLabel} · ventas totales</Text>
           <Pressable accessibilityRole="button" accessibilityState={{expanded:showEmission}} onPress={()=>setShowEmission(current=>!current)} style={styles.emissionToggle}><Ionicons name="swap-horizontal" size={19} color={colors.primary}/><Text style={styles.emissionText}>{showEmission?'Ocultar':'Ver'} emitidas vs. sin emitir</Text></Pressable>
           {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
 
@@ -97,22 +102,22 @@ export default function RankingScreen() {
 
           <View style={styles.rankingSection}>
             <View style={styles.rankingHeading}>
-              <Text style={styles.rankingTitle}>{period === 'annual' ? 'Ranking anual 2026' : `Ranking mensual · ${periodLabel}`}</Text>
+              <Text style={styles.rankingTitle}>{`${period === 'annual' ? 'Ranking anual' : 'Ranking mensual'} · ${periodLabel}`}</Text>
               <View style={styles.liveBadge}><View style={styles.liveDot} /><Text style={styles.liveText}>TOTALES</Text></View>
-            </View>
-            <View style={styles.list}>
-              {entries.map((entry) => <View key={entry.userId}><RankingRow entry={entry}/>{showEmission?<View style={styles.comparison}><Text style={styles.emissionText}>Emitidas: {entry.emittedValue===undefined?'Sin dato':`${formatUF(entry.emittedValue)} UF`}</Text><Text style={styles.emissionText}>Sin emitir: {entry.notEmittedValue===undefined?'Sin dato':`${formatUF(entry.notEmittedValue)} UF`}</Text></View>:null}</View>)}
-              {!entries.length ? <Text style={styles.empty}>Aún no hay un ranking total publicado para este período.</Text> : null}
             </View>
           </View>
         </View>
-      </View>
+      </View>}
+        ListEmptyComponent={<Text style={styles.empty}>Aún no hay un ranking total publicado para este período.</Text>}
+        renderItem={({item:entry})=><View style={styles.rankingRow}><RankingRow entry={entry}/>{showEmission?<View style={styles.comparison}><Text style={styles.emissionText}>Emitidas: {entry.emittedValue===undefined?'Sin dato':`${formatUF(entry.emittedValue)} UF`}</Text><Text style={styles.emissionText}>Sin emitir: {entry.notEmittedValue===undefined?'Sin dato':`${formatUF(entry.notEmittedValue)} UF`}</Text></View>:null}</View>}
+      />
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
   page: { alignItems: 'center', paddingBottom: 30 },
+  rankingRow:{maxWidth:620,width:'100%',paddingHorizontal:spacing.xl,backgroundColor:colors.surface},
   mobileFrame: { maxWidth: 620, width: '100%' },
   header: { paddingHorizontal: spacing.xl, paddingTop: spacing.sm },
   title: { color: colors.primary, fontFamily: typography.serif, fontSize: 34, fontWeight: '600', marginTop: spacing.xxl },

@@ -11,6 +11,8 @@ import {colors,radii,spacing} from '@/theme';
 
 export function IndependentSheetUpload(){
  const [source,setSource]=useState<SheetSource>('category'),[parsed,setParsed]=useState<SheetImport|null>(null),[filename,setFilename]=useState('');
+ const [goalSlot,setGoalSlot]=useState<'previous'|'current'>('current');
+ const isGoal=source==='category'||source==='senior';
  const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Santiago'});
  const [year,setYear]=useState(today.slice(0,4)),[preparedPeriod,setPreparedPeriod]=useState<ReturnType<typeof importPeriod>|null>(null);
  const [label,setLabel]=useState(''),[start,setStart]=useState(''),[end,setEnd]=useState(''),[closed,setClosed]=useState(false);
@@ -18,27 +20,29 @@ export function IndependentSheetUpload(){
  async function choose(){
   if(busy)return;
   setError('');setMessage('');setParsed(null);setPreparedPeriod(null);setFilename('');setBusy(true);
+  let cachedFile:File|undefined;
   try{
    const period=importPeriod(source,label,start,end,year,today);
    const file=await DocumentPicker.getDocumentAsync({type:['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.ms-excel'],copyToCacheDirectory:true});
-   if(file.canceled)return;setBusy(true);const asset=file.assets[0];if((asset.size??0)>20*1024*1024)throw Error('El Excel excede 20 MB.');
+   if(file.canceled)return;setBusy(true);const asset=file.assets[0];
    const webFile=(asset as typeof asset & {file?:Blob}).file;
-   if((webFile?.size??0)>20*1024*1024)throw Error('El Excel excede 20 MB.');
+   if(!webFile)cachedFile=new File(asset.uri);
+   if((asset.size??webFile?.size??0)>20*1024*1024)throw Error('El Excel excede 20 MB.');
    const data=webFile?new Uint8Array(await webFile.arrayBuffer()):await new File(asset.uri).bytes();const xlsx=await import('xlsx');
    if(data.byteLength>20*1024*1024)throw Error('El Excel excede 20 MB.');
    const workbook=xlsx.read(data,{type:'array',cellNF:true});
    const result=parseIndividualSheet(workbook,source,period);
    setFilename(asset.name);setParsed(result);setPreparedPeriod(period);
 
-  }catch(e){setError(e instanceof Error?e.message:'No se pudo leer el Excel.');}finally{setBusy(false);}
+  }catch(e){setError(e instanceof Error?e.message:'No se pudo leer el Excel.');}finally{if(cachedFile?.exists){try{cachedFile.delete();}catch{/* The OS can clear an unavailable cache file. */}}setBusy(false);}
  }
  async function publish(){
   if(!parsed||!preparedPeriod||busy)return;setBusy(true);setError('');setMessage('');
   try{
    {
-    const result=await individualSheetService.publish(parsed,filename,preparedPeriod.label,preparedPeriod.start,preparedPeriod.end,closed?'closed':'open');
+    const result=await individualSheetService.publish(parsed,filename,preparedPeriod.label,preparedPeriod.start,preparedPeriod.end,closed?'closed':'open',isGoal?goalSlot:undefined);
     const omitted=result.skipped.length?` ${result.skipped.length} persona(s) sin identidad en la dotación fueron omitidas: ${result.skipped.join(', ')}.`:'';
-    setMessage(`${parsed.sheet}: ${result.published} trabajadores publicados. Las otras cargas se conservaron.${omitted}`);
+    setMessage(`${parsed.sheet}: ${result.published} trabajadores publicados. ${isGoal?'Se conservan anterior y vigente.':'Se reemplazó la carga anterior de este origen.'}${omitted}`);
    }
    setParsed(null);setPreparedPeriod(null);
   }
@@ -50,6 +54,8 @@ export function IndependentSheetUpload(){
   {source==='dotacion'?<Text style={styles.copy}>Sube la nómina completa: reemplaza la anterior. Quienes falten, estén con licencia o vacaciones no podrán ingresar (Error 444). Se mantienen Benjamín Hernández, Gabriel De Luca y Tomás Espinoza, y el acceso de administrador.</Text>:null}
   <View style={styles.choices}>{(Object.keys(sheetSources) as SheetSource[]).map(key=><Pressable disabled={busy} key={key} onPress={()=>{setSource(key);setParsed(null);setPreparedPeriod(null);setFilename('');setLabel('');setStart('');setEnd('');setError('');setMessage('');setClosed(false);}} style={[styles.chip,source===key&&styles.selected]}><Text style={{color:source===key?colors.surface:colors.primary}}>{sheetSources[key].label}</Text></Pressable>)}</View>
   <Text style={styles.sheet}>{`Hoja: ${sheetSources[source].sheet}`}</Text>
+  {isGoal?<View style={styles.choices}>{(['previous','current'] as const).map(slot=><Pressable key={slot} disabled={busy} accessibilityRole="radio" accessibilityState={{checked:goalSlot===slot}} onPress={()=>{setGoalSlot(slot);setParsed(null);setPreparedPeriod(null);setFilename('');setLabel('');setStart('');setEnd('');}} style={[styles.chip,goalSlot===slot&&styles.selected]}><Text style={{color:goalSlot===slot?colors.surface:colors.primary}}>{source==='category'?'Catego':'Senior'} {slot==='previous'?'anterior':'vigente'}</Text></Pressable>)}</View>:null}
+  {isGoal?<Text style={styles.copy}>Anterior y vigente se cargan por separado y se conservan. El período anterior debe terminar antes del vigente.</Text>:<Text style={styles.copy}>Al publicar correctamente se reemplaza solo la carga anterior de este origen.</Text>}
   {needsPeriod(source)?<>
   <FormField editable={!busy} label="Nombre del período (opcional)" icon="calendar-outline" value={label} onChangeText={v=>{setLabel(v);setParsed(null);}} placeholder="Ej.: Catego julio-agosto 2026"/>
   <FormField editable={!busy} label="Inicio del período" icon="calendar-outline" value={start} onChangeText={v=>{setStart(v);setParsed(null);}} placeholder="AAAA-MM-DD"/>

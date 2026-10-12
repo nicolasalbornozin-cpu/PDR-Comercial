@@ -333,6 +333,13 @@ function demoDashboard(): DashboardData {
 }
 
 export const snapshotService = {
+  async getRankingPeriod(user:User,period:RankingPeriod,options:SnapshotRequestOptions={}):Promise<string>{
+    if(options.preview&&user.id.startsWith('preview-'))return period==='annual'?'Año calendario 2026':'Mes de demostración';
+    if(!supabase)return 'Sin carga publicada';
+    const result=await supabase.from('sheet_uploads').select('label').eq('source','ranking_'+period).order('published_at',{ascending:false}).limit(1).maybeSingle();
+    if(result.error)throw Error(result.error.message);
+    return result.data?.label??'Sin carga publicada';
+  },
   async getDashboard(user: User, options: SnapshotRequestOptions = {}): Promise<DashboardData> {
     if (options.preview && user.id.startsWith('preview-')) return previewDashboard(user);
     if (!supabase) return demoDashboard();

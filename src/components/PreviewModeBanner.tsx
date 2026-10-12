@@ -1,3 +1,4 @@
+import { displayPersonName } from '@/utils/personName';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useSegments } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -34,7 +35,7 @@ export function PreviewModeBanner() {
         </View>
         <View style={styles.copy}>
           <Text numberOfLines={1} style={styles.eyebrow}>{String(user.id).startsWith('preview-') ? 'DATOS DE EJEMPLO' : 'VISTA DE DATOS REALES'} · {(roleLabels[user.role] ?? 'Perfil').toUpperCase()}</Text>
-          <Text numberOfLines={1} style={styles.name}>{user.name}</Text>
+          <Text numberOfLines={1} style={styles.name}>{displayPersonName(user.name,user.role)}</Text>
         </View>
         <View style={styles.returnAction}>
           <Text style={styles.returnText}>Volver a administrador</Text>
