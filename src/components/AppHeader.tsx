@@ -17,7 +17,7 @@ export function AppHeader() {
       <View style={styles.actions}>
         <IconButton badge icon="notifications-outline" label="Abrir notificaciones" onPress={() => router.push('/notifications')} />
         <Pressable accessibilityLabel="Abrir perfil" onPress={() => router.push('/(tabs)/profile')}>
-          <UserAvatar name={displayPersonName(user?.name ?? currentUser.name,user?.role ?? currentUser.role)} size={42} />
+          <UserAvatar name={displayPersonName(user ?? currentUser)} size={42} />
         </Pressable>
       </View>
     </View>

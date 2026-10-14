@@ -74,7 +74,7 @@ async function getProfile(userId: string): Promise<User> {
     }
     // Login UUID and account settings remain intact; role/status come from the authoritative roster.
     const worker = workerUser(roster.data as WorkerRow);
-    return {...user, name:worker.name, role:worker.role, employmentStatus:worker.employmentStatus, active:worker.active,
+    return {...user, name:worker.name, displayName:worker.displayName, role:worker.role, employmentStatus:worker.employmentStatus, active:worker.active,
       supervisorId:worker.supervisorId, salesManagerId:worker.salesManagerId, teamId:worker.teamId,
       joinDate:worker.joinDate, birthDate:worker.birthDate};
   }

@@ -13,8 +13,13 @@ assert.equal(exportsObject.remainingUfTarget(900,'FALTAN 50,5 UF PARA SENIOR'),9
 assert.equal(exportsObject.remainingUfTarget(2100,'TRAMO MÁXIMO'),2100);
 assert.equal(exportsObject.remainingUfTarget(500,'Pendiente'),undefined);
 (async()=>{
+ workers[0].display_name='Nombre Correcto';
  const d=await service.dashboard({id:'login-uuid',rut:'seller',role:'seller'});
  assert.equal(d.profiles.length,1);assert.equal(d.profiles[0].id,'login-uuid');
+ assert.equal(d.profiles[0].displayName,'Nombre Correcto');assert.equal(d.profiles[0].name,'seller');
+ metrics.push(row('seller','cancellations',{cancellationUf:0,lastSaleDate:'2026-10-12'}));
+ const refreshed=await service.dashboard({id:'login-uuid',rut:'seller',role:'seller'});
+ assert.equal(refreshed.latestByUser['login-uuid'].lastSaleDate,'2026-10-12');assert.equal(refreshed.latestByUser['login-uuid'].annualCancellationUf,0);metrics.pop();
  assert.equal(d.latestByUser['login-uuid'].rankingPosition,7);
  assert.equal(d.annualEmittedUfByUser['login-uuid'],450);assert.equal(d.monthlyEmittedUfByUser['login-uuid'],20);
  assert.equal(d.scopeSalesTotals.monthlyGross,20);

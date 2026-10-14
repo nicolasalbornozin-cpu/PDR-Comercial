@@ -12,6 +12,9 @@ export function canonicalCancellationRows(rows:WorkerMetricRow[]):WorkerMetricRo
   old.metrics.cancellationUf=a+b;
   const last=[old.metrics.lastSaleDate,row.metrics.lastSaleDate].filter((v):v is string=>typeof v==='string').sort().at(-1);
   if(last){old.metrics.lastSaleDate=last;delete old.metrics.daysWithoutSaleText;}
+  else if(row.metrics.daysWithoutSaleText==='Sin ventas'||!old.metrics.daysWithoutSaleText){
+   if(row.metrics.daysWithoutSaleText)old.metrics.daysWithoutSaleText=row.metrics.daysWithoutSaleText;
+  }
  }
  return [...merged.values()];
 }

@@ -6,14 +6,14 @@ import {categoryProgress,GoalRule,seniorProgress} from '@/utils/goalProgress';
 import {canonicalCancellationRows} from '@/utils/cancellationRows';
 
 export interface WorkerRow {
- id:string;rut:string|null;name:string;aliases:string[];role:Exclude<UserRole,'admin'|'audiovisual'>;active:boolean;status:EmploymentStatus;
+ id:string;rut:string|null;name:string;display_name?:string|null;aliases:string[];role:Exclude<UserRole,'admin'|'audiovisual'>;active:boolean;status:EmploymentStatus;
  coordinator_id:string|null;manager_id:string|null;birth_date:string|null;join_date:string|null;
 }
 interface MetricRow {id:string;worker_id:string;source:SheetSource;metrics:SheetMetrics;label:string;period_start:string;period_end:string;published_at:string;sheet_name:string;goal_slot?:'current'|'previous';senior_status:'open'|'closed'|null;rules:GoalRule[]}
 function workerMatcher(workers:WorkerRow[]){
  const byRut=new Map<string,WorkerRow[]>(),byName=new Map<string,WorkerRow[]>();
  const add=(map:Map<string,WorkerRow[]>,key:string,w:WorkerRow)=>map.set(key,[...(map.get(key)??[]),w]);
- for(const w of workers){if(w.rut)add(byRut,w.rut,w);for(const name of new Set([w.name,...(w.aliases??[])].map(searchName)))add(byName,w.role+':'+name,w);}
+ for(const w of workers){if(w.rut)add(byRut,w.rut,w);for(const name of new Set([w.name,w.display_name,...(w.aliases??[])].filter(Boolean).map(searchName)))add(byName,w.role+':'+name,w);}
  return (row:{rut?:string;role:string;name:string})=>(row.rut?byRut.get(row.rut):byName.get(row.role+':'+searchName(row.name)))??[];
 }
 export function remainingUfTarget(uf:number|undefined,remaining:unknown):number|undefined {
@@ -27,7 +27,7 @@ export function remainingUfTarget(uf:number|undefined,remaining:unknown):number|
  return Number.isFinite(missing)?Math.round((Math.max(uf,0)+missing)*100)/100:undefined;
 }
 export function workerUser(w:WorkerRow):User {
- return {id:String(w.id??''),rut:String(w.rut??''),name:String(w.name??''),role:w.role,active:w.active,employmentStatus:w.status,teamId:String(w.coordinator_id??''),supervisorId:String(w.coordinator_id??''),salesManagerId:String(w.manager_id??''),avatar:'',email:'',joinDate:String(w.join_date??''),birthDate:w.birth_date?String(w.birth_date):undefined,mustChangePassword:false};
+ return {id:String(w.id??''),rut:String(w.rut??''),name:String(w.name??''),displayName:w.display_name??undefined,role:w.role,active:w.active,employmentStatus:w.status,teamId:String(w.coordinator_id??''),supervisorId:String(w.coordinator_id??''),salesManagerId:String(w.manager_id??''),avatar:'',email:'',joinDate:String(w.join_date??''),birthDate:w.birth_date?String(w.birth_date):undefined,mustChangePassword:false};
 }
 async function allRows<T>(table:string):Promise<T[]> {
  if(!supabase)throw Error('Supabase no está configurado.');

@@ -22,6 +22,7 @@ export const roleLabels: Record<UserRole, string> = {
 export interface User {
   id: string;
   name: string;
+  displayName?: string;
   email: string;
   rut: string;
   role: UserRole;
@@ -145,6 +146,7 @@ export interface MetricSnapshot {
 export interface VisibleProfile {
   id: string;
   name: string;
+  displayName?: string;
   role: UserRole;
   avatar: string;
   teamId: string;
@@ -233,6 +235,7 @@ export interface Competition {
 export interface RankingEntry {
   userId: string;
   name: string;
+  displayName?: string;
   avatar: string;
   value: number;
   emittedValue?: number;

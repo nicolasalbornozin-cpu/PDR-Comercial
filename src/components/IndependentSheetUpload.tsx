@@ -59,10 +59,11 @@ export function IndependentSheetUpload(){
  const errors=parsed.flatMap(p=>p.errors);
  return <View style={styles.card}>
   <Text style={styles.title}>Actualizar datos</Text>
-  <Text style={styles.copy}>Elige el destino. Catego y Senior se cargan por separado en vigente o anterior, sin escribir fechas. Sus nombres se pueden editar con el lápiz. Dotación es la única fuente para nombres, equipos y accesos.</Text>
+  <Text style={styles.copy}>Elige el destino. Catego y Senior se cargan por separado en vigente o anterior, sin escribir fechas. Sus nombres se pueden editar con el lápiz. Dotación define equipos y accesos; las correcciones de nombres por RUT se conservan.</Text>
   <View style={styles.choices}>{choices.map((choice,index)=><Pressable accessibilityRole="button" accessibilityState={{selected:selection===index}} disabled={busy} key={choice.source+choice.slot} onPress={()=>{setSelection(index);setParsed([]);setFilename('');setError('');setMessage('');}} style={[styles.chip,selection===index&&styles.selected]}><Text style={{color:selection===index?colors.surface:colors.primary}}>{choice.title}</Text></Pressable>)}</View>
   <Text style={styles.sheet}>{source==='ranking_monthly'?'Ranking Plataforma: anual total, anual emitido, mensual, mensual emitido y anulaciones':source==='production_sellers'?'Hojas: produccion vendedores y produccion coordinadores':`Hoja: ${sheetSources[source].sheet}`}</Text>
   {source==='dotacion'?<Text style={styles.copy}>Nómina completa: los ausentes, con licencia o vacaciones no podrán ingresar (Error 444). Se conservan las tres excepciones autorizadas y el administrador.</Text>:null}
+  {source==='ranking_monthly'?<Text style={styles.copy}>En «anulaciones», Ejecutivo y Última venta se leen por separado de las UF anuladas. La app calcula los días sin vender desde esa fecha.</Text>:null}
   <AppButton label={filename||'Seleccionar Excel'} icon="document-attach-outline" variant="secondary" onPress={choose} disabled={busy}/>
   {parsed.map(p=><View style={styles.validation} key={p.source}><Text style={styles.sheet}>{p.sheet}: {p.records.length} trabajadores · {p.errors.length} errores</Text>{[...p.errors.slice(0,5),...p.warnings.slice(0,3)].map((t,i)=><Text style={styles.copy} key={i}>{t}</Text>)}</View>)}
   {error?<Text accessibilityRole="alert" style={{color:colors.danger}}>{error}</Text>:null}

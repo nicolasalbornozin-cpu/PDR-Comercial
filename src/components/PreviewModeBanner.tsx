@@ -35,7 +35,7 @@ export function PreviewModeBanner() {
         </View>
         <View style={styles.copy}>
           <Text numberOfLines={1} style={styles.eyebrow}>{String(user.id).startsWith('preview-') ? 'DATOS DE EJEMPLO' : 'VISTA DE DATOS REALES'} · {(roleLabels[user.role] ?? 'Perfil').toUpperCase()}</Text>
-          <Text numberOfLines={1} style={styles.name}>{displayPersonName(user.name,user.role)}</Text>
+          <Text numberOfLines={1} style={styles.name}>{displayPersonName(user)}</Text>
         </View>
         <View style={styles.returnAction}>
           <Text style={styles.returnText}>Volver a administrador</Text>

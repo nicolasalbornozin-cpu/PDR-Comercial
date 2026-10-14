@@ -73,7 +73,7 @@ export default function GoalsScreen() {
   const validLevel = (level?:string) => Boolean(level && !/^(no|sin|pendiente|en carrera)/i.test(level));
   const completed = Number(validLevel(metric?.category)) + Number(validLevel(metric?.seniorLevel));
   const available = Number(metric?.categoryUf !== undefined) + Number(metric?.eligibleTotalUf !== undefined);
-  const firstName = displayPersonName(selected?.name ?? user?.name ?? '', selected?.role ?? user?.role);
+  const firstName = displayPersonName(selected ?? user ?? '');
   if (worker && data && !selected) return <ScreenContainer><DetailHeader title="Detalle del ejecutivo" /><Text>No tienes acceso a este ejecutivo.</Text></ScreenContainer>;
   return (
     <ScreenContainer contentContainerStyle={styles.page} edges={['top', 'left', 'right', 'bottom']}>

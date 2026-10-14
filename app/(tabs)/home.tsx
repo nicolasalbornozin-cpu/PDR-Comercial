@@ -33,7 +33,7 @@ function averageMetric(workers: VisibleProfile[], latest: DashboardData['latestB
 
 function sellerDays(metric?: Partial<MetricSnapshot>): string {
   const days = daysWithoutSale(metric?.lastSaleDate);
-  return days === null ? 'Sin fecha' : `${days} día${days === 1 ? '' : 's'}`;
+  return days === null ? metric?.daysWithoutSaleText === 'Sin ventas' ? 'Sin ventas' : 'Sin fecha' : `${days} día${days === 1 ? '' : 's'}`;
 }
 
 function ScopeCard({ title, subtitle, sellers, data, monthlyTarget, onPress,scopeId }: { title: string; subtitle: string; sellers: VisibleProfile[]; data: DashboardData; monthlyTarget: number; onPress: () => void;scopeId?:string }) {
@@ -103,7 +103,7 @@ export default function HomeScreen() {
   const isSeller = user?.role === 'seller';
   const isManager = user?.role === 'sales_manager';
   const isCommercialManager = user?.role === 'commercial_manager' || user?.role === 'sales_director';
-  const firstName = user ? displayPersonName(user.name, user.role) : '';
+  const firstName = user ? displayPersonName(user) : '';
   const totalAnnualUf = isSeller
     ? Number(data?.annualEmittedUfByUser[user?.id ?? ''] ?? 0)
     : sellerRows.reduce((total, seller) => total + Number(data?.annualEmittedUfByUser[seller.id] ?? 0), 0);
@@ -171,7 +171,7 @@ export default function HomeScreen() {
           {birthdayProfiles.length ? (
             <View style={styles.birthdayCard}>
               <Ionicons color={colors.goldText} name="gift-outline" size={23} />
-              <Text style={styles.birthdayText}>{birthdayProfiles.some((profile) => profile.id === user?.id) ? `¡Feliz cumpleaños, ${firstName}!` : `¡Feliz cumpleaños, ${birthdayProfiles.map((profile) => displayPersonName(profile.name, profile.role)).join(', ')}!`}</Text>
+              <Text style={styles.birthdayText}>{birthdayProfiles.some((profile) => profile.id === user?.id) ? `¡Feliz cumpleaños, ${firstName}!` : `¡Feliz cumpleaños, ${birthdayProfiles.map((profile) => displayPersonName(profile)).join(', ')}!`}</Text>
             </View>
           ) : null}
           {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
@@ -246,14 +246,14 @@ export default function HomeScreen() {
                     const bestManagement = Math.max(...salesManagers.map((item) => data.salesTotalsByScope?.[item.id]?.monthlyGross??sellerRows.filter((seller) => seller.salesManagerId === item.id).reduce((total, seller) => total + Number(data.monthlyTotalUfByUser[seller.id] ?? 0), 0)), managerMonthly);
                     return (
                       <View key={manager.id} style={styles.unitCard}>
-                        <ScopeCard scopeId={manager.id} onPress={() => router.push({pathname:'/team',params:{kind:'productivity',scope:manager.id}})} data={data} monthlyTarget={bestManagement} sellers={managerSellers} subtitle={`${managerCoordinators.length} coordinadores · ${managerSellers.length} vendedores habilitados`} title={displayPersonName(manager.name,manager.role)} />
+                        <ScopeCard scopeId={manager.id} onPress={() => router.push({pathname:'/team',params:{kind:'productivity',scope:manager.id}})} data={data} monthlyTarget={bestManagement} sellers={managerSellers} subtitle={`${managerCoordinators.length} coordinadores · ${managerSellers.length} vendedores habilitados`} title={displayPersonName(manager)} />
                         <View style={styles.unitTeams}>
                           {managerCoordinators.map((coordinator) => {
                             const coordinatedSellers = managerSellers.filter((seller) => seller.supervisorId === coordinator.id);
                             return (
                               <Pressable accessibilityRole="button" onPress={() => router.push({pathname:'/team',params:{kind:'productivity',scope:coordinator.id}})} key={coordinator.id} style={styles.unitTeamRow}>
                                 <View style={styles.flex}>
-                                  <Text numberOfLines={1} style={styles.workerName}>{displayPersonName(coordinator.name,coordinator.role)}</Text>
+                                  <Text numberOfLines={1} style={styles.workerName}>{displayPersonName(coordinator)}</Text>
                                   <Text style={styles.workerMeta}>{coordinatedSellers.length} vendedores · Mora {sumMetric(coordinatedSellers, data.latestByUser, 'debtSalesCount')} contratos</Text>
                                 </View>
                                 <Text style={styles.workerUf}>{formatUF(data.salesTotalsByScope?.[coordinator.id]?.monthlyGross??coordinatedSellers.reduce((total, seller) => total + Number(data.monthlyTotalUfByUser[seller.id] ?? 0), 0))} UF mes</Text>
@@ -273,7 +273,7 @@ export default function HomeScreen() {
                     const coordinatedSellers = sellerRows.filter((seller) => seller.supervisorId === coordinator.id);
                     const coordinatorMonthly = data.salesTotalsByScope?.[coordinator.id]?.monthlyGross??coordinatedSellers.reduce((total, seller) => total + Number(data.monthlyTotalUfByUser[seller.id] ?? 0), 0);
                     const bestCoordination = Math.max(...coordinators.map((item) => data.salesTotalsByScope?.[item.id]?.monthlyGross??sellerRows.filter((seller) => seller.supervisorId === item.id).reduce((total, seller) => total + Number(data.monthlyTotalUfByUser[seller.id] ?? 0), 0)), coordinatorMonthly);
-                    return <ScopeCard scopeId={coordinator.id} onPress={() => router.push({pathname:'/team',params:{kind:'productivity',scope:coordinator.id}})} data={data} key={coordinator.id} monthlyTarget={bestCoordination} sellers={coordinatedSellers} subtitle={`${coordinatedSellers.length} vendedores habilitados`} title={displayPersonName(coordinator.name,coordinator.role)} />;
+                    return <ScopeCard scopeId={coordinator.id} onPress={() => router.push({pathname:'/team',params:{kind:'productivity',scope:coordinator.id}})} data={data} key={coordinator.id} monthlyTarget={bestCoordination} sellers={coordinatedSellers} subtitle={`${coordinatedSellers.length} vendedores habilitados`} title={displayPersonName(coordinator)} />;
                   })}
                   {!coordinators.length ? <Text style={styles.empty}>Aún no hay coordinadores asignados.</Text> : null}
                 </View>
@@ -287,7 +287,7 @@ export default function HomeScreen() {
                       <View key={seller.id} style={[styles.workerRow, index < sellerRows.length - 1 && styles.workerBorder]}>
                         <View style={styles.position}><Text style={styles.positionText}>{index + 1}</Text></View>
                         <View style={styles.workerMain}>
-                          <Text numberOfLines={1} style={styles.workerName}>{displayPersonName(seller.name,seller.role)}</Text>
+                          <Text numberOfLines={1} style={styles.workerName}>{displayPersonName(seller)}</Text>
                           <Text style={styles.workerMeta}>Mes {formatUF(data.monthlyEmittedUfByUser[seller.id] ?? 0)} UF · Sin vender: {sellerDays(metric)}</Text>
                           <Text style={styles.workerMeta}>Anul. {metric?.cancellationUf === undefined ? '—' : `${formatUF(metric.cancellationUf)} UF`} · Mora <Text style={{ color: metric?.debtSalesCount === undefined ? colors.textMuted : mora > 0 ? colors.danger : colors.success }}>{metric?.debtSalesCount === undefined ? '—' : `${mora} contratos`}</Text> · Prod. <Text style={metric?.productivity === undefined ? styles.workerMeta : sellerProductivity < 1 ? styles.dangerText : styles.successText}>{metric?.productivity === undefined ? '—' : sellerProductivity.toFixed(2)}</Text></Text>
                           <View style={styles.workerProgress}><ProgressBar color={mora > 0 ? colors.danger : colors.secondary} height={5} progress={bestMonthlyUf ? Number(data.monthlyEmittedUfByUser[seller.id] ?? 0) / bestMonthlyUf : 0} /></View>

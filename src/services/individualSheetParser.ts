@@ -290,8 +290,9 @@ function parsePreparedRanking(book: WorkBook, source: 'ranking_annual'|'ranking_
   return result;
 }
 
-// Two worker-only outputs in this sheet: annual cancelled UF (G:H/D/K) and
-// last sale by worker (M:N). Never retain contract, customer or free-text data.
+// Independent worker-only tables share a worksheet, not a business meaning.
+// D/G:H/K measures annual annulments. M:N supplies last-sale dates, including
+// workers with NO annulments. Never infer a last sale from a cancelled contract.
 export function parseRankingCancellations(book:WorkBook,period?:{start:string;end:string}):SheetImport{
  const sheet=book.SheetNames.find(n=>searchName(n)==='anulaciones');
  const result:SheetImport={source:'cancellations',sheet:sheet??'anulaciones',records:[],errors:[],warnings:[],rules:[]};
@@ -333,12 +334,12 @@ export function parseRankingCancellations(book:WorkBook,period?:{start:string;en
   const record=workers.get(id)??{rut:sellerRut,name:seller,role:'seller' as const,row:r,values:{cancellationUf:0}};
   const value=ws['N'+r];const lastSale=value?.t==='e'?undefined:date(value?.v);
   if(lastSale&&lastSale>String(record.values.lastSaleDate??''))record.values.lastSaleDate=lastSale;
-  if(!lastSale&&!record.values.lastSaleDate)record.values.daysWithoutSaleText='Sin fecha de última venta';
+  if(!lastSale&&!record.values.lastSaleDate)record.values.daysWithoutSaleText=searchName(value?.v)==='sin ventas'?'Sin ventas':'Sin fecha de última venta';
   workers.set(id,record);
  }
  result.records=[...workers.values()];
  if(!result.records.length)result.errors.push('Anulaciones no contiene resultados de trabajadores.');
- result.warnings.push('Anulaciones del año: UF (D) por mes de envío para remuneraciones (K), como la fórmula del ranking. Última venta: M:N. Solo se envían totales por trabajador y su fecha de última venta.');
+ result.warnings.push('Dos tablas independientes: anulaciones anuales (D/G:H/K) y última venta (M:N). Los días sin vender se calculan con la fecha actual de Chile; «Sin ventas» se conserva sin inventar una fecha. Solo se publican datos agregados de trabajadores.');
  return result;
 }
 

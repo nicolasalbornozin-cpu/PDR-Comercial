@@ -66,7 +66,7 @@ function CompactGoal({ icon, label, value, progress }: { icon: IconName; label: 
 
 export function SellerHomeDashboard({ data, error, metric, user }: SellerHomeDashboardProps) {
   const router = useRouter();
-  const firstName = displayPersonName(user.name, user.role) || 'Vendedor';
+  const firstName = displayPersonName(user) || 'Vendedor';
   const soldUf = metricUf(metric);
   const eligibleUf = metric?.eligibleTotalUf ?? metric?.quarterTotalUf ?? soldUf;
   const category = metric?.category ?? 'Sin categoría publicada';

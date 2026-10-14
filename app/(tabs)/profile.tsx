@@ -78,8 +78,8 @@ export default function ProfileScreen() {
         <View style={styles.content}>
           <View style={styles.identityCard}>
             <View style={styles.leaf}><Ionicons color="rgba(39,114,80,0.1)" name="leaf-outline" size={112} /></View>
-            <UserAvatar highlighted name={displayPersonName(profile.name,profile.role)} size={88} />
-            <Text style={styles.name}>{displayPersonName(profile.name,profile.role)}</Text>
+            <UserAvatar highlighted name={displayPersonName(profile)} size={88} />
+            <Text style={styles.name}>{displayPersonName(profile)}</Text>
             <View style={styles.roleBadge}><Ionicons color={colors.gold} name="ribbon-outline" size={15} /><Text style={styles.roleText}>{roleLabels[profile.role]}</Text></View>
             <Text style={styles.employee}>En la plataforma desde {profileStartYear && !Number.isNaN(profileStartYear) ? profileStartYear : '—'}</Text>
           </View>
@@ -131,15 +131,15 @@ export default function ProfileScreen() {
                       <Text style={styles.previewPickerLabel}>Selecciona el trabajador</Text>
                       {previewCandidates.map((account) => (
                         <Pressable
-                          accessibilityLabel={`Ver la aplicación como ${displayPersonName(account.name,account.role)}, ${roleLabels[account.role]}`}
+                          accessibilityLabel={`Ver la aplicación como ${displayPersonName(account)}, ${roleLabels[account.role]}`}
                           accessibilityRole="button"
                           key={account.id}
                           onPress={() => openPreview(workerUser(account))}
                           style={({ pressed }) => [styles.previewAccount, pressed && styles.previewPressed]}
                         >
-                          <UserAvatar name={displayPersonName(account.name,account.role)} size={38} />
+                          <UserAvatar name={displayPersonName(account)} size={38} />
                           <View style={styles.previewAccountCopy}>
-                            <Text numberOfLines={1} style={styles.previewAccountName}>{displayPersonName(account.name,account.role)}</Text>
+                            <Text numberOfLines={1} style={styles.previewAccountName}>{displayPersonName(account)}</Text>
                             <Text style={styles.previewAccountRole}>{roleLabels[account.role]} · datos reales publicados</Text>
                           </View>
                           <Ionicons color={colors.primary} name="eye-outline" size={19} />
