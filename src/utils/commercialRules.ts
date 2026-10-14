@@ -44,6 +44,7 @@ export function daysWithoutSale(lastSaleDate?: string, now = new Date()): number
 // Explicit "Sin ventas" in Production also includes workers with no first sale.
 export function hasMonthWithoutSale(metric?: Partial<MetricSnapshot>, now = new Date()): boolean {
   if (!metric) return false;
+  if(metric.monthlyTotalUf!==undefined)return metric.monthlyTotalUf===0;
   if (!metric.lastSaleDate) return metric.daysWithoutSaleText?.toLowerCase().includes('sin ventas') ?? false;
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
   const part = (type: string) => Number(parts.find(p => p.type === type)?.value);
@@ -65,7 +66,7 @@ export function hasQualifiedSenior(goal?: Partial<MetricSnapshot>): boolean {
 
 export function latestGoal(data: { snapshots: MetricSnapshot[] }, userId: string, kind: 'category' | 'senior'): MetricSnapshot | undefined {
   return data.snapshots.filter(s => s.userId === userId && s.kind === kind)
-    .sort((a, b) => b.periodEnd.localeCompare(a.periodEnd) || b.publishedAt.localeCompare(a.publishedAt))[0];
+    .sort((a, b) => Number(b.goalSlot!=='previous')-Number(a.goalSlot!=='previous') || b.periodEnd.localeCompare(a.periodEnd) || b.publishedAt.localeCompare(a.publishedAt))[0];
 }
 
 export function isBirthdayToday(birthDate?: string, now = new Date()): boolean {

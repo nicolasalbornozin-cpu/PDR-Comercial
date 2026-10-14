@@ -28,15 +28,18 @@ export function parseDotacion(book:WorkBook):SheetImport{
   if(!ws[`A${r}`]?.v&&!ws[`B${r}`]?.v)continue;
   const get=(c:string)=>{const cell=ws[`${c}${r}`];if(cell?.t==='e'||cell?.f&&cell.v===undefined)result.errors.push(`${sheet}!${c}${r}: dato sin resultado válido.`);return cell?.v;};
   const rut=normalizeRut(get('A')),person=name(get('B')),rawRole=key(get('J')),rawStatus=key(get('E'));
-  const role:SheetRecord['role']|undefined=rawRole.includes('coordinador')?'coordinator':rawRole.includes('vendedor')?'seller':rawRole.includes('jefe')?'sales_manager':undefined;
+  // The EN CURSO section has an empty cost-center cell but explicit valid parents.
+  const inCourse=rawRole==='en curso'||!rawRole&&isValidRut(normalizeRut(ws[`F${r}`]?.v))&&normalizeRut(ws[`F${r}`]?.v)!==rut&&isValidRut(normalizeRut(ws[`H${r}`]?.v));
+  const role:SheetRecord['role']|undefined=rawRole.includes('coordinador')?'coordinator':rawRole.includes('vendedor')||inCourse?'seller':rawRole.includes('jefe')?'sales_manager':undefined;
   if(!isValidRut(rut)||!person||!role){result.errors.push(`${sheet}, fila ${r}: RUT, nombre o cargo inválido.`);continue;}
   if(seen.has(rut)){result.errors.push(`${sheet}, fila ${r}: RUT repetido.`);continue;}seen.add(rut);
-  const status=rawStatus==='vigente'?'active':rawStatus.includes('licen')?'medical_leave':rawStatus.includes('vacacion')?'vacation':['finiquitado','desvinculado','no vigente'].includes(rawStatus)?'detached':undefined;
+  const status=rawStatus==='vigente'?'active':rawStatus==='curso'?'course':rawStatus.includes('licen')?'medical_leave':rawStatus.includes('vacacion')?'vacation':['finiquitado','desvinculado','no vigente'].includes(rawStatus)?'detached':undefined;
   if(!status){result.errors.push(`${sheet}, fila ${r}: estado no reconocido; no se habilitará por defecto.`);continue;}
   const values:SheetMetrics={status};
   for(const [col,field]of [['C','birth_date'],['D','join_date']]as const){const raw=get(col),parsed=date(raw);if(parsed)values[field]=parsed;else if(raw!==undefined&&raw!==null&&raw!=='')result.errors.push(`${sheet}!${col}${r}: fecha inválida.`);}
   for(const [col,field]of [['F','coordinator_rut'],['H','manager_rut']]as const){const raw=get(col);if(raw!==undefined&&raw!==null&&raw!==''){const parent=normalizeRut(raw);if(!isValidRut(parent))result.errors.push(`${sheet}!${col}${r}: RUT de jefatura inválido.`);else values[field]=parent;}}
   result.records.push({rut,name:person,role,values,row:r});
+  if(inCourse)result.warnings.push(`Fila ${r}: CURSO sin acceso; sus ventas cuentan únicamente en rankings y totales autorizados.`);
  }
  if(!result.records.length)result.errors.push('La dotación está vacía: no se puede publicar.');
  const byRut=new Map(result.records.map(r=>[r.rut,r]));

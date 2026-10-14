@@ -12,10 +12,10 @@ export function scopedSellers(data: DashboardData, user: User, scope?: VisiblePr
 }
 
 export function teamDaysWithoutSale(sellers: VisibleProfile[], data: Pick<DashboardData,'latestByUser'>, now = new Date()) {
-  // The team's last sale is the most recent seller sale, not their average or maximum inactivity.
-  const dates = sellers.map(p => data.latestByUser[p.id]?.lastSaleDate)
-    .filter((date): date is string => Boolean(date && /^\d{4}-\d{2}-\d{2}$/.test(date))).sort();
-  return daysWithoutSale(dates.at(-1), now);
+  // Sum inactivity only for workers with zero monthly UF. Unknown dates stay unknown.
+  const inactive=sellers.filter(p=>hasMonthWithoutSale(data.latestByUser[p.id],now));
+  const days=inactive.map(p=>daysWithoutSale(data.latestByUser[p.id]?.lastSaleDate,now));
+  return days.some(d=>d===null)?null:days.reduce<number>((sum,d)=>sum+(d??0),0);
 }
 
 export function teamSummary(sellers: VisibleProfile[], data: DashboardData) {

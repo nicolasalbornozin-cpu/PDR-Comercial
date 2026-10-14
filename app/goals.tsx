@@ -6,13 +6,15 @@ import { ActivityIndicator, ImageBackground, Pressable, StyleSheet, Text, View }
 
 import { DetailHeader } from '@/components/DetailHeader';
 import { GoalCard } from '@/components/GoalCard';
+import {PlatformLabelEditor} from '@/components/PlatformLabelEditor';
+import {useCommercialRefresh} from '@/hooks/useCommercialRefresh';
 import { ScreenContainer } from '@/components/ScreenContainer';
 import { images } from '@/data/assets';
 import { useAuth } from '@/hooks/useAuth';
 import { snapshotService } from '@/services/snapshotService';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
 import { DashboardData, MetricSnapshot } from '@/types';
-import { formatDate, formatUF, getProgress } from '@/utils/format';
+import { formatUF, getProgress } from '@/utils/format';
 import { displayPersonName } from '@/utils/personName';
 import { goalRemainingUf } from '@/utils/goalProgress';
 
@@ -40,6 +42,8 @@ function categoryPeriodName(snapshot: Partial<MetricSnapshot> | undefined, fallb
 export default function GoalsScreen() {
   const { focus, worker } = useLocalSearchParams<{ focus?: string; worker?: string }>();
   const { isPreviewing, user } = useAuth();
+  const revision=useCommercialRefresh();
+  const [labelRevision,setLabelRevision]=useState(0);
   const [loaded, setLoaded] = useState<{userId:string;data:DashboardData}|null>(null);
   const [openGoal, setOpenGoal] = useState<GoalKind | null>(focus === 'category' || focus === 'senior' ? focus : null);
   const [periodView, setPeriodView] = useState<Record<GoalKind, GoalVersion>>({ senior: 'current', category: 'current' });
@@ -52,12 +56,12 @@ export default function GoalsScreen() {
       if (active) setLoaded({userId:user.id,data:result});
     }).catch(() => undefined);
     return () => { active = false; };
-  }, [isPreviewing, user]);
+  }, [isPreviewing, user,revision,labelRevision]);
 
   const selected = worker && ['coordinator','sales_manager','commercial_manager','sales_director','admin'].includes(user?.role ?? '') ? data?.profiles.find(p => p.id === worker && p.role === 'seller') : undefined;
   const targetId = worker ? selected?.id : user?.id;
   const metric = targetId && data ? data.latestByUser[targetId] : undefined;
-  const snapshotsFor = (kind: GoalKind) => targetId ? (data?.snapshots.filter((snapshot) => snapshot.userId === targetId && snapshot.kind === kind).sort((left, right) => right.periodEnd.localeCompare(left.periodEnd) || right.publishedAt.localeCompare(left.publishedAt)) ?? []) : [];
+  const snapshotsFor = (kind: GoalKind) => targetId ? (data?.snapshots.filter((snapshot) => snapshot.userId === targetId && snapshot.kind === kind).sort((left, right) => Number(right.goalSlot!=='previous')-Number(left.goalSlot!=='previous') || right.periodEnd.localeCompare(left.periodEnd) || right.publishedAt.localeCompare(left.publishedAt)) ?? []) : [];
   const seniorSnapshots = snapshotsFor('senior');
   const categorySnapshots = snapshotsFor('category');
   const seniorSnapshot = periodView.senior === 'previous' && seniorSnapshots[1] ? seniorSnapshots[1] : seniorSnapshots[0];
@@ -118,6 +122,7 @@ export default function GoalsScreen() {
                 <View style={styles.detailHeading}>
                   <Text style={styles.detailEyebrow}>PERÍODO SENIOR</Text>
                   <Text style={styles.detailTitle}>{seniorSnapshot?.seniorLabel ?? 'Sin período publicado'}</Text>
+                  <PlatformLabelEditor id={`senior_${periodView.senior}`} label={seniorSnapshot?.seniorLabel??'Senior'} onSaved={()=>setLabelRevision(value=>value+1)}/>
                 </View>
               </View>
               <View style={styles.ufComparison}>
@@ -127,7 +132,7 @@ export default function GoalsScreen() {
               </View>
               <View style={styles.requirementsSection}>
                 {selected ? <Text style={styles.detailNote}>Tiene {seniorSnapshot?.smadCount ?? '—'} SMAD · {seniorSnapshot?.restCount ?? '—'} descansos · {seniorSnapshot?.ssffCount ?? '—'} SSFF</Text> : null}
-                <Text style={styles.detailNote}>Tramo cumplido: {seniorSnapshot?.seniorLevel ?? 'Sin dato'}</Text>
+                <Text style={styles.detailNote}>Tramo informado: {seniorSnapshot?.seniorLevel ?? 'Sin dato'}</Text>
                 <Text style={styles.requirementsTitle}>{seniorSnapshot?.nextGoalLevel ? `Solo falta para ${seniorSnapshot.nextGoalLevel}` : 'Solo falta para cumplir'}</Text>
                 <View style={styles.requirementsGrid}>
                   {([
@@ -142,12 +147,12 @@ export default function GoalsScreen() {
                     </View>
                   ))}
                   {!seniorSnapshot?.goalPending && seniorSnapshot?.smadCount !== undefined && ![missingSmad(seniorSnapshot, 'senior'), seniorSnapshot?.restRemaining, seniorSnapshot?.ssffRemaining].some((value) => (value ?? 0) > 0) ? (
-                    <View style={styles.requirementsComplete}><Ionicons color={colors.success} name="checkmark-circle" size={20} /><Text style={styles.requirementsCompleteText}>Requisitos complementarios cumplidos</Text></View>
+                    <View style={styles.requirementsComplete}><Ionicons color={colors.success} name="checkmark-circle" size={20} /><Text style={styles.requirementsCompleteText}>Sin faltantes complementarios informados</Text></View>
                   ) : null}
                 </View>
               </View>
               <Text style={styles.detailNote}>{goalRemainingUf(seniorSnapshot,'senior')!==undefined?`Faltan ${formatUF(goalRemainingUf(seniorSnapshot,'senior')!)} UF. `:''}{seniorSnapshot?.seniorRemaining ?? 'Sin detalle de tramo publicado.'}</Text>
-              {seniorSnapshot?.goalPending?<Text style={styles.emissionNote}>El cuarto trimestre todavía no tiene una carga. Los resultados del tercer trimestre están en «Pasada».</Text>:null}
+              {seniorSnapshot?.goalPending?<Text style={styles.emissionNote}>Todavía no hay una carga vigente. Puedes consultar el período anterior en «Pasada».</Text>:null}
             </View>
           ) : null}
 
@@ -165,7 +170,7 @@ export default function GoalsScreen() {
                 <View style={styles.detailHeading}>
                   <Text style={styles.detailEyebrow}>PERÍODO DE CATEGO</Text>
                   <Text style={styles.detailTitle}>{categorySnapshot?.categoryLabel ?? 'Período de Catego sin publicar'}</Text>
-                  {categorySnapshot && !categorySnapshot.goalPending ? <Text style={styles.detailDates}>{formatDate(categorySnapshot.periodStart)} al {formatDate(categorySnapshot.periodEnd)}</Text> : null}
+                  <PlatformLabelEditor id={`category_${periodView.category}`} label={categorySnapshot?.categoryLabel??'Catego'} onSaved={()=>setLabelRevision(value=>value+1)}/>
                 </View>
               </View>
               <View style={styles.ufComparison}>
@@ -179,8 +184,8 @@ export default function GoalsScreen() {
                 <View><Text style={styles.detailMetricLabel}>SMAD que faltan</Text><Text style={styles.smadValue}>{missingSmad(categorySnapshot, 'category') ?? 'Sin dato'}</Text></View>
               </View>
               <Text style={styles.detailNote}>{categorySnapshot?.categoryRemaining ?? 'Sin detalle de tramo publicado.'}</Text>
-              {categorySnapshot?.goalPending?<Text style={styles.emissionNote}>Septiembre–Octubre comienza en 0 por indicación del administrador. Los tramos se confirmarán con su nueva Carga Catego. Agosto–Septiembre está en «Anterior».</Text>:null}
-              {categorySnapshot?.emittedUf === undefined ? <Text style={styles.emissionNote}>El desglose aparecerá al publicar Carga Catego con CANTO y Base TRIO dentro del mismo archivo.</Text> : null}
+              {categorySnapshot?.goalPending?<Text style={styles.emissionNote}>Todavía no hay una carga vigente. Puedes consultar el período anterior en «Anterior».</Text>:null}
+              {categorySnapshot?.emittedUf === undefined ? <Text style={styles.emissionNote}>El desglose requiere que Carga Catego incluya el total emitido por ejecutivo.</Text> : null}
             </View>
           ) : null}
 

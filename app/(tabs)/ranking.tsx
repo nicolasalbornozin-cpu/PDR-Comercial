@@ -4,6 +4,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader } from '@/components/AppHeader';
 import { RankingRow } from '@/components/RankingRow';
+import {PlatformLabelEditor} from '@/components/PlatformLabelEditor';
+import {useCommercialRefresh} from '@/hooks/useCommercialRefresh';
 import { RankingTabs } from '@/components/RankingTabs';
 import { ScreenContainer } from '@/components/ScreenContainer';
 import { useAuth } from '@/hooks/useAuth';
@@ -24,6 +26,9 @@ export default function RankingScreen() {
   const [period, setPeriod] = useState<RankingPeriod>('annual');
   const [loaded, setLoaded] = useState<{userId:string;period:RankingPeriod;entries:RankingEntry[]}|null>(null);
   const [periodLabel, setPeriodLabel] = useState('Mes comercial vigente');
+  const [executiveCount,setExecutiveCount]=useState<number>();
+  const [channelTotals,setChannelTotals]=useState<{annualGross:number;monthlyGross:number}>();
+  const revision=useCommercialRefresh();
   const [error, setError] = useState('');
   const [showEmission, setShowEmission] = useState(false);
   const { isPreviewing, user } = useAuth();
@@ -36,13 +41,13 @@ export default function RankingScreen() {
       snapshotService.getRanking(user, period, { preview: isPreviewing }),
       snapshotService.getDashboard(user, { preview: isPreviewing }),
     ])
-      .then(([result, dashboard]) => { if (active) { setLoaded({userId:user.id,period,entries:result}); setPeriodLabel(dashboard.periodLabel); setError(''); } })
+      .then(([result, dashboard]) => { if (active) { setLoaded({userId:user.id,period,entries:result}); setPeriodLabel(dashboard.periodLabel);setExecutiveCount(dashboard.rankingExecutiveCount);setChannelTotals(dashboard.scopeSalesTotals); setError(''); } })
       .catch(() => { if (active) setError('Error al comunicar con el servidor'); });
     return () => { active = false; };
-  }, [isPreviewing, period, user]);
+  }, [isPreviewing, period, user,revision]);
 
   const copy = rankingCopy(user?.role);
-  const totalUf = useMemo(() => entries.reduce((total, entry) => total + entry.value, 0), [entries]);
+  const totalUf = useMemo(() => user?.role==='admin'&&channelTotals?period==='annual'?channelTotals.annualGross:channelTotals.monthlyGross:entries.reduce((total, entry) => total + entry.value, 0), [entries,user?.role,channelTotals,period]);
   const currentEntry = entries.find((entry) => entry.isCurrentUser) ?? (user?.role === 'sales_manager' || user?.role === 'commercial_manager' || user?.role === 'sales_director' ? entries[0] : undefined);
   const nextEntry = currentEntry ? entries.find((entry) => entry.position === currentEntry.position - 1) : undefined;
   const gap = currentEntry && nextEntry ? Math.max(nextEntry.value - currentEntry.value, 0) : 0;
@@ -61,8 +66,8 @@ export default function RankingScreen() {
             <Ionicons color="rgba(255,255,255,0.08)" name="trophy-outline" size={118} style={styles.pattern} />
             <View style={styles.globalItem}>
               <Ionicons color={colors.gold} name="people-outline" size={20} />
-              <Text style={styles.globalValue}>{entries.length}</Text>
-              <Text style={styles.globalLabel}>{user?.role === 'seller' ? 'Vendedores' : user?.role === 'coordinator' ? 'Equipos' : user?.role === 'commercial_manager' || user?.role === 'sales_director' ? 'Jefaturas' : 'Coordinadores'}</Text>
+              <Text style={styles.globalValue}>{executiveCount??'—'}</Text>
+              <Text style={styles.globalLabel}>Ejecutivos en ranking</Text>
             </View>
             <View style={styles.globalDivider} />
             <View style={styles.globalItemWide}>
@@ -74,6 +79,7 @@ export default function RankingScreen() {
 
           <RankingTabs onChange={setPeriod} value={period} />
           <Text style={styles.period}>{period === 'annual' ? 'Acumulado del año calendario 2026' : periodLabel} · ventas totales</Text>
+          <Text style={styles.period}>Los totales de equipos incluyen las ventas de CURSO, sin habilitar acceso.</Text>
           <Pressable accessibilityRole="button" accessibilityState={{expanded:showEmission}} onPress={()=>setShowEmission(current=>!current)} style={styles.emissionToggle}><Ionicons name="swap-horizontal" size={19} color={colors.primary}/><Text style={styles.emissionText}>{showEmission?'Ocultar':'Ver'} emitidas vs. sin emitir</Text></Pressable>
           {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
 
@@ -98,6 +104,7 @@ export default function RankingScreen() {
           <View style={styles.rankingSection}>
             <View style={styles.rankingHeading}>
               <Text style={styles.rankingTitle}>{period === 'annual' ? 'Ranking anual 2026' : `Ranking mensual · ${periodLabel}`}</Text>
+              {period==='monthly'?<PlatformLabelEditor id="monthly_ranking" label={periodLabel} onSaved={setPeriodLabel}/>:null}
               <View style={styles.liveBadge}><View style={styles.liveDot} /><Text style={styles.liveText}>TOTALES</Text></View>
             </View>
             <View style={styles.list}>

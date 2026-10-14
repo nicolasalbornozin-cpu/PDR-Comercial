@@ -14,6 +14,8 @@ for(const name of ['Dotacion','DOTACION VIG']){
  assert.deepEqual(Object.keys(r.records[2].values).sort(),['birth_date','coordinator_rut','join_date','manager_rut','status']);
 }
 rows[3][4]='VACACIONES';assert.equal(parseIndividualSheet(book('Dotacion'),'dotacion').records[2].values.status,'vacation');
+rows[3][4]='CURSO';rows[3][9]='';const course=parseIndividualSheet(book('Dotacion'),'dotacion');
+assert.deepEqual(course.errors,[]);assert.equal(course.records[2].values.status,'course');assert.equal(course.records[2].role,'seller');assert.ok(course.warnings.some(w=>w.includes('CURSO sin acceso')));rows[3][9]='VENDEDORES TRADICIONALES';
 rows[3][4]='DESCONOCIDO';assert.ok(parseIndividualSheet(book('Dotacion'),'dotacion').errors.length);
 rows[3][4]='VIGENTE';rows.push(rows[3]);assert.ok(parseIndividualSheet(book('Dotacion'),'dotacion').errors.some(e=>e.includes('repetido')));rows.pop();
 rows.splice(2,1);assert.ok(parseIndividualSheet(book('Dotacion'),'dotacion').errors.some(e=>e.includes('coordinador ausente')));

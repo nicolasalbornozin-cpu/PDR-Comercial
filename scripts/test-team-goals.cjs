@@ -11,8 +11,10 @@ assert.equal(scopedSellers(data,{id:'j1',role:'sales_manager'},{id:'j2',role:'sa
 assert.equal(scopedSellers(data,{id:'av',role:'audiovisual'}).length,0);
 assert.equal(scopedSellers(data,{id:'director',role:'sales_director'}).length,4);
 const own=scopedSellers(data,{id:'c1',role:'coordinator'});
-assert.equal(teamDaysWithoutSale(own,data,new Date('2026-10-08T16:00:00Z')),2);
-assert.equal(teamDaysWithoutSale([],data),null);
+assert.equal(teamDaysWithoutSale(own,data,new Date('2026-10-08T16:00:00Z')),33);
+assert.equal(teamDaysWithoutSale([],data),0);
+data.latestByUser.a.monthlyTotalUf=0;data.latestByUser.b.monthlyTotalUf=0;
+assert.equal(teamDaysWithoutSale(own,data,new Date('2026-10-08T16:00:00Z')),35);
 assert.equal(teamSummary(own,data).debt,5);assert.equal(teamSummary(own,data).productivity,1);
 const rules=[{label:'Oro',uf:570,smad:2,prize:120000},{label:'Bronce',uf:350,smad:1,prize:50000},{label:'Plata',uf:460,smad:2,prize:80000}];
 assert.equal(categoryProgress(900,1,rules).nextGoalLevel,'Plata');

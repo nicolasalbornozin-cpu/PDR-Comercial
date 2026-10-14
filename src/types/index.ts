@@ -1,11 +1,12 @@
 export type UserRole = 'seller' | 'coordinator' | 'sales_manager' | 'commercial_manager' | 'sales_director' | 'admin' | 'audiovisual';
-export type EmploymentStatus = 'active' | 'detached' | 'medical_leave' | 'vacation';
+export type EmploymentStatus = 'active' | 'detached' | 'medical_leave' | 'vacation' | 'course';
 
 export const employmentStatusLabels: Record<EmploymentStatus, string> = {
   active: 'Activo/a',
   detached: 'Desvinculado/a',
   medical_leave: 'Licencia',
   vacation: 'Vacaciones',
+  course: 'En curso · sin acceso',
 };
 
 export const roleLabels: Record<UserRole, string> = {
@@ -71,6 +72,8 @@ export const snapshotRefreshCadence: Record<SnapshotKind, string> = {
 };
 
 export interface MetricSnapshot {
+  goalSlot?: 'current'|'previous';
+  monthlyTotalUf?: number;
   seniorLabel?: string;
   goalPending?: boolean;
   nextGoalLevel?: string;
@@ -153,6 +156,10 @@ export interface VisibleProfile {
 }
 
 export interface DashboardData {
+  scopeSalesTotals?: {annualGross:number;annualEmitted:number;monthlyGross:number;monthlyEmitted:number};
+  salesTotalsByScope?: Record<string,{annualGross:number;annualEmitted:number;monthlyGross:number;monthlyEmitted:number}>;
+  rankingExecutiveCount?: number;
+  displayLabels?: Record<string,string>;
   profiles: VisibleProfile[];
   snapshots: MetricSnapshot[];
   latestByUser: Record<string, Partial<MetricSnapshot>>;

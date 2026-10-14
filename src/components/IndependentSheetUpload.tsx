@@ -3,65 +3,67 @@ import {Pressable,StyleSheet,Text,View} from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import {File} from 'expo-file-system';
 import {AppButton} from './Buttons';
-import {FormField} from './FormField';
-import {parseIndividualSheet,SheetImport,SheetSource,sheetSources} from '@/services/individualSheetParser';
+import {parseIndividualSheet,searchName,SheetImport,SheetSource,sheetSources} from '@/services/individualSheetParser';
 import {individualSheetService} from '@/services/individualSheetService';
+import {uploadCampaignLabel,uploadPublicationDates} from '@/utils/uploadCampaign';
 import {colors,radii,spacing} from '@/theme';
 
+const choices: {source:SheetSource;slot:'current'|'previous';title:string}[]=[
+ {source:'category',slot:'current',title:'Catego vigente'},{source:'category',slot:'previous',title:'Catego anterior'},
+ {source:'senior',slot:'current',title:'Carga Senior vigente'},{source:'senior',slot:'previous',title:'Carga Senior anterior'},
+ ...(['dotacion','production_sellers','titanes','rbh','msc','sauce','ranking_monthly'] as SheetSource[]).map(source=>({source,slot:'current' as const,title:sheetSources[source].label})),
+];
 export function IndependentSheetUpload(){
- const [source,setSource]=useState<SheetSource>('category'),[parsed,setParsed]=useState<SheetImport|null>(null),[filename,setFilename]=useState('');
- const [annualRanking,setAnnualRanking]=useState<SheetImport|null>(null);
- const [label,setLabel]=useState(''),[start,setStart]=useState(''),[end,setEnd]=useState(''),[closed,setClosed]=useState(false);
+ const [selection,setSelection]=useState(0),[parsed,setParsed]=useState<SheetImport[]>([]),[filename,setFilename]=useState('');
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
+ const {source,slot}=choices[selection];
+ const dates=uploadPublicationDates(slot);
  async function choose(){
-  setError('');setMessage('');setParsed(null);setAnnualRanking(null);
+  setError('');setMessage('');setParsed([]);
   try{
-   const file=await DocumentPicker.getDocumentAsync({type:['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.ms-excel'],copyToCacheDirectory:true});
-   if(file.canceled)return;setBusy(true);const asset=file.assets[0];if((asset.size??0)>20*1024*1024)throw Error('El Excel excede 20 MB.');
+   const picked=await DocumentPicker.getDocumentAsync({type:['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.ms-excel'],copyToCacheDirectory:true});
+   if(picked.canceled)return;setBusy(true);const asset=picked.assets[0];if((asset.size??0)>20*1024*1024)throw Error('El Excel excede 20 MB.');
    const webFile=(asset as typeof asset & {file?:Blob}).file;
    const data=webFile?new Uint8Array(await webFile.arrayBuffer()):await new File(asset.uri).bytes();const xlsx=await import('xlsx');
-   const workbook=xlsx.read(data,{type:'array',cellNF:true});
-   if(source==='ranking_monthly'&&!/^ranking plataforma(?: \(\d+\))?\.xlsx?$/i.test(asset.name.trim()))throw Error('Selecciona el archivo Ranking Plataforma.xlsx.');
-   const result=parseIndividualSheet(workbook,source,{start,end});
-   setFilename(asset.name);setParsed(result);
+   const book=xlsx.read(data,{type:'array',cellNF:true});
+   if(source==='ranking_monthly'&&!/^ranking plataforma(?: \(\d+\))?\.xlsx?$/i.test(asset.name.trim()))throw Error('Selecciona Ranking Plataforma.xlsx.');
+   const selectedNames=source==='senior'||source==='category'?book.SheetNames.filter(n=>searchName(n)===searchName(sheetSources[source].sheet)):book.SheetNames;
+   const selectedBook={...book,SheetNames:selectedNames,Sheets:Object.fromEntries(selectedNames.map(n=>[n,book.Sheets[n]]))};
+   const imports=[parseIndividualSheet(selectedBook,source,dates)];
+   if(source==='production_sellers')imports.push(parseIndividualSheet(book,'production_coordinators',dates));
    if(source==='ranking_monthly'){
-    const year=(end||start).slice(0,4);
-    setAnnualRanking(parseIndividualSheet(workbook,'ranking_annual',{start:`${year}-01-01`,end:`${year}-12-31`}));
+    const annual={start:`${dates.year}-01-01`,end:`${dates.year}-12-31`};
+    imports.push(parseIndividualSheet(book,'ranking_annual',annual),parseIndividualSheet(book,'cancellations',annual));
    }
+   setFilename(asset.name);setParsed(imports);
   }catch(e){setError(e instanceof Error?e.message:'No se pudo leer el Excel.');}finally{setBusy(false);}
  }
  async function publish(){
-  if(!parsed)return;setBusy(true);setError('');setMessage('');
+  if(!parsed.length)return;setBusy(true);setError('');setMessage('');
   try{
-   if(source==='ranking_monthly'&&annualRanking){
-    const year=(end||start).slice(0,4);
-    const monthly=await individualSheetService.publish(parsed,filename,label,start,end);
-    const annual=await individualSheetService.publish(annualRanking,filename,`Ranking anual ${year}`,`${year}-01-01`,`${year}-12-31`);
-    setMessage(`Ranking Plataforma: ${monthly.published} resultados mensuales y ${annual.published} anuales publicados.`);
+   const label=uploadCampaignLabel(filename,source,slot);
+   if(parsed.length>1){
+    const result=await individualSheetService.publishBundle(parsed.map(p=>({parsed:p,filename,label:p.source==='ranking_annual'?`Ranking anual ${dates.year}`:p.source==='cancellations'?`Anulaciones ${dates.year}`:label,start:p.source==='ranking_annual'||p.source==='cancellations'?`${dates.year}-01-01`:dates.start,end:p.source==='ranking_annual'||p.source==='cancellations'?`${dates.year}-12-31`:dates.end})));
+    setMessage(`${result.published} resultados publicados juntos.${result.skipped.length?` ${result.skipped.length} filas fuera de dotación omitidas.`:''}`);
    }else{
-    const result=await individualSheetService.publish(parsed,filename,label,start,end,closed?'closed':'open');
-    const omitted=result.skipped.length?` ${result.skipped.length} persona(s) sin identidad en la dotación fueron omitidas: ${result.skipped.join(', ')}.`:'';
-    setMessage(`${parsed.sheet}: ${result.published} trabajadores publicados. Las otras cargas se conservaron.${omitted}`);
+    const result=await individualSheetService.publish(parsed[0],filename,label,dates.start,dates.end,slot==='current'?'open':'closed',slot);
+    setMessage(`${choices[selection].title}: ${result.published} trabajadores publicados. La otra carga se conservó.${result.skipped.length?` ${result.skipped.length} filas fuera de dotación omitidas.`:''}`);
    }
-   setParsed(null);setAnnualRanking(null);
-  }
-  catch(e){setError(e instanceof Error?e.message:'No se pudo publicar.');}finally{setBusy(false);}
+   setParsed([]);setFilename('');
+  }catch(e){setError(e instanceof Error?e.message:'No se pudo publicar.');}finally{setBusy(false);}
  }
+ const errors=parsed.flatMap(p=>p.errors);
  return <View style={styles.card}>
-  <Text style={styles.title}>Actualizar por hoja</Text>
-  <Text style={styles.copy}>Selecciona el origen y su Excel. Solo se carga la hoja indicada. Dotacion controla nombres, equipos y acceso; las demás cargas no habilitan personas. Los contratos y datos de clientes no se envían.</Text>
-  {source==='dotacion'?<Text style={styles.copy}>Sube la nómina completa: reemplaza la anterior. Quienes falten, estén con licencia o vacaciones no podrán ingresar (Error 444). Se mantienen Benjamín Hernández, Gabriel De Luca y Tomás Espinoza, y el acceso de administrador.</Text>:null}
-  <View style={styles.choices}>{(Object.keys(sheetSources) as SheetSource[]).filter(key=>key!=='ranking_annual').map(key=><Pressable disabled={busy} key={key} onPress={()=>{setSource(key);setParsed(null);setAnnualRanking(null);setFilename('');setLabel('');setStart('');setEnd('');setError('');setMessage('');setClosed(false);}} style={[styles.chip,source===key&&styles.selected]}><Text style={{color:source===key?colors.surface:colors.primary}}>{sheetSources[key].label}</Text></Pressable>)}</View>
-  <Text style={styles.sheet}>{source==='ranking_monthly'?'Archivo: Ranking Plataforma.xlsx · hojas anual total, anual, mes y mes emitido':`Hoja: ${sheetSources[source].sheet}`}</Text>
-  <FormField label="Nombre del período" icon="calendar-outline" value={label} onChangeText={setLabel} placeholder="Ej.: Catego julio-agosto 2026"/>
-  <FormField label="Inicio del período" icon="calendar-outline" value={start} onChangeText={v=>{setStart(v);setParsed(null);}} placeholder="AAAA-MM-DD"/>
-  <FormField label="Cierre del período" icon="calendar-outline" value={end} onChangeText={v=>{setEnd(v);setParsed(null);}} placeholder="AAAA-MM-DD"/>
-  {source==='senior'?<Pressable accessibilityRole="checkbox" accessibilityState={{checked:closed}} onPress={()=>{setClosed(!closed);setParsed(null);}}><Text style={styles.copy}>{closed?'☑':'☐'} Cierre Senior: confirmo que esta hoja está recalculada solo con ventas emitidas.</Text></Pressable>:null}
+  <Text style={styles.title}>Actualizar datos</Text>
+  <Text style={styles.copy}>Elige el destino. Catego y Senior se cargan por separado en vigente o anterior, sin escribir fechas. Sus nombres se pueden editar con el lápiz. Dotación es la única fuente para nombres, equipos y accesos.</Text>
+  <View style={styles.choices}>{choices.map((choice,index)=><Pressable accessibilityRole="button" accessibilityState={{selected:selection===index}} disabled={busy} key={choice.source+choice.slot} onPress={()=>{setSelection(index);setParsed([]);setFilename('');setError('');setMessage('');}} style={[styles.chip,selection===index&&styles.selected]}><Text style={{color:selection===index?colors.surface:colors.primary}}>{choice.title}</Text></Pressable>)}</View>
+  <Text style={styles.sheet}>{source==='ranking_monthly'?'Ranking Plataforma: anual total, anual emitido, mensual, mensual emitido y anulaciones':source==='production_sellers'?'Hojas: produccion vendedores y produccion coordinadores':`Hoja: ${sheetSources[source].sheet}`}</Text>
+  {source==='dotacion'?<Text style={styles.copy}>Nómina completa: los ausentes, con licencia o vacaciones no podrán ingresar (Error 444). Se conservan las tres excepciones autorizadas y el administrador.</Text>:null}
   <AppButton label={filename||'Seleccionar Excel'} icon="document-attach-outline" variant="secondary" onPress={choose} disabled={busy}/>
-  {parsed?<View style={styles.validation}><Text style={styles.sheet}>{parsed.records.length}{annualRanking?` mensuales · ${annualRanking.records.length} anuales`:' trabajadores'} · {parsed.errors.length+(annualRanking?.errors.length??0)} errores</Text>{[...parsed.errors.slice(0,6),...(annualRanking?.errors.slice(0,6)??[]),...parsed.warnings.slice(0,6)].map((t,i)=><Text style={styles.copy} key={i}>{t}</Text>)}</View>:null}
+  {parsed.map(p=><View style={styles.validation} key={p.source}><Text style={styles.sheet}>{p.sheet}: {p.records.length} trabajadores · {p.errors.length} errores</Text>{[...p.errors.slice(0,5),...p.warnings.slice(0,3)].map((t,i)=><Text style={styles.copy} key={i}>{t}</Text>)}</View>)}
   {error?<Text accessibilityRole="alert" style={{color:colors.danger}}>{error}</Text>:null}
   {message?<Text accessibilityRole="alert" style={{color:colors.success}}>{message}</Text>:null}
-  <AppButton label={source==='ranking_monthly'?'Publicar ambos rankings':'Publicar esta hoja'} loading={busy} disabled={!parsed||!!parsed.errors.length||!!annualRanking?.errors.length||!label||!start||!end} onPress={publish}/>
+  <AppButton label={`Publicar ${choices[selection].title}`} loading={busy} disabled={!parsed.length||!!errors.length} onPress={publish}/>
  </View>;
 }
 const styles=StyleSheet.create({card:{backgroundColor:colors.surface,borderRadius:radii.xl,padding:spacing.xl,gap:spacing.md},title:{fontSize:23,color:colors.primary,fontWeight:'700'},copy:{fontSize:13,lineHeight:20,color:colors.textMuted},choices:{flexDirection:'row',flexWrap:'wrap',gap:8},chip:{borderRadius:18,padding:10,backgroundColor:colors.softGreen},selected:{backgroundColor:colors.primary},sheet:{color:colors.primary,fontWeight:'700'},validation:{padding:12,backgroundColor:colors.background,borderRadius:12,gap:8}});

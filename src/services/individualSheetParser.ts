@@ -6,8 +6,8 @@ import type {GoalRule} from '../utils/goalProgress';
 export const sheetSources = {
   dotacion: { label: 'Dotacion · nómina y accesos', sheet: 'Dotacion (o DOTACION VIG)' },
   category: { label: 'Catego', sheet: 'Carga Catego' },
-  production_sellers: { label: 'Producción · vendedores', sheet: 'Resumen Vendedores' },
-  production_coordinators: { label: 'Producción · coordinadores', sheet: 'Resumen Coordinadores' },
+  production_sellers: { label: 'Producción · vendedores y coordinadores', sheet: 'produccion vendedores' },
+  production_coordinators: { label: 'Producción · coordinadores', sheet: 'produccion coordinadores' },
   senior: { label: 'Senior y anulaciones', sheet: 'CARGA Senior' },
   titanes: { label: 'Mora TITANES · Manuel Olmedo', sheet: 'Carga Titanes' },
   rbh: { label: 'Mora RBH · Rodolfo', sheet: 'Carga RBH' },
@@ -15,6 +15,7 @@ export const sheetSources = {
   sauce: { label: 'Riesgo Sauce', sheet: 'Carga Sauce' },
   ranking_monthly: { label: 'Ranking Plataforma · anual y mensual', sheet: 'Ranking del mes + emitido' },
   ranking_annual: { label: 'Ranking anual · ventas totales', sheet: 'BASE ANUAL' },
+  cancellations: { label: 'Anulaciones anuales y última venta', sheet: 'anulaciones' },
 } as const;
 export type SheetSource = keyof typeof sheetSources;
 export type SheetMetrics = Record<string, string | number>;
@@ -40,11 +41,14 @@ function date(value: unknown): string | undefined {
 
 const sheetAliases: Partial<Record<SheetSource, string[]>> = {
   sauce: ['Carga Sauce', 'Carga sause', 'Ranking Sauce Riesgo'],
+  production_sellers: ['produccion vendedores','Resumen Vendedores'],
+  production_coordinators: ['produccion coordinadores','Resumen Coordinadores'],
 };
 
 // Only aggregate worker results are published; no operation or client rows are uploaded.
 export function parseIndividualSheet(book: WorkBook, source: SheetSource, period?: {start:string;end:string}): SheetImport {
   if (source === 'dotacion') return parseDotacion(book);
+  if (source === 'cancellations') return parseRankingCancellations(book,period);
   if (source === 'ranking_annual' || source === 'ranking_monthly') return parsePreparedRanking(book, source, period) ?? parseCantoRanking(book,source,period);
   const expectedSheets = sheetAliases[source] ?? [sheetSources[source].sheet];
   const sheet = expectedSheets.map(expected => book.SheetNames.find(n => searchName(n) === searchName(expected))).find(Boolean);
@@ -72,7 +76,7 @@ export function parseIndividualSheet(book: WorkBook, source: SheetSource, period
   const debt = ['titanes', 'rbh', 'msc'].includes(source);
   const debtWithoutContract=debt&&searchName(ws.B1?.v)==='fecha contrato'&&searchName(ws.D1?.v)==='valor venta uf';
   // Several source versions retain old headings while moving actual data.
-  const debtRutCol = ['L', 'M', 'N'].find(c => debt && Array.from({ length: Math.min(maxRow - 1, 12) }, (_, i) => i + 2)
+  const debtRutCol = ['K', 'L', 'M', 'N'].find(c => debt && Array.from({ length: Math.min(maxRow - 1, 12) }, (_, i) => i + 2)
     .filter(r => isValidRut(normalizeRut(ws[`${c}${r}`]?.v))).length >= 2) ?? 'L';
   const debtNameCol = String.fromCharCode(debtRutCol.charCodeAt(0) + 1);
   const shiftedDebt = debt && debtRutCol !== 'L';
@@ -102,15 +106,20 @@ export function parseIndividualSheet(book: WorkBook, source: SheetSource, period
         if (rut && cancellation !== undefined && cancellation >= 0) seniorCancellation.set(rut, cancellation);
       }
       result.warnings.push('Senior: se prioriza UF Emitida de CARGA Senior; el resumen por RUT solo respalda formatos anteriores.');
-    } else {
-      result.warnings.push('Senior no incluye Resumen Senior; el desglose emitido/sin emitir quedará sin dato.');
+    } else if(searchName(ws.N3?.v)!=='uf emitida') {
+      result.warnings.push('Senior: falta la columna UF Emitida en la hoja de carga.');
     }
   }
   for (let r = first + 1; r <= maxRow; r++) {
-    const rowDebtRutCol = debt ? ['L','M','N'].find(c=>isValidRut(normalizeRut(ws[`${c}${r}`]?.v))) ?? debtRutCol : debtRutCol;
+    const rowDebtRutCol = debt ? ['K','L','M','N'].find(c=>isValidRut(normalizeRut(ws[`${c}${r}`]?.v))) ?? debtRutCol : debtRutCol;
     const rowDebtNameCol=String.fromCharCode(rowDebtRutCol.charCodeAt(0)+1);
     const nameCol = source === 'category' ? 'G' : source === 'senior' ? 'C' : source === 'production_coordinators' ? 'A' : debt ? rowDebtNameCol : source === 'sauce' && sauceLoad ? 'C' : source.startsWith('ranking_') ? 'C' : 'B';
     const name = text(get(nameCol, r, true));
+    if(source==='category'&&searchName(name)==='sin dato en dotacion'){
+      if(['H','I','M'].some(c=>Number(ws[`${c}${r}`]?.v??0)!==0))result.errors.push(`${sheet}, fila ${r}: resultados sin identidad en dotación.`);
+      else result.warnings.push(`${sheet}, fila ${r}: marcador sin persona y sin resultados; no es un trabajador.`);
+      continue;
+    }
     if (!name || /^(total|no vigente|\*|0$)/i.test(name)) continue;
     const rutCol = source === 'category' || source === 'production_coordinators' ? null : source === 'senior' ? 'D' : debt ? rowDebtRutCol : source === 'sauce' && sauceLoad ? 'B' : source.startsWith('ranking_') ? 'B' : 'A';
     const rut = rutCol ? normalizeRut(text(get(rutCol, r))) : undefined;
@@ -238,9 +247,9 @@ function parsePreparedRanking(book: WorkBook, source: 'ranking_annual'|'ranking_
   const names = book.SheetNames.map(name => ({ name, key: searchName(name) }));
   const total = source === 'ranking_annual'
     ? names.find(sheet => sheet.key === 'ranking anual total')
-    : names.find(sheet => /^ranking (enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)$/.test(sheet.key));
+    : names.find(sheet=>sheet.key==='ranking mensual') ?? names.find(sheet => sheet.key === `ranking ${['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'][Number(period?.start.slice(5,7))-1]}`);
   if (!total) return undefined;
-  const emitted = names.find(sheet => source === 'ranking_annual' ? sheet.key === 'ranking anual' : sheet.key === `${total.key} emitido`);
+  const emitted = names.find(sheet => source === 'ranking_annual' ? ['ranking anual emitido','ranking anual'].includes(sheet.key) : sheet.key === `${total.key} emitido`);
   const result: SheetImport = { source, sheet: total.name, records: [], errors: [], warnings: [], rules: [] };
   if (!period || !/^\d{4}-\d{2}-\d{2}$/.test(period.start) || !/^\d{4}-\d{2}-\d{2}$/.test(period.end) || period.end < period.start) {
     result.errors.push('Indica las fechas del ranking antes de seleccionar el archivo.'); return result;
@@ -279,6 +288,58 @@ function parsePreparedRanking(book: WorkBook, source: 'ranking_annual'|'ranking_
   if (!result.records.length) result.errors.push('No hay resultados válidos en los rankings.');
   result.warnings.push(`Se conservan exactamente los valores guardados de «${total.name}» y «${emitted.name}», incluidas sus anulaciones. Solo se publican RUT de trabajador y métricas agregadas. Dotación vigente controla quién aparece.`);
   return result;
+}
+
+// Two worker-only outputs in this sheet: annual cancelled UF (G:H/D/K) and
+// last sale by worker (M:N). Never retain contract, customer or free-text data.
+export function parseRankingCancellations(book:WorkBook,period?:{start:string;end:string}):SheetImport{
+ const sheet=book.SheetNames.find(n=>searchName(n)==='anulaciones');
+ const result:SheetImport={source:'cancellations',sheet:sheet??'anulaciones',records:[],errors:[],warnings:[],rules:[]};
+ if(!sheet){result.errors.push('Falta la hoja anulaciones de Ranking Plataforma.');return result;}
+ const ws=book.Sheets[sheet],year=Number(period?.start.slice(0,4));
+ if(!year||searchName(ws.G1?.v)!=='rut vendedor'||searchName(ws.M1?.v)!=='ejecutivo'||searchName(ws.N1?.v)!=='ultima venta'){
+  result.errors.push('Anulaciones debe incluir RUT_VENDEDOR, VENDEDOR, UF, mes de envío, Ejecutivo y Última venta.');return result;
+ }
+ const last=Object.keys(ws).filter(a=>/^[A-Z]+\d+$/.test(a)).reduce((m,a)=>Math.max(m,Number(a.replace(/\D/g,''))),1);
+ if(last>100000){result.errors.push('Anulaciones excede 100.000 filas.');return result;}
+ const workers=new Map<string,SheetRecord>();
+ const namesToRut=new Map<string,string>();
+ const totals=book.Sheets[book.SheetNames.find(n=>searchName(n)==='ranking anual total')??''];
+ if(totals)for(const address of Object.keys(totals).filter(a=>/^E\d+$/.test(a)&&Number(a.slice(1))>2)){
+  const row=Number(address.slice(1)),rut=normalizeRut(totals[address]?.v),name=text(totals['D'+row]?.v);
+  if(isValidRut(rut)&&name){namesToRut.set(searchName(name),rut);workers.set(rut,{rut,name,role:'seller',row,values:{cancellationUf:0}});}
+ }
+ // Resolve names against the complete worker table before reading M:N. The
+ // table can precede its matching cancellation row; row order is not identity.
+ for(let r=2;r<=last;r++){
+  const rut=normalizeRut(ws['G'+r]?.v),name=text(ws['H'+r]?.v);
+  if(isValidRut(rut)&&name)namesToRut.set(searchName(name),rut);
+ }
+ for(let r=2;r<=last;r++){
+  const rut=normalizeRut(ws['G'+r]?.v),name=text(ws['H'+r]?.v);
+  if(isValidRut(rut)&&name){
+   const record=workers.get(rut)??{rut,name,role:'seller' as const,row:r,values:{cancellationUf:0}};
+   const rawMonth=ws['K'+r]?.v,day=date(rawMonth),month=text(rawMonth);
+   const monthYear=day?Number(day.slice(0,4)):/20\d{2}$/.test(month)?Number(month.slice(-4)):/\d{2}$/.test(month)?2000+Number(month.slice(-2)):undefined;
+   if(monthYear===year){
+    const amount=number(ws['D'+r]?.v);if(amount===undefined||amount<0)result.errors.push(`${sheet}!D${r}: UF de anulación inválida.`);
+    else record.values.cancellationUf=Number(record.values.cancellationUf)+amount;
+   }
+   workers.set(rut,record);namesToRut.set(searchName(name),rut);
+  }
+  if(ws['M'+r]?.t==='e'){result.warnings.push(`${sheet}!M${r}: nombre de última venta no disponible.`);continue;}
+  const seller=text(ws['M'+r]?.v);if(!seller||/^(total|ejecutivo)/i.test(seller))continue;
+  const sellerRut=namesToRut.get(searchName(seller)),id=sellerRut??searchName(seller);
+  const record=workers.get(id)??{rut:sellerRut,name:seller,role:'seller' as const,row:r,values:{cancellationUf:0}};
+  const value=ws['N'+r];const lastSale=value?.t==='e'?undefined:date(value?.v);
+  if(lastSale&&lastSale>String(record.values.lastSaleDate??''))record.values.lastSaleDate=lastSale;
+  if(!lastSale&&!record.values.lastSaleDate)record.values.daysWithoutSaleText='Sin fecha de última venta';
+  workers.set(id,record);
+ }
+ result.records=[...workers.values()];
+ if(!result.records.length)result.errors.push('Anulaciones no contiene resultados de trabajadores.');
+ result.warnings.push('Anulaciones del año: UF (D) por mes de envío para remuneraciones (K), como la fórmula del ranking. Última venta: M:N. Solo se envían totales por trabajador y su fecha de última venta.');
+ return result;
 }
 
 // Canto supplies date, seller and UF. TRIO alone supplies emission status.

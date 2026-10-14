@@ -39,7 +39,7 @@ export default function TeamScreen() {
   const groups=data?.profiles.filter(p=>p.role===groupRole&&p.active&&p.employmentStatus==='active'
     && (!scope||p.salesManagerId===scope.id)
     && (user.role!=='sales_manager'||p.salesManagerId===user.id))??[];
-  const workers=sellers.filter(p=>kind!=='debt'||(data?.latestByUser[p.id]?.debtSalesCount??0)>0)
+  const workers=sellers.filter(p=>kind==='zero'?hasMonthWithoutSale(data?.latestByUser[p.id]):kind!=='debt'||(data?.latestByUser[p.id]?.debtSalesCount??0)>0)
     .sort((a,b)=>a.name.localeCompare(b.name,'es'));
   const summary=data?teamSummary(sellers,data):null;
   return <ScreenContainer contentContainerStyle={styles.page}>
@@ -48,7 +48,7 @@ export default function TeamScreen() {
     {error?<Text accessibilityRole="alert" style={styles.error}>{error}</Text>:!data?<ActivityIndicator color={colors.gold}/>:null}
     {summary?<View style={styles.card}><View style={styles.identity}>
       <Text style={styles.name}>{groupRole==='coordinator'?'Mis coordinadores':groupRole==='sales_manager'?'Mis jefes de venta':sellers.length+' ejecutivos de mi equipo'}</Text>
-      <Text style={styles.detail}>{kind==='debt'?summary.debt+' contratos en mora · suma total':kind==='zero'?(summary.days===null?'Sin fecha de última venta':summary.days+' días sin vender como equipo')+' · '+summary.zero+' personas con un mes sin vender':goalKind?'Todos los ejecutivos, incluidos quienes todavía no cumplen': 'Productividad de Producción, sin recalcular el resultado individual'}</Text>
+      <Text style={styles.detail}>{kind==='debt'?summary.debt+' contratos en mora · suma total':kind==='zero'?(summary.days===null?'Faltan fechas de última venta':summary.days+' días acumulados sin vender')+' · '+summary.zero+' ejecutivos con 0 UF este mes':goalKind?'Todos los ejecutivos, incluidos quienes todavía no cumplen': 'Productividad de Producción, sin recalcular el resultado individual'}</Text>
     </View></View>:null}
     {groupRole?groups.map(p=>{
       const children=data?scopedSellers(data,user,p):[];

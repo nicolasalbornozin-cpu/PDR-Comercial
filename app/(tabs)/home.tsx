@@ -8,6 +8,8 @@ import { AppHeader } from '@/components/AppHeader';
 import { GoalCard } from '@/components/GoalCard';
 import { RecentAchievements } from '@/components/RecentAchievements';
 import { MetricCard } from '@/components/MetricCard';
+import {SalesTotalsCarousel} from '@/components/SalesTotalsCarousel';
+import {useCommercialRefresh} from '@/hooks/useCommercialRefresh';
 import { ProgressBar } from '@/components/ProgressBar';
 import { ScreenContainer } from '@/components/ScreenContainer';
 import { images } from '@/data/assets';
@@ -34,9 +36,10 @@ function sellerDays(metric?: Partial<MetricSnapshot>): string {
   return days === null ? 'Sin fecha' : `${days} día${days === 1 ? '' : 's'}`;
 }
 
-function ScopeCard({ title, subtitle, sellers, data, monthlyTarget, onPress }: { title: string; subtitle: string; sellers: VisibleProfile[]; data: DashboardData; monthlyTarget: number; onPress: () => void }) {
-  const annual = sellers.reduce((total, seller) => total + Number(data.annualEmittedUfByUser[seller.id] ?? 0), 0);
-  const monthly = sellers.reduce((total, seller) => total + Number(data.monthlyEmittedUfByUser[seller.id] ?? 0), 0);
+function ScopeCard({ title, subtitle, sellers, data, monthlyTarget, onPress,scopeId }: { title: string; subtitle: string; sellers: VisibleProfile[]; data: DashboardData; monthlyTarget: number; onPress: () => void;scopeId?:string }) {
+  const totals=scopeId?data.salesTotalsByScope?.[scopeId]:undefined;
+  const annual = totals?.annualGross??sellers.reduce((total, seller) => total + Number(data.annualTotalUfByUser[seller.id] ?? 0), 0);
+  const monthly = totals?.monthlyGross??sellers.reduce((total, seller) => total + Number(data.monthlyTotalUfByUser[seller.id] ?? 0), 0);
   const mora = sumMetric(sellers, data.latestByUser, 'debtSalesCount');
   const hasMora = sellers.some(w=>data.latestByUser[w.id]?.debtSalesCount !== undefined);
   const hasProductivity = sellers.some(w=>data.latestByUser[w.id]?.productivity !== undefined);
@@ -66,6 +69,7 @@ function ScopeCard({ title, subtitle, sellers, data, monthlyTarget, onPress }: {
 export default function HomeScreen() {
   const router = useRouter();
   const { isPreviewing, user } = useAuth();
+  const revision=useCommercialRefresh();
   const [loaded, setLoaded] = useState<{userId:string;data:DashboardData}|null>(null);
   const data = loaded?.userId === user?.id ? loaded?.data ?? null : null;
   const [error, setError] = useState('');
@@ -77,7 +81,7 @@ export default function HomeScreen() {
       .then((result) => { if (active) { setLoaded({userId:user.id,data:result}); setError(''); } })
       .catch(() => { if (active) setError('Error al comunicar con el servidor'); });
     return () => { active = false; };
-  }, [isPreviewing, user]);
+  }, [isPreviewing, user,revision]);
 
   const sellers = useMemo(
     () => data?.profiles.filter((profile) => profile.role === 'seller' && profile.active && profile.employmentStatus === 'active') ?? [],
@@ -108,6 +112,8 @@ export default function HomeScreen() {
     : sellerRows.reduce((total, seller) => total + Number(data?.monthlyEmittedUfByUser[seller.id] ?? 0), 0);
   const totalAnnualGrossUf = isSeller ? Number(data?.annualTotalUfByUser[user?.id ?? ''] ?? 0)
     : sellerRows.reduce((total,seller)=>total+Number(data?.annualTotalUfByUser[seller.id]??0),0);
+  const totalMonthlyGrossUf = isSeller ? Number(data?.monthlyTotalUfByUser[user?.id ?? ''] ?? 0)
+    : sellerRows.reduce((total,seller)=>total+Number(data?.monthlyTotalUfByUser[seller.id]??0),0);
   const teamDays = data ? teamDaysWithoutSale(sellerRows,data) : null;
   const moraContracts = isSeller ? Number(ownMetric?.debtSalesCount ?? 0) : sumMetric(sellerRows, data?.latestByUser ?? {}, 'debtSalesCount');
   const productivity = ownMetric?.productivity ?? averageMetric(sellerRows, data?.latestByUser ?? {}, 'productivity');
@@ -171,22 +177,14 @@ export default function HomeScreen() {
           {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
           {!data && !error ? <ActivityIndicator color={colors.gold} style={styles.loader} /> : null}
 
-          <View style={styles.salesCard}>
-            <Ionicons color="rgba(255,255,255,0.07)" name="leaf-outline" size={120} style={styles.leaf} />
-            <Text style={styles.salesLabel}>VENTAS ACUMULADAS DEL AÑO{isCommercialManager ? ' · CANAL SANTA CLARA' : ''}</Text>
-            <View style={styles.salesSplit}>
-              <View style={styles.salesHalf}><Text style={styles.salesLabel}>EMITIDO</Text><Text adjustsFontSizeToFit numberOfLines={1} style={styles.salesValue}>{formatUF(totalAnnualUf)} <Text style={styles.salesUnit}>UF</Text></Text></View>
-              <View style={styles.salesDivider}/>
-              <View style={styles.salesHalf}><Text style={styles.salesLabel}>BRUTO</Text><Text adjustsFontSizeToFit numberOfLines={1} style={styles.salesValue}>{formatUF(totalAnnualGrossUf)} <Text style={styles.salesUnit}>UF</Text></Text></View>
-            </View>
-            <Text style={styles.updated}>Mes comercial: {formatUF(totalMonthlyUf)} UF · {data?.periodLabel ?? 'sin datos publicados'}</Text>
-          </View>
+          <SalesTotalsCarousel annualEmitted={data?.scopeSalesTotals?.annualEmitted??totalAnnualUf} annualGross={data?.scopeSalesTotals?.annualGross??totalAnnualGrossUf} monthlyEmitted={data?.scopeSalesTotals?.monthlyEmitted??totalMonthlyUf} monthlyGross={data?.scopeSalesTotals?.monthlyGross??totalMonthlyGrossUf} label={data?.periodLabel??'Sin carga mensual'} channel={isCommercialManager||user?.role==='admin'}/>
+          {!isSeller?<Text style={styles.period}>Los totales de ventas incluyen CURSO; estas personas no tienen acceso.</Text>:null}
 
           <View style={styles.metricsRow}>
             <MetricCard onPress={!isSeller ? () => router.push({pathname:'/team',params:{kind:'debt'}}) : undefined} detail={hasMora ? isSeller ? 'contratos en mora' : isCommercialManager ? 'total · ver jefes de venta' : isManager ? 'total · ver coordinadores' : 'total · ver vendedores' : 'sin mora cargada'} icon="alert-circle-outline" label="MORA" tone={hasMora && moraContracts > 0 ? 'red' : 'green'} value={hasMora ? `${moraContracts}` : '—'} />
             <MetricCard onPress={!isSeller ? () => router.push({pathname:'/team',params:{kind:'productivity'}}) : undefined} detail={hasProductivity?isSeller?'según Producción':'ver productividad del equipo':'sin datos cargados'} icon="briefcase-outline" label="PRODUCTIVIDAD" tone={hasProductivity?productivityTone(productivity):'gold'} value={hasProductivity?productivity.toFixed(2):'—'} />
             <MetricCard detail={isSeller ? 'posición anual' : 'personas visibles'} icon="trophy-outline" label={isSeller ? 'RANKING' : 'EQUIPO'} tone="gold" value={isSeller ? rankingPosition !== undefined ? `#${rankingPosition}` : '—' : `${sellerRows.length}`} />
-            <MetricCard onPress={!isSeller?()=>router.push({pathname:'/team',params:{kind:'zero'}}):undefined} detail={isSeller?'días desde última venta':`${noSaleCount} personas · 1 mes sin vender`} icon="calendar-outline" label="SIN VENDER" value={isSeller?sellerDays(ownMetric):teamDays===null?'Sin fecha':`${teamDays} días`} />
+            <MetricCard onPress={!isSeller?()=>router.push({pathname:'/team',params:{kind:'zero'}}):undefined} detail={isSeller?'días desde última venta':`${noSaleCount} ejecutivos con 0 UF este mes · ver detalle`} icon="calendar-outline" label="DÍAS SIN VENDER" value={isSeller?sellerDays(ownMetric):teamDays===null?'Sin fecha':`${teamDays} días`} />
           </View>
 
           {isSeller ? <View style={styles.secondaryMetrics}><View style={styles.secondaryMetric}><View style={[styles.secondaryIcon, ownMetric?.sauceRisk !== undefined && ownMetric.sauceRisk > 30 ? styles.dangerBackground : undefined]}><Ionicons name="shield-checkmark-outline" color={ownMetric?.sauceRisk !== undefined && ownMetric.sauceRisk > 30 ? colors.danger : colors.goldText} size={20}/></View><View><Text style={styles.secondaryLabel}>Riesgo Sauce</Text><Text style={[styles.secondaryValue, ownMetric?.sauceRisk !== undefined && ownMetric.sauceRisk > 30 ? styles.dangerText : undefined]}>{ownMetric?.sauceRisk === undefined ? 'Sin dato' : `${ownMetric.sauceRisk.toFixed(1)}%`}</Text></View></View></View> : null}
@@ -244,11 +242,11 @@ export default function HomeScreen() {
                   {salesManagers.map((manager) => {
                     const managerSellers = sellerRows.filter((seller) => seller.salesManagerId === manager.id);
                     const managerCoordinators = coordinators.filter((coordinator) => coordinator.salesManagerId === manager.id);
-                    const managerMonthly = managerSellers.reduce((total, seller) => total + Number(data.monthlyEmittedUfByUser[seller.id] ?? 0), 0);
-                    const bestManagement = Math.max(...salesManagers.map((item) => sellerRows.filter((seller) => seller.salesManagerId === item.id).reduce((total, seller) => total + Number(data.monthlyEmittedUfByUser[seller.id] ?? 0), 0)), managerMonthly);
+                    const managerMonthly = data.salesTotalsByScope?.[manager.id]?.monthlyGross??managerSellers.reduce((total, seller) => total + Number(data.monthlyTotalUfByUser[seller.id] ?? 0), 0);
+                    const bestManagement = Math.max(...salesManagers.map((item) => data.salesTotalsByScope?.[item.id]?.monthlyGross??sellerRows.filter((seller) => seller.salesManagerId === item.id).reduce((total, seller) => total + Number(data.monthlyTotalUfByUser[seller.id] ?? 0), 0)), managerMonthly);
                     return (
                       <View key={manager.id} style={styles.unitCard}>
-                        <ScopeCard onPress={() => router.push({pathname:'/team',params:{kind:'productivity',scope:manager.id}})} data={data} monthlyTarget={bestManagement} sellers={managerSellers} subtitle={`${managerCoordinators.length} coordinadores · ${managerSellers.length} vendedores`} title={manager.name} />
+                        <ScopeCard scopeId={manager.id} onPress={() => router.push({pathname:'/team',params:{kind:'productivity',scope:manager.id}})} data={data} monthlyTarget={bestManagement} sellers={managerSellers} subtitle={`${managerCoordinators.length} coordinadores · ${managerSellers.length} vendedores habilitados`} title={manager.name} />
                         <View style={styles.unitTeams}>
                           {managerCoordinators.map((coordinator) => {
                             const coordinatedSellers = managerSellers.filter((seller) => seller.supervisorId === coordinator.id);
@@ -258,7 +256,7 @@ export default function HomeScreen() {
                                   <Text numberOfLines={1} style={styles.workerName}>{coordinator.name}</Text>
                                   <Text style={styles.workerMeta}>{coordinatedSellers.length} vendedores · Mora {sumMetric(coordinatedSellers, data.latestByUser, 'debtSalesCount')} contratos</Text>
                                 </View>
-                                <Text style={styles.workerUf}>{formatUF(coordinatedSellers.reduce((total, seller) => total + Number(data.monthlyEmittedUfByUser[seller.id] ?? 0), 0))} UF mes</Text>
+                                <Text style={styles.workerUf}>{formatUF(data.salesTotalsByScope?.[coordinator.id]?.monthlyGross??coordinatedSellers.reduce((total, seller) => total + Number(data.monthlyTotalUfByUser[seller.id] ?? 0), 0))} UF mes</Text>
                               </Pressable>
                             );
                           })}
@@ -273,9 +271,9 @@ export default function HomeScreen() {
                 <View style={styles.workerList}>
                   {coordinators.map((coordinator) => {
                     const coordinatedSellers = sellerRows.filter((seller) => seller.supervisorId === coordinator.id);
-                    const coordinatorMonthly = coordinatedSellers.reduce((total, seller) => total + Number(data.monthlyEmittedUfByUser[seller.id] ?? 0), 0);
-                    const bestCoordination = Math.max(...coordinators.map((item) => sellerRows.filter((seller) => seller.supervisorId === item.id).reduce((total, seller) => total + Number(data.monthlyEmittedUfByUser[seller.id] ?? 0), 0)), coordinatorMonthly);
-                    return <ScopeCard onPress={() => router.push({pathname:'/team',params:{kind:'productivity',scope:coordinator.id}})} data={data} key={coordinator.id} monthlyTarget={bestCoordination} sellers={coordinatedSellers} subtitle={`${coordinatedSellers.length} vendedores`} title={coordinator.name} />;
+                    const coordinatorMonthly = data.salesTotalsByScope?.[coordinator.id]?.monthlyGross??coordinatedSellers.reduce((total, seller) => total + Number(data.monthlyTotalUfByUser[seller.id] ?? 0), 0);
+                    const bestCoordination = Math.max(...coordinators.map((item) => data.salesTotalsByScope?.[item.id]?.monthlyGross??sellerRows.filter((seller) => seller.supervisorId === item.id).reduce((total, seller) => total + Number(data.monthlyTotalUfByUser[seller.id] ?? 0), 0)), coordinatorMonthly);
+                    return <ScopeCard scopeId={coordinator.id} onPress={() => router.push({pathname:'/team',params:{kind:'productivity',scope:coordinator.id}})} data={data} key={coordinator.id} monthlyTarget={bestCoordination} sellers={coordinatedSellers} subtitle={`${coordinatedSellers.length} vendedores habilitados`} title={coordinator.name} />;
                   })}
                   {!coordinators.length ? <Text style={styles.empty}>Aún no hay coordinadores asignados.</Text> : null}
                 </View>

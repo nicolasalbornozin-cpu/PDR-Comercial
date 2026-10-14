@@ -1,6 +1,8 @@
 # Importación segura de datos comerciales
 
-## Flujo habitual
+El flujo vigente de Excel es [Cargas separadas y control de acceso](CARGAS_SEPARADAS_20261014.md). Ese documento reemplaza las reglas antiguas de períodos, ranking exclusivamente emitido y cargas combinadas que aparecen a continuación.
+
+## Flujo legado (referencia histórica, no usar para las nuevas cargas Excel)
 
 1. Mantener el Excel original dentro del entorno corporativo.
 2. En la app, entrar con el perfil administrador y abrir **Administrar → Cargas**.
