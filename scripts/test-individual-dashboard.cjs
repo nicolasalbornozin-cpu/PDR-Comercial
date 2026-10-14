@@ -18,6 +18,8 @@ assert.equal(exportsObject.remainingUfTarget(500,'Pendiente'),undefined);
  assert.equal(d.latestByUser['login-uuid'].rankingPosition,7);
  assert.equal(d.annualEmittedUfByUser['login-uuid'],450);assert.equal(d.monthlyEmittedUfByUser['login-uuid'],20);
  assert.equal(d.scopeSalesTotals.monthlyGross,20);
+ const previous=row('seller','senior',{uf:800,emittedUf:700,level:'Anterior',smad:12});previous.goal_slot='previous';previous.id='previous-qa';metrics.push(previous);
+ const slots=await service.dashboard({id:'login-uuid',rut:'seller',role:'seller'});assert.equal(slots.latestByUser['login-uuid'].eligibleTotalUf,310);assert.ok(slots.snapshots.some(s=>s.goalSlot==='previous'&&s.eligibleTotalUf===800));metrics.pop();
  assert.equal(d.latestByUser['login-uuid'].cancellationUf,42);assert.equal(d.latestByUser['login-uuid'].productionUf,9999);assert.equal(d.latestByUser['login-uuid'].restRemaining,2);assert.equal(d.latestByUser['login-uuid'].ssffRemaining,1);assert.equal(d.latestByUser['login-uuid'].categoryNotEmittedUf,180);assert.equal(d.latestByUser['login-uuid'].seniorNotEmittedUf,210);
  assert.equal(d.latestByUser['login-uuid'].sauceRisk,undefined);assert.equal(d.latestByUser['login-uuid'].delinquencyRate,undefined);
  const team=await service.dashboard({id:'coord',rut:'coord',role:'coordinator'});

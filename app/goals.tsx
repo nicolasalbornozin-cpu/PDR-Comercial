@@ -17,6 +17,7 @@ import { DashboardData, MetricSnapshot } from '@/types';
 import { formatUF, getProgress } from '@/utils/format';
 import { displayPersonName } from '@/utils/personName';
 import { goalRemainingUf } from '@/utils/goalProgress';
+import {compareGoalSnapshots} from '@/utils/commercialRules';
 
 type GoalKind = 'senior' | 'category';
 type GoalVersion = 'current' | 'previous';
@@ -61,11 +62,11 @@ export default function GoalsScreen() {
   const selected = worker && ['coordinator','sales_manager','commercial_manager','sales_director','admin'].includes(user?.role ?? '') ? data?.profiles.find(p => p.id === worker && p.role === 'seller') : undefined;
   const targetId = worker ? selected?.id : user?.id;
   const metric = targetId && data ? data.latestByUser[targetId] : undefined;
-  const snapshotsFor = (kind: GoalKind) => targetId ? (data?.snapshots.filter((snapshot) => snapshot.userId === targetId && snapshot.kind === kind).sort((left, right) => Number(right.goalSlot!=='previous')-Number(left.goalSlot!=='previous') || right.periodEnd.localeCompare(left.periodEnd) || right.publishedAt.localeCompare(left.publishedAt)) ?? []) : [];
+  const snapshotsFor = (kind: GoalKind) => targetId ? (data?.snapshots.filter((snapshot) => snapshot.userId === targetId && snapshot.kind === kind).sort(compareGoalSnapshots) ?? []) : [];
   const seniorSnapshots = snapshotsFor('senior');
   const categorySnapshots = snapshotsFor('category');
-  const seniorSnapshot = periodView.senior === 'previous' && seniorSnapshots[1] ? seniorSnapshots[1] : seniorSnapshots[0];
-  const categorySnapshot = periodView.category === 'previous' && categorySnapshots[1] ? categorySnapshots[1] : categorySnapshots[0];
+  const seniorSnapshot = seniorSnapshots.some(s=>s.goalSlot)?seniorSnapshots.find(s=>s.goalSlot===periodView.senior):seniorSnapshots[periodView.senior==='previous'?1:0];
+  const categorySnapshot = categorySnapshots.some(s=>s.goalSlot)?categorySnapshots.find(s=>s.goalSlot===periodView.category):categorySnapshots[periodView.category==='previous'?1:0];
   const seniorValue = Number(metric?.eligibleTotalUf ?? metric?.quarterTotalUf ?? 0);
   const categoryValue = Number(metric?.categoryUf ?? 0);
   const categoryTarget = metric?.categoryTargetUf ?? 0;

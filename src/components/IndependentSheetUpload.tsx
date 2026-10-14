@@ -19,12 +19,16 @@ export function IndependentSheetUpload(){
  const {source,slot}=choices[selection];
  const dates=uploadPublicationDates(slot);
  async function choose(){
+  if(busy)return;
   setError('');setMessage('');setParsed([]);
+  setBusy(true);let cachedFile:File|undefined;
   try{
    const picked=await DocumentPicker.getDocumentAsync({type:['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.ms-excel'],copyToCacheDirectory:true});
-   if(picked.canceled)return;setBusy(true);const asset=picked.assets[0];if((asset.size??0)>20*1024*1024)throw Error('El Excel excede 20 MB.');
-   const webFile=(asset as typeof asset & {file?:Blob}).file;
+   if(picked.canceled)return;const asset=picked.assets[0];
+   const webFile=(asset as typeof asset & {file?:Blob}).file;if(!webFile)cachedFile=new File(asset.uri);
+   if((asset.size??webFile?.size??cachedFile?.size??0)>20*1024*1024)throw Error('El Excel excede 20 MB.');
    const data=webFile?new Uint8Array(await webFile.arrayBuffer()):await new File(asset.uri).bytes();const xlsx=await import('xlsx');
+   if(data.byteLength>20*1024*1024)throw Error('El Excel excede 20 MB.');
    const book=xlsx.read(data,{type:'array',cellNF:true});
    if(source==='ranking_monthly'&&!/^ranking plataforma(?: \(\d+\))?\.xlsx?$/i.test(asset.name.trim()))throw Error('Selecciona Ranking Plataforma.xlsx.');
    const selectedNames=source==='senior'||source==='category'?book.SheetNames.filter(n=>searchName(n)===searchName(sheetSources[source].sheet)):book.SheetNames;
@@ -36,10 +40,10 @@ export function IndependentSheetUpload(){
     imports.push(parseIndividualSheet(book,'ranking_annual',annual),parseIndividualSheet(book,'cancellations',annual));
    }
    setFilename(asset.name);setParsed(imports);
-  }catch(e){setError(e instanceof Error?e.message:'No se pudo leer el Excel.');}finally{setBusy(false);}
+  }catch(e){setError(e instanceof Error?e.message:'No se pudo leer el Excel.');}finally{if(cachedFile?.exists){try{cachedFile.delete();}catch{/* The OS may already have cleared the picker cache. */}}setBusy(false);}
  }
  async function publish(){
-  if(!parsed.length)return;setBusy(true);setError('');setMessage('');
+  if(!parsed.length||busy)return;setBusy(true);setError('');setMessage('');
   try{
    const label=uploadCampaignLabel(filename,source,slot);
    if(parsed.length>1){
@@ -63,7 +67,7 @@ export function IndependentSheetUpload(){
   {parsed.map(p=><View style={styles.validation} key={p.source}><Text style={styles.sheet}>{p.sheet}: {p.records.length} trabajadores · {p.errors.length} errores</Text>{[...p.errors.slice(0,5),...p.warnings.slice(0,3)].map((t,i)=><Text style={styles.copy} key={i}>{t}</Text>)}</View>)}
   {error?<Text accessibilityRole="alert" style={{color:colors.danger}}>{error}</Text>:null}
   {message?<Text accessibilityRole="alert" style={{color:colors.success}}>{message}</Text>:null}
-  <AppButton label={`Publicar ${choices[selection].title}`} loading={busy} disabled={!parsed.length||!!errors.length} onPress={publish}/>
+  <AppButton label={`Publicar ${choices[selection].title}`} loading={busy} disabled={busy||!parsed.length||parsed.some(p=>!p.records.length)||!!errors.length} onPress={publish}/>
  </View>;
 }
 const styles=StyleSheet.create({card:{backgroundColor:colors.surface,borderRadius:radii.xl,padding:spacing.xl,gap:spacing.md},title:{fontSize:23,color:colors.primary,fontWeight:'700'},copy:{fontSize:13,lineHeight:20,color:colors.textMuted},choices:{flexDirection:'row',flexWrap:'wrap',gap:8},chip:{borderRadius:18,padding:10,backgroundColor:colors.softGreen},selected:{backgroundColor:colors.primary},sheet:{color:colors.primary,fontWeight:'700'},validation:{padding:12,backgroundColor:colors.background,borderRadius:12,gap:8}});

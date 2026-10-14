@@ -333,6 +333,13 @@ function demoDashboard(): DashboardData {
 }
 
 export const snapshotService = {
+  async getRankingPeriod(user:User,period:RankingPeriod,options:SnapshotRequestOptions={}):Promise<string>{
+    if(options.preview&&user.id.startsWith('preview-'))return period==='annual'?'Año calendario 2026':'Mes de demostración';
+    if(!supabase)return 'Sin carga publicada';
+    const result=await supabase.from('sheet_uploads').select('label').eq('source','ranking_'+period).order('published_at',{ascending:false}).limit(1).maybeSingle();
+    if(result.error)throw Error(result.error.message);
+    return result.data?.label??'Sin carga publicada';
+  },
   async getDashboard(user: User, options: SnapshotRequestOptions = {}): Promise<DashboardData> {
     if (options.preview && user.id.startsWith('preview-')) return previewDashboard(user);
     if (!supabase) return demoDashboard();
@@ -343,7 +350,7 @@ export const snapshotService = {
   async getRanking(user: User, period: RankingPeriod, options: SnapshotRequestOptions = {}): Promise<RankingEntry[]> {
     if (options.preview && user.id.startsWith('preview-')) return previewRanking(user, period);
     if (!supabase) return [];
-    const independent = await supabase.rpc('individual_sheet_ranking', {p_period:period,p_target:options.preview?user.id:null});
+    const independent = await supabase.rpc('individual_sheet_ranking', {p_period:period,p_target:options.preview&&user.role!=='admin'?user.id:null});
     if(independent.error)throw Error(independent.error.message);
     return independent.data??[];
   },

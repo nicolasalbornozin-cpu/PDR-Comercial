@@ -10,7 +10,8 @@ select set_config('request.jwt.claims',jsonb_build_object('sub',(select id from 
 do $$declare u uuid;ranking jsonb;totals jsonb;begin
  u:=public.publish_individual_sheet('{"source":"ranking_monthly","filename":"QA.xlsx","sheet_name":"Ranking mensual","label":"QA","period_start":"2026-10-14","period_end":"2026-10-14"}','[{"worker_id":"__course_worker","source_row":3,"metrics":{"totalUf":151,"emittedUf":100}}]');
  ranking:=public.individual_sheet_ranking('monthly','__course_coord');
- if not exists(select 1 from jsonb_array_elements(ranking)r where r->>'userId'='__course_coord' and (r->>'value')::numeric=151) then raise exception 'Course sale missing from coordinator ranking';end if;
+ if not exists(select 1 from jsonb_array_elements(ranking)r where r->>'userId'=(select ranking_id::text from public.commercial_workers where id='__course_coord') and (r->>'value')::numeric=151) then raise exception 'Course sale missing from coordinator ranking';end if;
+ if exists(select 1 from jsonb_array_elements(ranking)r where r->>'userId' !~ '^[0-9a-f-]{36}$' or r->>'teamId' !~ '^[0-9a-f-]{36}$' or r ? 'rut') then raise exception 'Ranking identity leak';end if;
  totals:=public.sales_scope_totals('__course_coord');
  if (totals->'scope'->>'monthlyGross')::numeric<>151 then raise exception 'Course sale missing from scoped totals';end if;
  if private.registration_identity('990001117') is not null then raise exception 'Course registration permitted';end if;

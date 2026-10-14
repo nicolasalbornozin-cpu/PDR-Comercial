@@ -12,12 +12,15 @@ import { daysWithoutSale, hasMonthWithoutSale, latestGoal } from '@/utils/commer
 import { goalRemainingUf } from '@/utils/goalProgress';
 import { formatUF } from '@/utils/format';
 import { scopedSellers, teamSummary } from '@/utils/teamOverview';
+import {displayPersonName} from '@/utils/personName';
+import {useCommercialRefresh} from '@/hooks/useCommercialRefresh';
 
 const titles = { debt: 'Contratos en mora', zero: 'Días sin vender', category: 'Categorización de mi equipo', senior: 'Senior de mi equipo', productivity: 'Productividad de mi equipo' };
 export default function TeamScreen() {
   const { kind: rawKind, scope: scopeId } = useLocalSearchParams<{kind?: string; scope?: string}>();
   const kind = rawKind && Object.hasOwn(titles,rawKind) ? rawKind as keyof typeof titles : 'debt';
   const { user, isPreviewing } = useAuth();
+  const revision=useCommercialRefresh();
   const router = useRouter();
   const [loaded, setLoaded] = useState<{userId:string;data:DashboardData} | null>(null);
   const [error, setError] = useState('');
@@ -27,7 +30,7 @@ export default function TeamScreen() {
     let active=true;
     snapshotService.getDashboard(user,{preview:isPreviewing}).then(data=>{if(active){setLoaded({userId:user.id,data});setError('');}}).catch(()=>{if(active)setError('Error al comunicar con el servidor');});
     return()=>{active=false;};
-  },[user,isPreviewing,allowed]);
+  },[user,isPreviewing,allowed,revision]);
   if (!allowed || !user) return <Redirect href="/(tabs)/home" />;
   const data=loaded?.userId===user.id?loaded.data:null;
   const scope=data?.profiles.find(p=>p.id===scopeId&&['coordinator','sales_manager'].includes(p.role)&&p.active&&p.employmentStatus==='active');
@@ -44,7 +47,7 @@ export default function TeamScreen() {
   const summary=data?teamSummary(sellers,data):null;
   return <ScreenContainer contentContainerStyle={styles.page}>
     <DetailHeader title={titles[kind]}/>
-    {scope?<Text style={styles.name}>{scope.name}</Text>:null}
+    {scope?<Text style={styles.name}>{displayPersonName(scope.name,scope.role)}</Text>:null}
     {error?<Text accessibilityRole="alert" style={styles.error}>{error}</Text>:!data?<ActivityIndicator color={colors.gold}/>:null}
     {summary?<View style={styles.card}><View style={styles.identity}>
       <Text style={styles.name}>{groupRole==='coordinator'?'Mis coordinadores':groupRole==='sales_manager'?'Mis jefes de venta':sellers.length+' ejecutivos de mi equipo'}</Text>
@@ -54,7 +57,7 @@ export default function TeamScreen() {
       const children=data?scopedSellers(data,user,p):[];
       const totals=data?teamSummary(children,data):null;
       return <Pressable key={p.id} accessibilityRole="button" onPress={()=>router.push({pathname:'/team',params:{kind,scope:p.id}})} style={styles.card}>
-        <View style={styles.identity}><Text style={styles.name}>{p.name}</Text><Text style={styles.detail}>{children.length} ejecutivos</Text>
+        <View style={styles.identity}><Text style={styles.name}>{displayPersonName(p.name,p.role)}</Text><Text style={styles.detail}>{children.length} ejecutivos</Text>
           <Text style={styles.detail}>{kind==='debt'?(totals?.debt??0)+' contratos en mora':kind==='productivity'?'Productividad promedio: '+(totals?.productivity?.toFixed(2)??'Sin dato'):kind==='zero'?(totals?.days??'Sin dato')+' días sin vender como equipo · '+(totals?.zero??0)+' personas sin ventas en un mes':'Ver avance de todos los ejecutivos'}</Text>
         </View><Ionicons name="chevron-forward" size={22} color={colors.goldText}/>
       </Pressable>;
@@ -62,7 +65,7 @@ export default function TeamScreen() {
       const m=data?.latestByUser[p.id];const goal=goalKind&&data?latestGoal(data,p.id,kind):undefined;
       const missing=goalKind?goalRemainingUf(goal,kind):undefined;
       return <Pressable key={p.id} disabled={!goalKind} accessibilityRole={goalKind?'button':undefined} onPress={()=>router.push({pathname:'/goals',params:{worker:p.id,focus:kind}})} style={styles.card}>
-        <View style={styles.identity}><Text style={styles.name}>{p.name}</Text>
+        <View style={styles.identity}><Text style={styles.name}>{displayPersonName(p.name,p.role)}</Text>
           <Text style={styles.detail}>{kind==='debt'?m?.debtSalesCount+' contratos en mora':kind==='zero'?m?.lastSaleDate?daysWithoutSale(m.lastSaleDate)+' días sin vender · última venta '+m.lastSaleDate+(hasMonthWithoutSale(m)?' · un mes sin ventas':''):'Sin fecha de venta registrada':kind==='productivity'?(m?.productionUf===undefined?'Sin dato':formatUF(m.productionUf))+' UF de Producción':kind==='category'?goal?.category:goal?.seniorLevel}</Text>
           {goal?<><Text style={styles.detail}>{goal.goalPending?'Pendiente de nueva carga':formatUF(kind==='category'?goal.categoryUf??0:goal.eligibleTotalUf??0)+' UF · '+(goal.smadCount??'—')+' SMAD'}</Text><Text style={styles.detail}>{missing===undefined?goal.categoryRemaining??goal.seniorRemaining:'Faltan '+formatUF(missing)+' UF y '+(goal.smadRemaining??'—')+' SMAD'}</Text></>:null}
         </View>{kind==='productivity'?<Text style={[styles.productivity,{color:m?.productivity===undefined?colors.textMuted:m.productivity<1?colors.danger:colors.success}]}>{m?.productivity?.toFixed(2)??'—'}</Text>:goalKind?<Ionicons name="chevron-forward" size={22} color={colors.goldText}/>:null}

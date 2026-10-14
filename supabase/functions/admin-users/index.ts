@@ -44,6 +44,12 @@ Deno.serve(async (request) => {
   const { data: authData, error: authError } = await caller.auth.getUser();
   if (authError || !authData.user) return jsonResponse({ error: 'Sesión no válida.' }, 401);
 
+  // Recheck the live access gate even when an existing JWT is still valid.
+  const { data: accessAllowed, error: accessError } = await caller.rpc('session_access_allowed');
+  if (accessError || accessAllowed !== true) {
+    return jsonResponse({ error: 'Acceso no habilitado.' }, 403);
+  }
+
   const { data: callerProfile } = await admin
     .from('profiles')
     .select('id,role,active')

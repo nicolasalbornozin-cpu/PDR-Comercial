@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import {FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader } from '@/components/AppHeader';
 import { RankingRow } from '@/components/RankingRow';
@@ -40,8 +40,9 @@ export default function RankingScreen() {
     Promise.all([
       snapshotService.getRanking(user, period, { preview: isPreviewing }),
       snapshotService.getDashboard(user, { preview: isPreviewing }),
+      snapshotService.getRankingPeriod(user,period,{preview:isPreviewing}),
     ])
-      .then(([result, dashboard]) => { if (active) { setLoaded({userId:user.id,period,entries:result}); setPeriodLabel(dashboard.periodLabel);setExecutiveCount(dashboard.rankingExecutiveCount);setChannelTotals(dashboard.scopeSalesTotals); setError(''); } })
+      .then(([result, dashboard, label]) => { if (active) { setLoaded({userId:user.id,period,entries:result}); setPeriodLabel(period==='annual'?label:dashboard.periodLabel);setExecutiveCount(dashboard.rankingExecutiveCount);setChannelTotals(dashboard.scopeSalesTotals); setError(''); } })
       .catch(() => { if (active) setError('Error al comunicar con el servidor'); });
     return () => { active = false; };
   }, [isPreviewing, period, user,revision]);
@@ -53,8 +54,10 @@ export default function RankingScreen() {
   const gap = currentEntry && nextEntry ? Math.max(nextEntry.value - currentEntry.value, 0) : 0;
 
   return (
-    <ScreenContainer contentContainerStyle={styles.page} edges={['top', 'left', 'right']}>
-      <View style={styles.mobileFrame}>
+    <ScreenContainer scroll={false} edges={['top', 'left', 'right']}>
+      <FlatList data={entries} keyExtractor={entry=>entry.userId} extraData={showEmission}
+        initialNumToRender={12} maxToRenderPerBatch={12} windowSize={7} contentContainerStyle={styles.page}
+        ListHeaderComponent={<View style={styles.mobileFrame}>
         <View style={styles.header}>
           <AppHeader />
           <Text style={styles.title}>{copy.title}</Text>
@@ -78,7 +81,7 @@ export default function RankingScreen() {
           </View>
 
           <RankingTabs onChange={setPeriod} value={period} />
-          <Text style={styles.period}>{period === 'annual' ? 'Acumulado del año calendario 2026' : periodLabel} · ventas totales</Text>
+          <Text style={styles.period}>{periodLabel} · ventas totales</Text>
           <Text style={styles.period}>Los totales de equipos incluyen las ventas de CURSO, sin habilitar acceso.</Text>
           <Pressable accessibilityRole="button" accessibilityState={{expanded:showEmission}} onPress={()=>setShowEmission(current=>!current)} style={styles.emissionToggle}><Ionicons name="swap-horizontal" size={19} color={colors.primary}/><Text style={styles.emissionText}>{showEmission?'Ocultar':'Ver'} emitidas vs. sin emitir</Text></Pressable>
           {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
@@ -103,23 +106,23 @@ export default function RankingScreen() {
 
           <View style={styles.rankingSection}>
             <View style={styles.rankingHeading}>
-              <Text style={styles.rankingTitle}>{period === 'annual' ? 'Ranking anual 2026' : `Ranking mensual · ${periodLabel}`}</Text>
+              <Text style={styles.rankingTitle}>{`${period==='annual'?'Ranking anual':'Ranking mensual'} · ${periodLabel}`}</Text>
               {period==='monthly'?<PlatformLabelEditor id="monthly_ranking" label={periodLabel} onSaved={setPeriodLabel}/>:null}
               <View style={styles.liveBadge}><View style={styles.liveDot} /><Text style={styles.liveText}>TOTALES</Text></View>
             </View>
-            <View style={styles.list}>
-              {entries.map((entry) => <View key={entry.userId}><RankingRow entry={entry}/>{showEmission?<View style={styles.comparison}><Text style={styles.emissionText}>Emitidas: {entry.emittedValue===undefined?'Sin dato':`${formatUF(entry.emittedValue)} UF`}</Text><Text style={styles.emissionText}>Sin emitir: {entry.notEmittedValue===undefined?'Sin dato':`${formatUF(entry.notEmittedValue)} UF`}</Text></View>:null}</View>)}
-              {!entries.length ? <Text style={styles.empty}>Aún no hay un ranking total publicado para este período.</Text> : null}
-            </View>
           </View>
         </View>
-      </View>
+      </View>}
+        ListEmptyComponent={<Text style={styles.empty}>Aún no hay un ranking total publicado para este período.</Text>}
+        renderItem={({item:entry})=><View style={styles.rankingRow}><RankingRow entry={entry}/>{showEmission?<View style={styles.comparison}><Text style={styles.emissionText}>Emitidas: {entry.emittedValue===undefined?'Sin dato':`${formatUF(entry.emittedValue)} UF`}</Text><Text style={styles.emissionText}>Sin emitir: {entry.notEmittedValue===undefined?'Sin dato':`${formatUF(entry.notEmittedValue)} UF`}</Text></View>:null}</View>}
+      />
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
   page: { alignItems: 'center', paddingBottom: 30 },
+  rankingRow:{maxWidth:620,width:'100%',paddingHorizontal:spacing.xl,backgroundColor:colors.surface},
   mobileFrame: { maxWidth: 620, width: '100%' },
   header: { paddingHorizontal: spacing.xl, paddingTop: spacing.sm },
   title: { color: colors.primary, fontFamily: typography.serif, fontSize: 34, fontWeight: '600', marginTop: spacing.xxl },
@@ -150,7 +153,7 @@ const styles = StyleSheet.create({
   trophy: { bottom: -13, position: 'absolute', right: -6 },
   rankingSection: { gap: spacing.md },
   rankingHeading: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
-  rankingTitle: { color: colors.text, fontFamily: typography.serif, fontSize: 22, fontWeight: '600' },
+  rankingTitle: { color: colors.text, fontFamily: typography.serif, fontSize: 22, fontWeight: '600',flex:1 },
   liveBadge: { alignItems: 'center', backgroundColor: colors.softGreen, borderRadius: radii.pill, flexDirection: 'row', gap: 5, paddingHorizontal: 9, paddingVertical: 6 },
   liveDot: { backgroundColor: colors.secondary, borderRadius: 4, height: 7, width: 7 },
   liveText: { color: colors.secondary, fontFamily: typography.sans, fontSize: 8, fontWeight: '900', letterSpacing: 0.8 },

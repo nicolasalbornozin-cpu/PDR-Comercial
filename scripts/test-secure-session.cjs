@@ -1,0 +1,25 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript');
+require.extensions['.ts']=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{module:1,target:9}}).outputText,f);
+const {createSecureSessionStorage}=require('../src/utils/secureSessionStorage.ts');
+const memory=()=>{const data=new Map();return {data,async getItem(k){return data.get(k)??null;},async setItem(k,v){data.set(k,v);},async removeItem(k){data.delete(k);}};};
+(async()=>{
+ const secure=memory(),legacy=memory();let id=0;
+ const storage=createSecureSessionStorage(secure,legacy,()=>`generation-${++id}`);
+ const session=JSON.stringify({access_token:'synthetic',profile:'á🌿'.repeat(2000)});
+ await legacy.setItem('auth',session);
+ assert.equal(await storage.getItem('auth'),session);assert.equal(await legacy.getItem('auth'),null);
+ for(const value of secure.data.values())assert.ok(Buffer.byteLength(value,'utf8')<=1800);
+ const originalSet=secure.setItem;let fail=true;
+ secure.setItem=async(k,v)=>{if(fail&&k.endsWith('.1'))throw Error('disk failure');return originalSet(k,v);};
+ await assert.rejects(storage.setItem('auth','z'.repeat(2000)),/disk failure/);
+ assert.equal(await storage.getItem('auth'),session);
+ fail=false;
+ await Promise.all([storage.setItem('auth','first'),storage.setItem('auth','second')]);
+ assert.equal(await storage.getItem('auth'),'second');assert.equal(secure.data.size,2);
+ await storage.removeItem('auth');await legacy.setItem('auth','stale-plaintext');
+ assert.equal(await storage.getItem('auth'),null);assert.equal(await legacy.getItem('auth'),null);
+ assert.equal(secure.data.size,1);
+ await storage.setItem('auth',session);secure.data.delete([...secure.data.keys()].find(k=>k.endsWith('.0')));
+ await assert.rejects(storage.getItem('auth'),/incompleta/);
+ console.log('PASS: encrypted-store adapter migration, Unicode chunks, interrupted write, concurrency and logout tombstone.');
+})().catch(e=>{console.error(e);process.exitCode=1;});

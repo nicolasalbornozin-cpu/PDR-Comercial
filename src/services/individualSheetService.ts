@@ -10,8 +10,12 @@ export interface WorkerRow {
  coordinator_id:string|null;manager_id:string|null;birth_date:string|null;join_date:string|null;
 }
 interface MetricRow {id:string;worker_id:string;source:SheetSource;metrics:SheetMetrics;label:string;period_start:string;period_end:string;published_at:string;sheet_name:string;goal_slot?:'current'|'previous';senior_status:'open'|'closed'|null;rules:GoalRule[]}
-interface UploadRow {id:string;source:SheetSource;label:string;period_start:string;period_end:string;published_at:string;sheet_name:string;goal_slot?:'current'|'previous';senior_status:'open'|'closed'|null;rules:GoalRule[]}
-interface HistoricalMetricRow {upload_id:string;worker_id:string;metrics:SheetMetrics;source_row:number}
+function workerMatcher(workers:WorkerRow[]){
+ const byRut=new Map<string,WorkerRow[]>(),byName=new Map<string,WorkerRow[]>();
+ const add=(map:Map<string,WorkerRow[]>,key:string,w:WorkerRow)=>map.set(key,[...(map.get(key)??[]),w]);
+ for(const w of workers){if(w.rut)add(byRut,w.rut,w);for(const name of new Set([w.name,...(w.aliases??[])].map(searchName)))add(byName,w.role+':'+name,w);}
+ return (row:{rut?:string;role:string;name:string})=>(row.rut?byRut.get(row.rut):byName.get(row.role+':'+searchName(row.name)))??[];
+}
 export function remainingUfTarget(uf:number|undefined,remaining:unknown):number|undefined {
  if(uf===undefined)return undefined;
  const text=String(remaining??'');
@@ -28,12 +32,7 @@ export function workerUser(w:WorkerRow):User {
 async function allRows<T>(table:string):Promise<T[]> {
  if(!supabase)throw Error('Supabase no está configurado.');
  const rows:T[]=[];
- for(let start=0;;start+=500){let query=supabase.from(table).select('*').order(table==='current_worker_metrics'?'worker_id':'id');if(table==='current_worker_metrics')query=query.order('source');const r=await query.range(start,start+499);if(r.error)throw Error(r.error.message);rows.push(...r.data as T[]);if(r.data.length<500)return rows;}
-}
-async function historicalMetrics(uploadIds:string[],workerIds:string[]):Promise<HistoricalMetricRow[]> {
- if(!supabase||!uploadIds.length||!workerIds.length)return [];
- const rows:HistoricalMetricRow[]=[];
- for(let start=0;;start+=500){const r=await supabase.from('sheet_metrics').select('upload_id,worker_id,metrics,source_row').in('upload_id',uploadIds).in('worker_id',workerIds).order('worker_id').order('upload_id').range(start,start+499);if(r.error)throw Error(r.error.message);rows.push(...r.data as HistoricalMetricRow[]);if(r.data.length<500)return rows;}
+ for(let start=0;;start+=500){let query=supabase.from(table).select('*').order(table==='active_worker_metrics'?'worker_id':'id');if(table==='active_worker_metrics')query=query.order('source').order('id');const r=await query.range(start,start+499);if(r.error)throw Error(r.error.message);rows.push(...r.data as T[]);if(r.data.length<500)return rows;}
 }
 function goalFields(source:'category'|'senior',v:SheetMetrics,seniorOpen:boolean,rules:GoalRule[]=[]):Partial<MetricSnapshot>{
  const num=(k:string)=>typeof v[k]==='number'?v[k] as number:undefined;
@@ -48,11 +47,11 @@ function goalFields(source:'category'|'senior',v:SheetMetrics,seniorOpen:boolean
 export const individualSheetService={
  async publishBundle(items:{parsed:SheetImport;filename:string;label:string;start:string;end:string}[]){
   if(!supabase)throw Error('Supabase no está configurado.');
-  const workers=await allRows<WorkerRow>('commercial_workers');const skipped:string[]=[];
+  const workers=await allRows<WorkerRow>('commercial_workers');const match=workerMatcher(workers);const skipped:string[]=[];
   const imports=items.map(({parsed,filename,label,start,end})=>{
    if(parsed.errors.length)throw Error('Corrige los errores antes de publicar.');
    let records=parsed.records.flatMap(row=>{
-    const found=workers.filter(w=>row.rut?w.rut===row.rut:w.role===row.role&&[w.name,...w.aliases].some(n=>searchName(n)===searchName(row.name)));
+    const found=match(row);
     if(found.length===0){skipped.push(row.name);return [];}
     if(found.length!==1)throw Error(`Identidad ambigua: ${row.name}.`);
     return [{worker_id:found[0].id,source_row:row.row,metrics:row.values}];
@@ -86,9 +85,10 @@ export const individualSheetService={
    if(r.error)throw Error(r.error.message);return {id:r.data as string,published:records.length,skipped:[] as string[]};
   }
   const workers=await allRows<WorkerRow>('commercial_workers');
+  const match=workerMatcher(workers);
   const skipped:string[]=[];
   const records=parsed.records.flatMap(row=>{
-   const found=workers.filter(w=>row.rut?w.rut===row.rut:w.role===row.role&&[w.name,...(w.aliases??[])].some(n=>searchName(n)===searchName(row.name)));
+   const found=match(row);
    if(found.length===0&&['category','sauce','cancellations','ranking_annual','ranking_monthly','senior'].includes(parsed.source)){skipped.push(row.name);return [];}
    if(found.length!==1)throw Error(`No hay una identidad única en dotación para ${row.name}. Revisa su RUT o nombre antes de cargar.`);
    return [{worker_id:found[0].id,metrics:row.values,source_row:row.row}];
@@ -103,28 +103,28 @@ export const individualSheetService={
   if(r.error)throw Error(r.error.message);return {id:r.data as string,published:records.length,skipped};
  },
  async dashboard(user:User):Promise<DashboardData>{
-  const [allWorkers,allMetrics,allUploads,settings,count]=await Promise.all([allRows<WorkerRow>('commercial_workers'),allRows<MetricRow>('current_worker_metrics'),allRows<UploadRow>('sheet_uploads'),allRows<{id:string;label:string}>('platform_settings'),supabase?.rpc('ranking_executive_count')]);
+  const [allWorkers,allMetrics,settings,count]=await Promise.all([allRows<WorkerRow>('commercial_workers'),allRows<MetricRow>('active_worker_metrics'),allRows<{id:string;label:string}>('platform_settings'),supabase?.rpc('ranking_executive_count')]);
   if(count?.error)throw Error(count.error.message);
   const displayLabels=Object.fromEntries(settings.filter(s=>s.id&&s.label).map(s=>[s.id,s.label]));
   const self=allWorkers.find(w=>w.id===user.id||w.rut===normalizeRut(user.rut));
   if(user.role!=='admin'&&(!self||!self.active||self.status!=='active'))throw Error('Error 444');
-  const totals=await supabase?.rpc('sales_scope_totals',{p_target:self?.id??null});if(totals?.error)throw Error(totals.error.message);
+  const totals=await supabase?.rpc('sales_scope_totals',{p_target:user.role==='admin'?null:self?.id??null});if(totals?.error)throw Error(totals.error.message);
   const workers=allWorkers.filter(w=>w.active&&w.status==='active'&&(user.role==='admin'||self?.role==='commercial_manager'||self?.role==='sales_director'||w.id===self?.id||self?.role==='coordinator'&&w.coordinator_id===self.id||self?.role==='sales_manager'&&w.manager_id===self.id));
   const ids=new Set(workers.map(w=>w.id));
   // Keep the authenticated UUID as the UI's own key, while roster joins use stable worker IDs.
   const uiId=(id:string|null)=>id===self?.id?user.id:id??'';
   const rows=allMetrics.filter(m=>ids.has(m.worker_id));
   const latest:DashboardData['latestByUser']={},annual:Record<string,number>={},monthly:Record<string,number>={},annualTotal:Record<string,number>={},monthlyTotal:Record<string,number>={},snapshots:MetricSnapshot[]=[];
-  const senior=rows.find(m=>m.source==='senior');
+  const senior=rows.find(m=>m.source==='senior'&&m.goal_slot!=='previous');
   const seniorOpen=Boolean(senior&&senior.senior_status==='open');
   for(const [index,row]of rows.entries()){
    const id=uiId(row.worker_id),v=row.metrics;
    const m:Partial<MetricSnapshot>={};
    const num=(k:string)=>typeof v[k]==='number'?v[k] as number:undefined;
-   if(row.source==='category')Object.assign(m,goalFields('category',v,seniorOpen,row.rules),{categoryLabel:displayLabels.category_current??row.label});
+   if(row.source==='category')Object.assign(m,goalFields('category',v,seniorOpen,row.rules),{categoryLabel:displayLabels[`category_${row.goal_slot??'current'}`]??row.label});
    if(row.source==='senior'){
     // Preserve uploaded Q3 figures as historical, never silently erase or relabel them as Q4.
-    Object.assign(m,goalFields('senior',v,seniorOpen,row.rules),{seniorLabel:displayLabels.senior_current??row.label});
+    Object.assign(m,goalFields('senior',v,row.senior_status==='open',row.rules),{seniorLabel:displayLabels[`senior_${row.goal_slot??'current'}`]??row.label});
    }
    if(row.source.startsWith('production_')){m.productivity=num('productivity');m.productionUf=num('uf');if(!rows.some(r=>r.worker_id===row.worker_id&&r.source==='cancellations')){m.lastSaleDate=typeof v.lastSaleDate==='string'?v.lastSaleDate:undefined;m.daysWithoutSaleText=typeof v.daysWithoutSaleText==='string'?v.daysWithoutSaleText:undefined;} }
    if(row.source==='cancellations'){m.annualCancellationUf=num('cancellationUf');m.lastSaleDate=typeof v.lastSaleDate==='string'?v.lastSaleDate:undefined;m.daysWithoutSaleText=typeof v.daysWithoutSaleText==='string'?v.daysWithoutSaleText:undefined;}
@@ -132,32 +132,29 @@ export const individualSheetService={
    if(row.source==='sauce')m.sauceRisk=num('risk');
    if(row.source==='ranking_annual'){annual[id]=num('emittedUf')??0;if(num('totalUf')!==undefined)annualTotal[id]=num('totalUf')!;m.rankingPosition=num('position');}
    if(row.source==='ranking_monthly'){monthly[id]=num('emittedUf')??0;if(num('totalUf')!==undefined){monthlyTotal[id]=num('totalUf')!;m.monthlyTotalUf=num('totalUf');}m.businessCount=num('businesses');}
-   const snap:MetricSnapshot={id:index,batchId:row.id,userId:id,goalSlot:row.source==='category'||row.source==='senior'?'current':undefined,kind:row.source==='category'?'category':row.source==='senior'?'senior':row.source==='sauce'?'sauce':row.source.startsWith('ranking_')?'ranking':'commercial',periodStart:row.period_start,periodEnd:row.period_end,sourceName:row.sheet_name,publishedAt:row.published_at,...m};
+   const snap:MetricSnapshot={id:index,batchId:row.id,userId:id,goalSlot:row.source==='category'||row.source==='senior'?row.goal_slot??'current':undefined,kind:row.source==='category'?'category':row.source==='senior'?'senior':row.source==='sauce'?'sauce':row.source.startsWith('ranking_')?'ranking':'commercial',periodStart:row.period_start,periodEnd:row.period_end,sourceName:row.sheet_name,publishedAt:row.published_at,...m};
    snapshots.push(snap);
+   if(row.goal_slot==='previous')continue;
    const merged={...latest[id],...Object.fromEntries(Object.entries(m).filter(([,value])=>value!==undefined))};
    if(['titanes','rbh','msc'].includes(row.source))for(const key of ['debtInstallmentsCount','debtUf08','debtSalesCount','delinquentClientsCount'] as const){if(m[key]!==undefined)merged[key]=(latest[id]?.[key]??0)+m[key]!;}
    latest[id]=merged;
   }
-  const currentGoalUploadIds=new Set(rows.filter(row=>row.source==='category'||row.source==='senior').map(row=>row.id));
-  const previousGoalUploads=(['category','senior'] as const).flatMap(source=>allUploads.filter(upload=>upload.source===source&&upload.goal_slot==='previous'&&!currentGoalUploadIds.has(upload.id)).sort((a,b)=>b.published_at.localeCompare(a.published_at)).slice(0,1));
-  const historical=await historicalMetrics(previousGoalUploads.map(upload=>upload.id),[...ids]);
-  for(const row of historical){const upload=previousGoalUploads.find(item=>item.id===row.upload_id);if(!upload)continue;const id=uiId(row.worker_id);const fields=goalFields(upload.source as 'category'|'senior',row.metrics,upload.senior_status==='open',upload.rules);const label=displayLabels[`${upload.source}_previous`]??upload.label;snapshots.push({id:snapshots.length,batchId:upload.id,userId:id,goalSlot:'previous',kind:upload.source as 'category'|'senior',periodStart:upload.period_start,periodEnd:upload.period_end,sourceName:upload.sheet_name,publishedAt:upload.published_at,...fields,...(upload.source==='category'?{categoryLabel:label}:{seniorLabel:label})});}
   // Explicit campaign rollover requested by the administrator. These are display placeholders,
   // not fabricated database imports. The first new upload replaces them automatically.
   for(const w of workers.filter(w=>w.role==='seller')){
    const id=uiId(w.id);
    for(const kind of ['category','senior'] as const){
-    const current=rows.find(r=>r.worker_id===w.id&&r.source===kind);
+    const current=rows.find(r=>r.worker_id===w.id&&r.source===kind&&r.goal_slot!=='previous');
     if(current)continue;
     const fields:Partial<MetricSnapshot>=kind==='category'
-      ?{categoryLabel:'Catego · Septiembre–Octubre',category:'Sin categoría',categoryUf:0,emittedUf:0,notEmittedUf:0,smadCount:0,smadRemaining:undefined,categoryEmittedUf:0,categoryNotEmittedUf:0,categorySmadCount:0,categorySmadRemaining:undefined,categoryTargetUf:undefined,categoryRemaining:'Pendiente de cargar el nuevo período y sus tramos'}
-      :{seniorLabel:'Senior · cuarto trimestre 2026',seniorLevel:'Sin carga vigente',eligibleTotalUf:undefined,seniorEmittedUf:undefined,seniorNotEmittedUf:undefined,seniorSmadCount:undefined,seniorSmadRemaining:undefined,seniorTargetUf:undefined,seniorRemaining:'Pendiente de cargar el cuarto trimestre y sus condiciones'};
-    const marker=kind==='category'?'2026-09-25':'2026-10-06';
+      ?{categoryLabel:displayLabels.category_current??'Catego vigente',category:'Sin categoría',categoryUf:0,emittedUf:0,notEmittedUf:0,smadCount:0,smadRemaining:undefined,categoryEmittedUf:0,categoryNotEmittedUf:0,categorySmadCount:0,categorySmadRemaining:undefined,categoryTargetUf:undefined,categoryRemaining:'Pendiente de cargar el nuevo período y sus tramos'}
+      :{seniorLabel:displayLabels.senior_current??'Senior vigente',seniorLevel:'Sin carga vigente',eligibleTotalUf:undefined,seniorEmittedUf:undefined,seniorNotEmittedUf:undefined,seniorSmadCount:undefined,seniorSmadRemaining:undefined,seniorTargetUf:undefined,seniorRemaining:'Pendiente de cargar el período vigente y sus condiciones'};
+    const marker='';
     snapshots.push({id:snapshots.length,batchId:`pending-${kind}`,userId:id,goalSlot:'current',kind,periodStart:marker,periodEnd:marker,sourceName:'Sin carga vigente',publishedAt:marker,goalPending:true,...fields});
     latest[id]={...latest[id],...fields};
    }
   }
-  if(self&&Object.keys(annualTotal).length&&supabase){const ranking=await supabase.rpc('individual_sheet_ranking',{p_period:'annual',p_target:self.id});if(ranking.error)throw Error(ranking.error.message);const own=ranking.data?.find((entry:{userId:string})=>entry.userId===self.id);if(own)latest[user.id]={...latest[user.id],rankingPosition:own.position};}
+  if(self&&Object.keys(annualTotal).length&&supabase){const ranking=await supabase.rpc('individual_sheet_ranking',{p_period:'annual',p_target:user.role==='admin'?null:self.id});if(ranking.error)throw Error(ranking.error.message);const own=ranking.data?.find((entry:{isCurrentUser:boolean})=>entry.isCurrentUser);if(own)latest[user.id]={...latest[user.id],rankingPosition:own.position};}
   return {profiles:workers.map(w=>({...workerUser(w),id:uiId(w.id),supervisorId:uiId(w.coordinator_id),salesManagerId:uiId(w.manager_id)})),snapshots,latestByUser:latest,annualEmittedUfByUser:annual,monthlyEmittedUfByUser:monthly,annualTotalUfByUser:annualTotal,monthlyTotalUfByUser:monthlyTotal,periodLabel:displayLabels.monthly_ranking??rows.find(r=>r.source==='ranking_monthly')?.label??'Cargas independientes',seniorOpen,displayLabels,rankingExecutiveCount:typeof count?.data==='number'?count.data:undefined,scopeSalesTotals:totals?.data?.scope,salesTotalsByScope:Object.fromEntries(Object.entries(totals?.data?.groups??{}).map(([id,value])=>[uiId(id),value])) as DashboardData['salesTotalsByScope']};
  }
 };

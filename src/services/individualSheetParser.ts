@@ -346,7 +346,8 @@ export function parseRankingCancellations(book:WorkBook,period?:{start:string;en
 // Canto can have several UF movements for an operation (e.g. an increase).
 // They all contribute to total UF. The TRIO join never multiplies these rows.
 function parseCantoRanking(book: WorkBook, source: 'ranking_annual'|'ranking_monthly', period?: {start:string;end:string}): SheetImport {
-  const expected=source==='ranking_annual'?['BASE ANUAL']:['Septiembre Comercial 26','BASE ANUAL'];
+  const month=period?.start?new Date(`${period.start}T12:00:00Z`).toLocaleDateString('es-CL',{month:'long',timeZone:'UTC'}):'';
+  const expected=source==='ranking_annual'?['BASE ANUAL']:[`${month} Comercial ${period?.start.slice(2,4)}`,'BASE ANUAL'];
   const sheet=expected.map(name=>book.SheetNames.find(n=>searchName(n)===searchName(name))).find(Boolean);
   const result:SheetImport={source,sheet:sheet??sheetSources[source].sheet,records:[],errors:[],warnings:[],rules:[]};
   if(!sheet){result.errors.push(`Falta la base de canto «${result.sheet}».`);return result;}

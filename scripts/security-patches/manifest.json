@@ -1,0 +1,47 @@
+[
+  {
+    "pkg": "braces",
+    "version": "3.0.3",
+    "file": "lib/parse.js",
+    "before": "  while (index < length) {",
+    "after": "  while (index < length) {\n    if (stack.length > 64) throw new SyntaxError('Brace pattern exceeds safe depth');",
+    "originalHash": "e572166565f15fa6ad9865ae49d678218e32aabfd1b3720f6d0d43d39800d310",
+    "patchedHash": "7b739e6fccb3379fb542a913966bea62d9730ee35bbf640bdfbcd8f50c5a9180"
+  },
+  {
+    "pkg": "braces",
+    "version": "3.0.3",
+    "file": "lib/stringify.js",
+    "before": "module.exports = (ast, options = {}) => {",
+    "after": "module.exports = (ast, options = {}) => {\n  require('./pdr-safe-ast')(ast);",
+    "originalHash": "379f22d77bfa1478341ccd49c5e4267464aabcbba03558bab332aac23fc6f23a",
+    "patchedHash": "a987c66c199660bb412d434c84068cbc043c00d3f5de142ccf08617d5e9e4e08"
+  },
+  {
+    "pkg": "braces",
+    "version": "3.0.3",
+    "file": "lib/compile.js",
+    "before": "const compile = (ast, options = {}) => {",
+    "after": "const compile = (ast, options = {}) => {\n  require('./pdr-safe-ast')(ast);",
+    "originalHash": "dc98f22eee3d511785d92a00758d5f0d48efed5f5813bdecc2de430c529b5c9f",
+    "patchedHash": "8be951855b623f835ba8a73cf136a7a1b8e33ea7c54ab051353efcf71729a10d"
+  },
+  {
+    "pkg": "braces",
+    "version": "3.0.3",
+    "file": "lib/expand.js",
+    "before": "const expand = (ast, options = {}) => {",
+    "after": "const expand = (ast, options = {}) => {\n  require('./pdr-safe-ast')(ast);",
+    "originalHash": "41ccc196ebfa7b7781a634e721eb744e4e7bcb54cba427a7e3d6806a1b9e58f7",
+    "patchedHash": "b910b77e4b9b01a8a6ff5b81202281df3c90daed41a6cfca30f0a395a565cd65"
+  },
+  {
+    "pkg": "node-forge",
+    "version": "1.4.0",
+    "file": "lib/rsa.js",
+    "before": "obj.value.length !== 2) {",
+    "after": "obj.value.length !== 2 ||\n            obj.value[0].value.length !== ('parameters' in capture ? 2 : 1) ||\n            ('parameters' in capture && capture.parameters !== '')) {",
+    "originalHash": "fd4740238145ec26470eb3f06a627c72039538ce1307dbdce40521f94dfd0a50",
+    "patchedHash": "96c154db17c611f81eeb48aed2c064c80d87517df2fff24cf574fbd1ac050492"
+  }
+]

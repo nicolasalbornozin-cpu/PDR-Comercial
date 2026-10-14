@@ -3,7 +3,7 @@ require.extensions['.ts'] = (m, f) => m._compile(ts.transpileModule(fs.readFileS
 const { displayPersonName } = require('../src/utils/personName.ts');
 const { seniorTrips, tripPhotos } = require('../src/utils/newsTrips.ts');
 assert.equal(displayPersonName('CAVIERES   PONCE MAURICIO LEONARDO', 'seller'), 'Mauricio Cavieres');
-assert.equal(displayPersonName('FONTALVO FAIRUZ MARINA', 'coordinator'), 'Fairuz Fontalvo');
+assert.equal(displayPersonName('FONTALVO FAIRUZ MARINA', 'coordinator'), 'Marina Fontalvo');
 assert.equal(displayPersonName('GABRIEL DE LUCA', 'sales_director'), 'Gabriel De Luca');
 assert.equal(displayPersonName('TOMAS ESPINOZA', 'audiovisual'), 'Tomas Espinoza');
 assert.equal(displayPersonName(''), '');
