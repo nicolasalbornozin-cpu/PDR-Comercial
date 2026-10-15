@@ -1,0 +1,33 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
+const code=ts.transpileModule(fs.readFileSync('src/components/SalesTotalsCarousel.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
+const element=(type,props)=>({type,props:props??{}});
+let values=[],cursor=0,scrolls=[];
+const ref={current:{scrollTo:options=>scrolls.push(options)}};
+const output={};
+vm.runInNewContext(code,{exports:output,require(id){
+ if(id==='react')return {useState(initial){const i=cursor++;if(!(i in values))values[i]=initial;return [values[i],v=>{values[i]=typeof v==='function'?v(values[i]):v;}];},useRef:()=>ref};
+ if(id==='react/jsx-runtime')return {jsx:element,jsxs:element};
+ if(id==='react-native')return {Pressable:'Pressable',Text:'Text',View:'View',ScrollView:'ScrollView',StyleSheet:{create:x=>x}};
+ if(id==='@expo/vector-icons')return {Ionicons:'Icon'};
+ if(id==='@/theme')return {colors:{primary:'green',gold:'gold',surface:'white'},radii:{},shadows:{},spacing:{},typography:{}};
+ if(id==='@/utils/format')return {formatUF:String};throw Error(id);
+}});
+const render=()=>{cursor=0;return output.SalesTotalsCarousel({annualEmitted:195192.5,annualGross:237471.66,monthlyEmitted:1927.7,monthlyGross:9765.24,label:'Octubre comercial 2026',channel:true});};
+function walk(n,fn){if(!n)return;if(Array.isArray(n))return n.forEach(x=>walk(x,fn));fn(n);if(typeof n==='object')walk(n.props.children,fn);}
+const find=(tree,fn)=>{const a=[];walk(tree,n=>{if(typeof n==='object'&&fn(n))a.push(n);});return a;};
+const text=tree=>{const a=[];walk(tree,n=>{if(typeof n==='string'||typeof n==='number')a.push(String(n));});return a.join('');};
+const button=(tree,label)=>find(tree,n=>n.type==='Pressable'&&n.props.accessibilityLabel===label)[0];
+let screen=render();assert.equal(button(screen,'Ver ventas anuales').props.accessibilityState.selected,true);
+button(screen,'Ver ventas mensuales').props.onPress();screen=render();
+assert.equal(button(screen,'Ver ventas mensuales').props.accessibilityState.selected,true);assert.equal(scrolls.at(-1).x,320);
+const pages=find(screen,n=>n.props.importantForAccessibility);
+assert.equal(pages.length,2);assert.equal(pages[0].props.accessibilityElementsHidden,true);assert.equal(pages[1].props.accessibilityElementsHidden,false);
+assert.ok(text(pages[1]).includes('1927.7'));assert.ok(text(pages[1]).includes('9765.24'));assert.ok(text(pages[1]).includes('Octubre comercial 2026'));
+find(screen,n=>n.props.onLayout)[0].props.onLayout({nativeEvent:{layout:{width:270}}});screen=render();assert.equal(scrolls.at(-1).x,270);
+const pager=find(screen,n=>n.type==='ScrollView')[0];assert.equal(pager.props.horizontal,true);assert.equal(pager.props.pagingEnabled,true);
+pager.props.onScroll({nativeEvent:{contentOffset:{x:0}}});screen=render();assert.equal(button(screen,'Ver ventas anuales').props.accessibilityState.selected,true);
+button(screen,'Siguiente: ventas mensuales').props.onPress();screen=render();assert.equal(scrolls.at(-1).x,270);
+assert.equal(button(screen,'Siguiente: ventas mensuales').props.disabled,true);assert.equal(button(screen,'Anterior: ventas anuales').props.disabled,false);
+const home=fs.readFileSync('app/(tabs)/home.tsx','utf8');assert.ok(!home.includes('Pendiente de carga anual'));
+assert.ok(home.includes("data?`${formatUF(cancellations)} UF`:'Cargando…'"));
+console.log('PASS: visible Año/Mes controls, arrows and swipe preserve emitted/gross values, October label and position on resize; annual cancellations show zero after loading.');

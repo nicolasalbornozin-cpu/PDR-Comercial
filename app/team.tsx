@@ -51,7 +51,7 @@ export default function TeamScreen() {
     {error?<Text accessibilityRole="alert" style={styles.error}>{error}</Text>:!data?<ActivityIndicator color={colors.gold}/>:null}
     {summary?<View style={styles.card}><View style={styles.identity}>
       <Text style={styles.name}>{groupRole==='coordinator'?'Mis coordinadores':groupRole==='sales_manager'?'Mis jefes de venta':sellers.length+' ejecutivos de mi equipo'}</Text>
-      <Text style={styles.detail}>{kind==='debt'?summary.debt+' contratos en mora · suma total':kind==='zero'?(summary.days===null?'Faltan fechas de última venta':summary.days+' días acumulados sin vender')+' · '+summary.zero+' ejecutivos con 0 UF este mes':goalKind?'Todos los ejecutivos, incluidos quienes todavía no cumplen': 'Productividad de Producción, sin recalcular el resultado individual'}</Text>
+      <Text style={styles.detail}>{kind==='debt'?summary.debt+' contratos en mora · suma total':kind==='zero'?(summary.days===null?'Sin fecha de última venta del equipo':summary.days+' días desde la última venta del equipo')+' · '+summary.zero+' ejecutivos con 0 UF este mes':goalKind?'Todos los ejecutivos, incluidos quienes todavía no cumplen': 'Productividad de Producción, sin recalcular el resultado individual'}</Text>
     </View></View>:null}
     {groupRole?groups.map(p=>{
       const children=data?scopedSellers(data,user,p):[];

@@ -117,7 +117,6 @@ export default function HomeScreen() {
   const teamDays = data ? teamDaysWithoutSale(sellerRows,data) : null;
   const moraContracts = isSeller ? Number(ownMetric?.debtSalesCount ?? 0) : sumMetric(sellerRows, data?.latestByUser ?? {}, 'debtSalesCount');
   const productivity = ownMetric?.productivity ?? averageMetric(sellerRows, data?.latestByUser ?? {}, 'productivity');
-  const hasAnnualCancellations = isSeller ? ownMetric?.annualCancellationUf !== undefined : sellerRows.length > 0 && sellerRows.every(s=>data?.latestByUser[s.id]?.annualCancellationUf !== undefined);
   const cancellations = isSeller ? Number(ownMetric?.annualCancellationUf ?? 0) : sumMetric(sellerRows, data?.latestByUser ?? {}, 'annualCancellationUf');
   const hasMora = isSeller ? ownMetric?.debtSalesCount !== undefined : sellerRows.some(w=>data?.latestByUser[w.id]?.debtSalesCount !== undefined);
   const hasProductivity = ownMetric?.productivity !== undefined || (!isSeller && sellerRows.some(w=>data?.latestByUser[w.id]?.productivity !== undefined));
@@ -191,7 +190,7 @@ export default function HomeScreen() {
           <View style={styles.secondaryMetrics}>
             <View style={styles.secondaryMetric}>
               <View style={[styles.secondaryIcon, { backgroundColor: cancellations ? '#FBECE9' : colors.softGreen }]}><Ionicons color={cancellations ? colors.danger : colors.success} name="close-circle-outline" size={19} /></View>
-              <View><Text style={styles.secondaryLabel}>Anulaciones del año</Text><Text style={[styles.secondaryValue, cancellations ? styles.dangerText : styles.successText]}>{hasAnnualCancellations?`${formatUF(cancellations)} UF`:'Pendiente de carga anual'}</Text></View>
+              <View><Text style={styles.secondaryLabel}>Anulaciones del año</Text><Text style={[styles.secondaryValue, cancellations ? styles.dangerText : styles.successText]}>{data?`${formatUF(cancellations)} UF`:'Cargando…'}</Text></View>
             </View>
             <View style={styles.secondaryDivider} />
             <View style={styles.secondaryMetric}>
