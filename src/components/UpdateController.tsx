@@ -9,7 +9,6 @@ export function UpdateController() {
   const {isUpdatePending,isRestarting}=Updates.useUpdates();
   const checking = useRef(false);
   const pendingRef=useRef(isUpdatePending);
-  pendingRef.current=isUpdatePending;
   const [downloadReady,setDownloadReady]=useState(false);
   const [deferred,setDeferred]=useState(false);
   const [restarting,setRestarting]=useState(false);
@@ -17,6 +16,8 @@ export function UpdateController() {
   const enabled=!__DEV__&&Platform.OS!=='web'&&Updates.isEnabled;
   const pending=isUpdatePending||downloadReady;
   const busy=restarting||isRestarting;
+
+  useEffect(()=>{pendingRef.current=isUpdatePending;},[isUpdatePending]);
 
   useEffect(() => {
     if (__DEV__ || Platform.OS === 'web' || !Updates.isEnabled) return undefined;
