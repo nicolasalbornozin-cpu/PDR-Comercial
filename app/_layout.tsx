@@ -41,7 +41,6 @@ function RootNavigator() {
   return (
     <>
       <StatusBar style="dark" />
-      <UpdateController />
       <View style={styles.app}>
         <Stack screenOptions={{ animation: 'fade', contentStyle: { backgroundColor: colors.background }, headerShown: false }}>
           <Stack.Screen name="index" />
@@ -61,7 +60,7 @@ function RootNavigator() {
 }
 
 export default function RootLayout() {
-  return <AuthProvider><RootNavigator /></AuthProvider>;
+  return <AuthProvider><View style={styles.app}><RootNavigator /><UpdateController /></View></AuthProvider>;
 }
 
 const styles = StyleSheet.create({

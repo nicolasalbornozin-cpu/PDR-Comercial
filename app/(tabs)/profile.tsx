@@ -85,6 +85,7 @@ export default function ProfileScreen() {
             <Text style={styles.employee}>En la plataforma desde {profileStartYear && !Number.isNaN(profileStartYear) ? profileStartYear : '—'}</Text>
           </View>
 
+          <AppUpdateStatus/>
           <View style={styles.infoCard}>
             {profileDetails.map((detail, index) => (
               <View key={detail.label} style={[styles.detailRow, index < profileDetails.length - 1 && styles.detailBorder]}>
@@ -163,7 +164,6 @@ export default function ProfileScreen() {
 
           <AppButton icon="document-text-outline" label="Condiciones y datos personales" onPress={()=>router.push('/conditions')} variant="secondary" />
           <AppButton icon="log-out-outline" label="Cerrar sesión" loading={isLoading} onPress={handleSignOut} variant="secondary" />
-          <AppUpdateStatus/>
         </View>
       </View>
     </ScreenContainer>
