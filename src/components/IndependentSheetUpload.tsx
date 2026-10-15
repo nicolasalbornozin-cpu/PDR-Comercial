@@ -17,6 +17,7 @@ export function IndependentSheetUpload(){
  const [selection,setSelection]=useState(0),[parsed,setParsed]=useState<SheetImport[]>([]),[filename,setFilename]=useState('');
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
  const {source,slot}=choices[selection];
+ const isGoal=source==='category'||source==='senior';
  const dates=uploadPublicationDates(slot);
  async function choose(){
   if(busy)return;
@@ -51,7 +52,7 @@ export function IndependentSheetUpload(){
     setMessage(`${result.published} resultados publicados juntos.${result.skipped.length?` ${result.skipped.length} filas fuera de dotación omitidas.`:''}`);
    }else{
     const result=await individualSheetService.publish(parsed[0],filename,label,dates.start,dates.end,slot==='current'?'open':'closed',slot);
-    setMessage(`${choices[selection].title}: ${result.published} trabajadores publicados. La otra carga se conservó.${result.skipped.length?` ${result.skipped.length} filas fuera de dotación omitidas.`:''}`);
+    setMessage(`${choices[selection].title}: ${result.published} trabajadores publicados.${isGoal?' La otra carga se conservó.':''}${result.skipped.length?` ${result.skipped.length} filas fuera de dotación omitidas.`:''}`);
    }
    setParsed([]);setFilename('');
   }catch(e){setError(e instanceof Error?e.message:'No se pudo publicar.');}finally{setBusy(false);}
@@ -62,6 +63,10 @@ export function IndependentSheetUpload(){
   <Text style={styles.copy}>Elige el destino. Catego y Senior se cargan por separado en vigente o anterior, sin escribir fechas. Sus nombres se pueden editar con el lápiz. Dotación define equipos y accesos; las correcciones de nombres por RUT se conservan.</Text>
   <View style={styles.choices}>{choices.map((choice,index)=><Pressable accessibilityRole="button" accessibilityState={{selected:selection===index}} disabled={busy} key={choice.source+choice.slot} onPress={()=>{setSelection(index);setParsed([]);setFilename('');setError('');setMessage('');}} style={[styles.chip,selection===index&&styles.selected]}><Text style={{color:selection===index?colors.surface:colors.primary}}>{choice.title}</Text></Pressable>)}</View>
   <Text style={styles.sheet}>{source==='ranking_monthly'?'Ranking Plataforma: anual total, anual emitido, mensual, mensual emitido y anulaciones':source==='production_sellers'?'Hojas: produccion vendedores y produccion coordinadores':`Hoja: ${sheetSources[source].sheet}`}</Text>
+  {isGoal?<Text style={styles.copy}>Destino: {choices[selection].title}. Sube un Excel con una sola hoja «{source==='category'?'Carga Catego':'Carga Senior'}». Reemplaza únicamente {slot==='current'?'la vigente; la anterior se conserva':'la anterior; la vigente se conserva'}. No necesitas escribir fechas ni período aquí.</Text>:null}
+  {source==='production_sellers'?<Text style={styles.copy}>Un solo Excel con las dos hojas: «produccion vendedores» y «produccion coordinadores». Se publican juntas.</Text>:null}
+  {['titanes','rbh','msc'].includes(source)?<Text style={styles.copy}>Sube el archivo individual «{sheetSources[source].sheet}.xlsx», con su hoja del mismo nombre. Solo reemplaza la mora de esta jefatura.</Text>:null}
+  {source==='sauce'?<Text style={styles.copy}>Sube «Carga Sauce.xlsx» con la hoja «Carga Sauce». Este porcentaje de riesgo se carga por separado de los contratos en mora.</Text>:null}
   {source==='dotacion'?<Text style={styles.copy}>Nómina completa: los ausentes, con licencia o vacaciones no podrán ingresar (Error 444). Se conservan las tres excepciones autorizadas y el administrador.</Text>:null}
   {source==='ranking_monthly'?<Text style={styles.copy}>En «anulaciones», Ejecutivo y Última venta se leen por separado de las UF anuladas. La app calcula los días sin vender desde esa fecha.</Text>:null}
   <AppButton label={filename||'Seleccionar Excel'} icon="document-attach-outline" variant="secondary" onPress={choose} disabled={busy}/>

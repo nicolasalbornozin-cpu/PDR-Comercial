@@ -1,4 +1,5 @@
 import {IndependentSheetUpload} from '@/components/IndependentSheetUpload';
+import {AppUpdateStatus} from '@/components/AppUpdateStatus';
 import { RegistrationControls } from '@/components/RegistrationControls';
 import { Redirect } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
@@ -146,7 +147,7 @@ export default function AdminScreen() {
           {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
           {message ? <Text accessibilityRole="alert" style={styles.success}>{message}</Text> : null}
 
-          {section === 'uploads' ? <IndependentSheetUpload /> : null}
+          {section === 'uploads' ? <><AppUpdateStatus/><IndependentSheetUpload /></> : null}
 
           {section === 'users' ? (
             <>

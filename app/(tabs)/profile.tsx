@@ -1,4 +1,5 @@
 import { displayPersonName } from '@/utils/personName';
+import {AppUpdateStatus} from '@/components/AppUpdateStatus';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { ComponentProps, useEffect, useState } from 'react';
@@ -162,7 +163,7 @@ export default function ProfileScreen() {
 
           <AppButton icon="document-text-outline" label="Condiciones y datos personales" onPress={()=>router.push('/conditions')} variant="secondary" />
           <AppButton icon="log-out-outline" label="Cerrar sesión" loading={isLoading} onPress={handleSignOut} variant="secondary" />
-          <Text style={styles.version}>PDR Comercial · Versión 1.1.2</Text>
+          <AppUpdateStatus/>
         </View>
       </View>
     </ScreenContainer>
