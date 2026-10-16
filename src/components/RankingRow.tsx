@@ -9,14 +9,15 @@ import { formatUF } from '@/utils/format';
 const medals: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' };
 
 export function RankingRow({ entry }: { entry: RankingEntry }) {
+  const name = entry.entityType === 'team' ? entry.teamName?.trim() || 'Equipo sin nombre asignado' : displayPersonName(entry);
   return (
     <View style={[styles.row, entry.isCurrentUser && styles.current]}>
       <View style={styles.positionBox}>
         <Text style={medals[entry.position] ? styles.medal : styles.position}>{medals[entry.position] ?? entry.position}</Text>
       </View>
-      <UserAvatar highlighted={entry.isCurrentUser} name={displayPersonName(entry)} size={46} />
+      <UserAvatar highlighted={entry.isCurrentUser} name={name} size={36} />
       <View style={styles.content}>
-        <Text numberOfLines={1} style={styles.name}>{displayPersonName(entry)}{entry.isCurrentUser ? ' · Tú' : ''}</Text>
+        <Text numberOfLines={2} style={styles.name}>{name}{entry.isCurrentUser ? entry.entityType === 'team' ? ' · Tu equipo' : ' · Tú' : ''}</Text>
         <Text numberOfLines={1} style={styles.subtitle}>{entry.subtitle}</Text>
       </View>
       <Text style={styles.value}>{formatUF(entry.value)} <Text style={styles.unit}>UF</Text></Text>
@@ -25,7 +26,7 @@ export function RankingRow({ entry }: { entry: RankingEntry }) {
 }
 
 const styles = StyleSheet.create({
-  row: { alignItems: 'center', backgroundColor: colors.surface, borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: 'row', gap: spacing.sm, minHeight: 74, paddingHorizontal: spacing.md, paddingVertical: 10 },
+  row: { alignItems: 'center', width:'100%', backgroundColor: colors.surface, borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: 'row', gap: spacing.sm, minHeight: 74, paddingHorizontal: spacing.sm, paddingVertical: 10 },
   current: { backgroundColor: colors.softGreen, borderBottomColor: colors.softGreen, borderRadius: radii.md, marginVertical: 3 },
   positionBox: { alignItems: 'center', width: 32 },
   medal: { fontSize: 21 },

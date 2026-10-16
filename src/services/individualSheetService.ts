@@ -4,6 +4,7 @@ import {DashboardData,EmploymentStatus,MetricSnapshot,User,UserRole} from '@/typ
 import {normalizeRut} from '@/utils/rut';
 import {categoryProgress,GoalRule,seniorProgress} from '@/utils/goalProgress';
 import {canonicalCancellationRows} from '@/utils/cancellationRows';
+import {mergeHomeTotals} from '@/utils/rankingHomeTotals';
 
 export interface WorkerRow {
  id:string;rut:string|null;name:string;display_name?:string|null;aliases:string[];role:Exclude<UserRole,'admin'|'audiovisual'>;active:boolean;status:EmploymentStatus;
@@ -56,6 +57,7 @@ export const individualSheetService={
     if(found.length!==1)throw Error(`Identidad ambigua: ${row.name}.`);
     return [{worker_id:found[0].id,source_row:row.row,metrics:row.values}];
    });
+   if(parsed.source==='ranking_annual')records=mergeHomeTotals(records,parsed.homeTotals,workers);
    if(parsed.source==='cancellations'){
     records=canonicalCancellationRows(records);
     const present=new Set(records.map(r=>r.worker_id));
@@ -87,12 +89,13 @@ export const individualSheetService={
   const workers=await allRows<WorkerRow>('commercial_workers');
   const match=workerMatcher(workers);
   const skipped:string[]=[];
-  const records=parsed.records.flatMap(row=>{
+  let records=parsed.records.flatMap(row=>{
    const found=match(row);
    if(found.length===0&&['category','sauce','cancellations','ranking_annual','ranking_monthly','senior'].includes(parsed.source)){skipped.push(row.name);return [];}
    if(found.length!==1)throw Error(`No hay una identidad única en dotación para ${row.name}. Revisa su RUT o nombre antes de cargar.`);
    return [{worker_id:found[0].id,metrics:row.values,source_row:row.row}];
   });
+  if(parsed.source==='ranking_annual')records=mergeHomeTotals(records,parsed.homeTotals,workers);
   // These are complete debt reports for one jefatura. Absence means no debt,
   // not an unknown value; keep active sellers with zero contracts visible.
   const debtManagerRut:Partial<Record<SheetSource,string>>={titanes:'10368000k',rbh:'124603005',msc:'83624663'};

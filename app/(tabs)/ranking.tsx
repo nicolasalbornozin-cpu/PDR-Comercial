@@ -14,42 +14,39 @@ import { colors, radii, shadows, spacing, typography } from '@/theme';
 import { RankingEntry, RankingPeriod } from '@/types';
 import { formatUF } from '@/utils/format';
 
-function rankingCopy(role?: string) {
-  if (role === 'coordinator') return { title: 'Ranking de equipos', subtitle: 'Tu equipo frente a los demás equipos', position: 'POSICIÓN DE TU EQUIPO' };
-  if (role === 'sales_manager') return { title: 'Mis coordinadores', subtitle: 'Comparación de los equipos de tu jefatura', position: 'MEJOR EQUIPO' };
-  if (role === 'commercial_manager') return { title: 'Ranking por jefatura', subtitle: 'Comparación de las tres unidades comerciales', position: 'MEJOR JEFATURA' };
-  if (role === 'sales_director') return { title: 'Ranking por jefatura', subtitle: 'Comparación de las tres unidades comerciales', position: 'MEJOR JEFATURA' };
-  return { title: 'Ranking general', subtitle: 'Tu avance frente al resto de vendedores', position: 'TU POSICIÓN' };
+function rankingCopy(role: string | undefined, mode: 'executives'|'teams') {
+  if (mode === 'teams') return {title:'Ranking de equipos',subtitle:role==='sales_manager'?'Comparación de los equipos de tu jefatura':'Comparación de los equipos comerciales',position:role==='seller'||role==='coordinator'?'POSICIÓN DE TU EQUIPO':'MEJOR EQUIPO'};
+  return {title:'Ranking por ejecutivo',subtitle:role==='coordinator'?'Ejecutivos de tu equipo':role==='sales_manager'?'Ejecutivos de tu jefatura':'Comparación de los ejecutivos comerciales',position:role==='seller'?'TU POSICIÓN':'MEJOR EJECUTIVO'};
 }
 
 export default function RankingScreen() {
   const [period, setPeriod] = useState<RankingPeriod>('annual');
-  const [loaded, setLoaded] = useState<{userId:string;period:RankingPeriod;entries:RankingEntry[]}|null>(null);
+  const [mode,setMode] = useState<'executives'|'teams'>('executives');
+  const [loaded, setLoaded] = useState<{userId:string;period:RankingPeriod;mode:typeof mode;entries:RankingEntry[]}|null>(null);
   const [periodLabel, setPeriodLabel] = useState('Mes comercial vigente');
   const [executiveCount,setExecutiveCount]=useState<number>();
-  const [channelTotals,setChannelTotals]=useState<{annualGross:number;monthlyGross:number}>();
   const revision=useCommercialRefresh();
   const [error, setError] = useState('');
   const [showEmission, setShowEmission] = useState(false);
   const { isPreviewing, user } = useAuth();
-  const entries = useMemo(() => loaded?.userId === user?.id && loaded?.period === period ? loaded.entries : [], [loaded, period, user?.id]);
+  const entries = useMemo(() => loaded?.userId === user?.id && loaded?.period === period && loaded?.mode === mode ? loaded.entries : [], [loaded, period, mode, user?.id]);
 
   useEffect(() => {
     if (!user) return;
     let active = true;
     Promise.all([
-      snapshotService.getRanking(user, period, { preview: isPreviewing }),
+      snapshotService.getRanking(user, period, { preview: isPreviewing,rankingMode:mode }),
       snapshotService.getDashboard(user, { preview: isPreviewing }),
       snapshotService.getRankingPeriod(user,period,{preview:isPreviewing}),
     ])
-      .then(([result, dashboard, label]) => { if (active) { setLoaded({userId:user.id,period,entries:result}); setPeriodLabel(period==='annual'?label:dashboard.periodLabel);setExecutiveCount(dashboard.rankingExecutiveCount);setChannelTotals(dashboard.scopeSalesTotals); setError(''); } })
+      .then(([result, dashboard, label]) => { if (active) { setLoaded({userId:user.id,period,mode,entries:result}); setPeriodLabel(period==='annual'?label:dashboard.periodLabel);setExecutiveCount(dashboard.rankingExecutiveCount); setError(''); } })
       .catch(() => { if (active) setError('Error al comunicar con el servidor'); });
     return () => { active = false; };
-  }, [isPreviewing, period, user,revision]);
+  }, [isPreviewing, period, mode, user,revision]);
 
-  const copy = rankingCopy(user?.role);
-  const totalUf = useMemo(() => user?.role==='admin'&&channelTotals?period==='annual'?channelTotals.annualGross:channelTotals.monthlyGross:entries.reduce((total, entry) => total + entry.value, 0), [entries,user?.role,channelTotals,period]);
-  const currentEntry = entries.find((entry) => entry.isCurrentUser) ?? (user?.role === 'sales_manager' || user?.role === 'commercial_manager' || user?.role === 'sales_director' ? entries[0] : undefined);
+  const copy = rankingCopy(user?.role,mode);
+  const totalUf = useMemo(() => entries.reduce((total, entry) => total + entry.value, 0), [entries]);
+  const currentEntry = entries.find((entry) => entry.isCurrentUser) ?? (user?.role !== 'seller' && user?.role !== 'coordinator' || mode==='executives'&&user?.role==='coordinator' ? entries[0] : undefined);
   const nextEntry = currentEntry ? entries.find((entry) => entry.position === currentEntry.position - 1) : undefined;
   const gap = currentEntry && nextEntry ? Math.max(nextEntry.value - currentEntry.value, 0) : 0;
 
@@ -69,8 +66,8 @@ export default function RankingScreen() {
             <Ionicons color="rgba(255,255,255,0.08)" name="trophy-outline" size={118} style={styles.pattern} />
             <View style={styles.globalItem}>
               <Ionicons color={colors.gold} name="people-outline" size={20} />
-              <Text style={styles.globalValue}>{executiveCount??'—'}</Text>
-              <Text style={styles.globalLabel}>Ejecutivos en ranking</Text>
+              <Text style={styles.globalValue}>{mode==='teams'?entries.length:entries.length||(executiveCount??'—')}</Text>
+              <Text style={styles.globalLabel}>{mode==='teams'?'Equipos en ranking':'Ejecutivos en ranking'}</Text>
             </View>
             <View style={styles.globalDivider} />
             <View style={styles.globalItemWide}>
@@ -81,8 +78,9 @@ export default function RankingScreen() {
           </View>
 
           <RankingTabs onChange={setPeriod} value={period} />
+          <View accessibilityRole="tablist" style={styles.modeTabs}>{([{id:'executives',label:'Por ejecutivo'},{id:'teams',label:'Por equipo'}] as const).map(tab=><Pressable key={tab.id} accessibilityRole="tab" accessibilityState={{selected:mode===tab.id}} onPress={()=>setMode(tab.id)} style={[styles.modeTab,mode===tab.id&&styles.modeSelected]}><Text style={[styles.modeText,mode===tab.id&&styles.modeTextSelected]}>{tab.label}</Text></Pressable>)}</View>
           <Text style={styles.period}>{periodLabel} · ventas totales</Text>
-          <Text style={styles.period}>Los totales de equipos incluyen las ventas de CURSO, sin habilitar acceso.</Text>
+          <Text style={styles.period}>Los totales de equipos incluyen las ventas de CURSO, sin habilitar acceso. El ranking conserva las anulaciones del Excel; Inicio usa la tabla de totales anuales.</Text>
           <Pressable accessibilityRole="button" accessibilityState={{expanded:showEmission}} onPress={()=>setShowEmission(current=>!current)} style={styles.emissionToggle}><Ionicons name="swap-horizontal" size={19} color={colors.primary}/><Text style={styles.emissionText}>{showEmission?'Ocultar':'Ver'} emitidas vs. sin emitir</Text></Pressable>
           {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
 
@@ -121,9 +119,14 @@ export default function RankingScreen() {
 }
 
 const styles = StyleSheet.create({
-  page: { alignItems: 'center', paddingBottom: 30 },
-  rankingRow:{maxWidth:620,width:'100%',paddingHorizontal:spacing.xl,backgroundColor:colors.surface},
-  mobileFrame: { maxWidth: 620, width: '100%' },
+  page: { alignItems: 'stretch', paddingBottom: 30 },
+  rankingRow:{maxWidth:620,width:'100%',alignSelf:'center',paddingHorizontal:spacing.xl,backgroundColor:colors.surface},
+  mobileFrame: { maxWidth: 620, width: '100%',alignSelf:'center' },
+  modeTabs:{flexDirection:'row',gap:8},
+  modeTab:{flex:1,alignItems:'center',paddingVertical:13,borderRadius:radii.pill,backgroundColor:colors.softGreen},
+  modeSelected:{backgroundColor:colors.primary},
+  modeText:{color:colors.primary,fontFamily:typography.sans,fontWeight:'700',fontSize:13},
+  modeTextSelected:{color:colors.surface},
   header: { paddingHorizontal: spacing.xl, paddingTop: spacing.sm },
   title: { color: colors.primary, fontFamily: typography.serif, fontSize: 34, fontWeight: '600', marginTop: spacing.xxl },
   subtitle: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 13, marginTop: 3 },

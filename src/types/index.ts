@@ -236,6 +236,8 @@ export interface RankingEntry {
   userId: string;
   name: string;
   displayName?: string;
+  entityType?: 'executive' | 'team';
+  teamName?: string;
   avatar: string;
   value: number;
   emittedValue?: number;

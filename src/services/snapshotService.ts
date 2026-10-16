@@ -5,6 +5,7 @@ import { individualSheetService } from './individualSheetService';
 
 interface SnapshotRequestOptions {
   preview?: boolean;
+  rankingMode?: 'executives' | 'teams';
 }
 
 interface PreviewMetricSeed {
@@ -245,26 +246,21 @@ function previewDashboard(user: User): DashboardData {
   };
 }
 
-function previewRanking(user: User, period: RankingPeriod): RankingEntry[] {
-  if (user.role === 'coordinator') {
+function previewRanking(user: User, period: RankingPeriod, mode: 'executives'|'teams' = 'executives'): RankingEntry[] {
+  if (mode === 'teams') {
     const exactIndex = teamRanking.findIndex((entry) => entry.teamId === user.teamId);
     const namedIndex = teamRanking.findIndex((entry) => entry.name.toLocaleLowerCase('es').includes(user.name.split(' ')[0].toLocaleLowerCase('es')));
     const currentIndex = exactIndex >= 0 ? exactIndex : namedIndex >= 0 ? namedIndex : 0;
     return teamRanking.map((entry, index) => ({
       ...entry,
+      entityType:'team' as const,
+      teamName:entry.name,
       value: period === 'monthly' ? Math.round(entry.value * 0.08) : entry.value,
       ...(index === currentIndex && exactIndex < 0
         ? { userId: user.teamId || entry.userId, teamId: user.teamId || entry.teamId, name: `Equipo ${user.name.split(' ')[0]}` }
         : {}),
       isCurrentUser: index === currentIndex,
     })).sort((left, right) => right.value - left.value).map((entry, index) => ({ ...entry, position: index + 1 }));
-  }
-  if (user.role === 'sales_manager') {
-    const multiplier = period === 'monthly' ? 0.08 : 1;
-    return [
-      { userId: `preview-${user.id}-team-1`, name: 'Equipo Cristian Hernández', avatar: 'CH', value: Math.round(26840 * multiplier), position: 1, teamId: `preview-${user.id}-team-1`, subtitle: '4 vendedores' },
-      { userId: `preview-${user.id}-team-2`, name: 'Equipo Mauricio Segura', avatar: 'MS', value: Math.round(24120 * multiplier), position: 2, teamId: `preview-${user.id}-team-2`, subtitle: '4 vendedores' },
-    ];
   }
   const source = sellerRanking.map((entry, index) => ({
     ...entry,
@@ -348,9 +344,9 @@ export const snapshotService = {
   },
 
   async getRanking(user: User, period: RankingPeriod, options: SnapshotRequestOptions = {}): Promise<RankingEntry[]> {
-    if (options.preview && user.id.startsWith('preview-')) return previewRanking(user, period);
+    if (options.preview && user.id.startsWith('preview-')) return previewRanking(user, period, options.rankingMode);
     if (!supabase) return [];
-    const independent = await supabase.rpc('individual_sheet_ranking', {p_period:period,p_target:options.preview&&user.role!=='admin'?user.id:null});
+    const independent = await supabase.rpc('individual_sheet_ranking_v2', {p_period:period,p_mode:options.rankingMode??'executives',p_target:options.preview&&user.role!=='admin'?user.id:null});
     if(independent.error)throw Error(independent.error.message);
     return independent.data??[];
   },

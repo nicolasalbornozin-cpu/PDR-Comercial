@@ -20,7 +20,7 @@ export const sheetSources = {
 export type SheetSource = keyof typeof sheetSources;
 export type SheetMetrics = Record<string, string | number>;
 export interface SheetRecord { rut?: string; name: string; role: 'seller' | 'coordinator' | 'sales_manager'; values: SheetMetrics; row: number }
-export interface SheetImport { source: SheetSource; sheet: string; records: SheetRecord[]; errors: string[]; warnings: string[]; rules: GoalRule[] }
+export interface SheetImport { source: SheetSource; sheet: string; records: SheetRecord[]; homeTotals?: SheetRecord[]; errors: string[]; warnings: string[]; rules: GoalRule[] }
 export function searchName(value: unknown): string {
   return String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\([^)]*\)/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
@@ -286,8 +286,49 @@ function parsePreparedRanking(book: WorkBook, source: 'ranking_annual'|'ranking_
   }
   if ([...emissions.keys()].some(rut => !totals.has(rut))) result.errors.push('Los rankings total y emitido no tienen la misma nómina.');
   if (!result.records.length) result.errors.push('No hay resultados válidos en los rankings.');
+  if (source === 'ranking_annual') readAnnualHomeTotals(book.Sheets[total.name], result);
   result.warnings.push(`Se conservan exactamente los valores guardados de «${total.name}» y «${emitted.name}», incluidas sus anulaciones. Solo se publican RUT de trabajador y métricas agregadas. Dotación vigente controla quién aparece.`);
   return result;
+}
+
+// Read only the explicitly labelled worker-summary blocks. Never serialize raw
+// worksheet columns, formulas, operation IDs or customer information.
+function readAnnualHomeTotals(ws: WorkBook['Sheets'][string], result: SheetImport): void {
+  const cells = Object.keys(ws).filter(a => /^[A-Z]+\d+$/.test(a));
+  const blocks = cells.filter(a => ['jefes','coordinadores'].includes(searchName(ws[a]?.v)));
+  if (!blocks.length) {
+    result.warnings.push('Sin tabla de totales de Inicio: se usarán las sumas del ranking para jefes y coordinadores.');
+    return;
+  }
+  result.homeTotals = [];
+  const seen = new Set<string>();
+  for (const address of blocks) {
+    const col = address.replace(/\d/g, ''), first = Number(address.replace(/\D/g, ''));
+    const index = [...col].reduce((n, c) => n * 26 + c.charCodeAt(0) - 64, 0);
+    const column = (n: number): string => n > 26 ? column(Math.floor((n - 1) / 26)) + String.fromCharCode(65 + (n - 1) % 26) : String.fromCharCode(64 + n);
+    const grossCol = column(index + 1), emittedCol = column(index + 2);
+    const role = searchName(ws[address]?.v) === 'jefes' ? 'sales_manager' : 'coordinator';
+    if (searchName(ws[`${grossCol}${first + 1}`]?.v) !== 'bruto' || searchName(ws[`${emittedCol}${first + 1}`]?.v) !== 'emitido') {
+      result.errors.push(`Totales de Inicio: encabezados Bruto / Emitido inválidos junto a ${address}.`); continue;
+    }
+    let count = 0;
+    for (let row = first + 2; row <= first + 502; row++) {
+      const name = text(ws[`${col}${row}`]?.v);
+      if (!name) break;
+      if (['jefes','coordinadores'].includes(searchName(name))) break;
+      const gross = ws[`${grossCol}${row}`], emitted = ws[`${emittedCol}${row}`];
+      const homeAnnualGrossUf = number(gross?.v), homeAnnualEmittedUf = number(emitted?.v);
+      if (gross?.t === 'e' || emitted?.t === 'e' || homeAnnualGrossUf === undefined || homeAnnualEmittedUf === undefined) {
+        result.errors.push(`Totales de Inicio, fila ${row}: recalcula y guarda los valores Bruto / Emitido.`); continue;
+      }
+      const key = role + ':' + searchName(name);
+      if (seen.has(key)) { result.errors.push(`Totales de Inicio, fila ${row}: nombre repetido.`); continue; }
+      seen.add(key); count++;
+      result.homeTotals.push({name, role, row, values:{homeAnnualGrossUf, homeAnnualEmittedUf}});
+    }
+    if (!count) result.errors.push(`Totales de Inicio: tabla vacía junto a ${address}.`);
+  }
+  if (result.homeTotals.length) result.warnings.push(`Inicio: ${result.homeTotals.length} totales anuales de jefes y coordinadores tomados de Bruto / Emitido, sin descontar nuevamente anulaciones.`);
 }
 
 // Independent worker-only tables share a worksheet, not a business meaning.
