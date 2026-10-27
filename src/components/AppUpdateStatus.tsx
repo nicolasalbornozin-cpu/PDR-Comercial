@@ -6,7 +6,7 @@ import {AppButton} from './Buttons';
 import {checkAppUpdate} from '@/services/appUpdateService';
 import {colors,radii,spacing} from '@/theme';
 
-export const APP_REVISION='2026.10.16.1';
+export const APP_REVISION='2026.10.27.1';
 export function AppUpdateStatus(){
  const update=Updates.useUpdates();
  const [busy,setBusy]=useState(false),[message,setMessage]=useState(''),[ready,setReady]=useState(false);

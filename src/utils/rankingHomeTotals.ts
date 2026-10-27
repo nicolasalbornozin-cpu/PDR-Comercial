@@ -7,7 +7,10 @@ export function matchHomeTotal(row: SheetRecord, workers: ScopeWorker[]): ScopeW
   const key = (name:unknown) => searchName(name).replace(/^manuelo\b/, 'manuel').replace(/\bguissela\b/g,'guisela');
   const tokens = key(row.name).split(' ');
   if (tokens.length < 2) return [];
-  const current = workers.filter(w => w.role === row.role && [w.name,w.display_name,...(w.aliases??[])].some(name => {
+  // The Jefes summary can include the channel director/commercial manager.
+  // Match against their existing roster identity; never assign a role from Excel.
+  const roles = row.role === 'sales_manager' ? ['sales_manager','sales_director','commercial_manager'] : [row.role];
+  const current = workers.filter(w => roles.includes(w.role) && [w.name,w.display_name,...(w.aliases??[])].some(name => {
     const words = new Set(key(name).split(' '));
     return tokens.every(token => words.has(token));
   }));

@@ -18,8 +18,12 @@ el rol, vigencia o acceso que determina Dotación. Un coordinador histórico
 que hoy tiene otro rol conserva esa métrica, pero no se convierte por ello
 en coordinador.
 
-Inicio utiliza la fila del coordinador o jefe correspondiente. Administrador,
-jefe comercial y gerente ven la suma de jefaturas una sola vez. Los valores
+Inicio utiliza la fila del coordinador o jefe correspondiente. La tabla Jefes
+también puede incluir la identidad ya habilitada del gerente. Si está presente,
+esa fila define el total del canal para Administrador, jefe comercial y gerente:
+no se vuelve a sumar con las jefaturas, incluso si difiere de su suma por incluir
+historia de jefaturas anteriores. Sin fila de gerente se utiliza una fila de jefe
+comercial si existe; sin ambas se conserva la suma de jefaturas una sola vez. Los valores
 mensuales y los vendedores conservan su cálculo anterior. Si una carga no
 incluye la tabla o falta una fila, se recurre a la suma del ranking, sin
 recuperar un total antiguo de una carga anterior.

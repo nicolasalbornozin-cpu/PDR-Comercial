@@ -31,7 +31,7 @@ export function IndependentSheetUpload(){
    const data=webFile?new Uint8Array(await webFile.arrayBuffer()):await new File(asset.uri).bytes();const xlsx=await import('xlsx');
    if(data.byteLength>20*1024*1024)throw Error('El Excel excede 20 MB.');
    const book=xlsx.read(data,{type:'array',cellNF:true});
-   if(source==='ranking_monthly'&&!/^ranking plataforma(?: \(\d+\))?\.xlsx?$/i.test(asset.name.trim()))throw Error('Selecciona Ranking Plataforma.xlsx.');
+   if(source==='ranking_monthly'&&!/^ranking plataforma(?: actualizado)?(?: \(\d+\))?\.xlsx?$/i.test(asset.name.trim()))throw Error('Selecciona Ranking Plataforma.xlsx o Ranking plataforma actualizado.xlsx.');
    const selectedNames=source==='senior'||source==='category'?book.SheetNames.filter(n=>searchName(n)===searchName(sheetSources[source].sheet)):book.SheetNames;
    const selectedBook={...book,SheetNames:selectedNames,Sheets:Object.fromEntries(selectedNames.map(n=>[n,book.Sheets[n]]))};
    const imports=[parseIndividualSheet(selectedBook,source,dates)];
@@ -68,7 +68,7 @@ export function IndependentSheetUpload(){
   {['titanes','rbh','msc'].includes(source)?<Text style={styles.copy}>Sube el archivo individual «{sheetSources[source].sheet}.xlsx», con su hoja del mismo nombre. Solo reemplaza la mora de esta jefatura.</Text>:null}
   {source==='sauce'?<Text style={styles.copy}>Sube «Carga Sauce.xlsx» con la hoja «Carga Sauce». Este porcentaje de riesgo se carga por separado de los contratos en mora.</Text>:null}
   {source==='dotacion'?<Text style={styles.copy}>Nómina completa: los ausentes, con licencia o vacaciones no podrán ingresar (Error 444). Se conservan las tres excepciones autorizadas y el administrador.</Text>:null}
-  {source==='ranking_monthly'?<Text style={styles.copy}>En «Ranking anual total», las tablas Jefes y Coordinadores con Bruto / Emitido actualizan las UF anuales de Inicio sin recalcularlas. En «anulaciones», Ejecutivo y Última venta se leen por separado de las UF anuladas. La app calcula los días sin vender desde esa fecha.</Text>:null}
+  {source==='ranking_monthly'?<Text style={styles.copy}>En «Ranking anual total», las tablas Jefes y Coordinadores con Bruto / Emitido actualizan las UF anuales de Inicio sin recalcularlas. La fila del gerente define el total del canal para Gerente, Jefe Comercial y Administrador; no se suma otra vez a las jefaturas. En «anulaciones», Ejecutivo y Última venta se leen por separado de las UF anuladas. La app calcula los días sin vender desde esa fecha.</Text>:null}
   <AppButton label={filename||'Seleccionar Excel'} icon="document-attach-outline" variant="secondary" onPress={choose} disabled={busy}/>
   {parsed.map(p=><View style={styles.validation} key={p.source}><Text style={styles.sheet}>{p.sheet}: {p.records.length} trabajadores · {p.errors.length} errores</Text>{[...p.errors.slice(0,5),...p.warnings.slice(0,3)].map((t,i)=><Text style={styles.copy} key={i}>{t}</Text>)}</View>)}
   {error?<Text accessibilityRole="alert" style={{color:colors.danger}}>{error}</Text>:null}
