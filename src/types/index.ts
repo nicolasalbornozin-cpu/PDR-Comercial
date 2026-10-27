@@ -14,7 +14,7 @@ export const roleLabels: Record<UserRole, string> = {
   coordinator: 'Coordinador/a',
   sales_manager: 'Jefe/a de ventas',
   commercial_manager: 'Jefe Comercial',
-  sales_director: 'Gerente de Venta',
+  sales_director: 'Gerente de Ventas',
   admin: 'Administrador/a',
   audiovisual: 'Audiovisual',
 };

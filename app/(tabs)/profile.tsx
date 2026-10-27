@@ -24,6 +24,8 @@ const previewRoles: { icon: IconName; label: string; role: PreviewRole }[] = [
   { icon: 'person-outline', label: 'Ver como vendedor', role: 'seller' },
   { icon: 'people-outline', label: 'Ver como coordinador', role: 'coordinator' },
   { icon: 'briefcase-outline', label: 'Ver como jefe de venta', role: 'sales_manager' },
+  { icon: 'business-outline', label: 'Ver como jefe comercial', role: 'commercial_manager' },
+  { icon: 'ribbon-outline', label: 'Ver como gerente de ventas', role: 'sales_director' },
 ];
 
 const profileDetails: { icon: IconName; label: string; getValue: (profile: User) => string }[] = [
