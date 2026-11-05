@@ -21,7 +21,8 @@ function rankingCopy(role: string | undefined, mode: 'executives'|'teams') {
 
 export default function RankingScreen() {
   const [period, setPeriod] = useState<RankingPeriod>('annual');
-  const [mode,setMode] = useState<'executives'|'teams'>('executives');
+  const [monthlyMode,setMonthlyMode] = useState<'executives'|'teams'>('executives');
+  const mode = period === 'annual' ? 'executives' : monthlyMode;
   const [loaded, setLoaded] = useState<{userId:string;period:RankingPeriod;mode:typeof mode;entries:RankingEntry[]}|null>(null);
   const [periodLabel, setPeriodLabel] = useState('Mes comercial vigente');
   const [executiveCount,setExecutiveCount]=useState<number>();
@@ -78,9 +79,9 @@ export default function RankingScreen() {
           </View>
 
           <RankingTabs onChange={setPeriod} value={period} />
-          <View accessibilityRole="tablist" style={styles.modeTabs}>{([{id:'executives',label:'Por ejecutivo'},{id:'teams',label:'Por equipo'}] as const).map(tab=><Pressable key={tab.id} accessibilityRole="tab" accessibilityState={{selected:mode===tab.id}} onPress={()=>setMode(tab.id)} style={[styles.modeTab,mode===tab.id&&styles.modeSelected]}><Text style={[styles.modeText,mode===tab.id&&styles.modeTextSelected]}>{tab.label}</Text></Pressable>)}</View>
+          {period === 'monthly' ? <View accessibilityRole="tablist" style={styles.modeTabs}>{([{id:'executives',label:'Por ejecutivo'},{id:'teams',label:'Por equipo'}] as const).map(tab=><Pressable key={tab.id} accessibilityRole="tab" accessibilityState={{selected:mode===tab.id}} onPress={()=>setMonthlyMode(tab.id)} style={[styles.modeTab,mode===tab.id&&styles.modeSelected]}><Text style={[styles.modeText,mode===tab.id&&styles.modeTextSelected]}>{tab.label}</Text></Pressable>)}</View> : null}
           <Text style={styles.period}>{periodLabel} · ventas totales</Text>
-          <Text style={styles.period}>Los totales de equipos incluyen las ventas de CURSO, sin habilitar acceso. El ranking conserva las anulaciones del Excel; Inicio usa la tabla de totales anuales.</Text>
+          <Text style={styles.period}>{period === 'monthly' ? 'Los totales de equipos incluyen las ventas de CURSO, sin habilitar acceso. ' : ''}El ranking conserva las anulaciones del Excel; Inicio usa la tabla de totales anuales.</Text>
           <Pressable accessibilityRole="button" accessibilityState={{expanded:showEmission}} onPress={()=>setShowEmission(current=>!current)} style={styles.emissionToggle}><Ionicons name="swap-horizontal" size={19} color={colors.primary}/><Text style={styles.emissionText}>{showEmission?'Ocultar':'Ver'} emitidas vs. sin emitir</Text></Pressable>
           {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
 
