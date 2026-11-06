@@ -1,16 +1,21 @@
 import { displayPersonName } from '@/utils/personName';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useSegments } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/hooks/useAuth';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
 import { roleLabels } from '@/types';
+import { bottomNavigationMetrics } from '@/utils/bottomNavigation';
 
 export function PreviewModeBanner() {
   const router = useRouter();
   const segments = useSegments();
   const { isPreviewing, stopPreview, user } = useAuth();
+  const insets = useSafeAreaInsets();
+  const { width, fontScale } = useWindowDimensions();
+  const navigation = bottomNavigationMetrics(width, insets, fontScale);
 
   if (!isPreviewing || !user) return null;
 
@@ -22,7 +27,7 @@ export function PreviewModeBanner() {
   const aboveTabBar = segments[0] === '(tabs)';
 
   return (
-    <View style={[styles.overlay, aboveTabBar ? styles.aboveTabs : styles.aboveEdge]}>
+    <View style={[styles.overlay, { bottom: aboveTabBar ? navigation.previewOffset : Math.max(insets.bottom, spacing.lg) }]}>
       <Pressable
         accessibilityHint="Finaliza la simulación y vuelve al perfil real del administrador"
         accessibilityLabel="Volver al modo administrador"
@@ -48,8 +53,6 @@ export function PreviewModeBanner() {
 
 const styles = StyleSheet.create({
   overlay: { alignItems: 'center', left: spacing.md, pointerEvents: 'box-none', position: 'absolute', right: spacing.md, zIndex: 1000 },
-  aboveTabs: { bottom: 84 },
-  aboveEdge: { bottom: spacing.lg },
   banner: {
     ...shadows.floating,
     alignItems: 'center',
