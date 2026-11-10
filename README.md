@@ -37,6 +37,27 @@ npm install
 
 ## Ejecución
 
+### Acceso web desde PC
+
+La versión web de producción está en [PDR Comercial](https://pdr-comercial.expo.app).
+Usa el mismo RUT y contraseña de la app. Para actualizar archivos desde el PC:
+**Administrar → Cargas → elegir destino → Seleccionar Excel → Publicar**.
+Las cargas actualizan los mismos datos consultados por la app móvil; no requieren
+reinstalar la APK. Solo el administrador puede publicar las cargas.
+
+La web se aloja en el proyecto Expo existente. Para publicar una revisión, exporta
+con el entorno de producción y promueve ese resultado al enlace estable:
+
+```bash
+eas env:exec production "npm run export:web" --non-interactive
+eas deploy --prod --environment production --export-dir dist --no-source-maps --non-interactive
+```
+
+Publica únicamente `dist/`, con las variables públicas del cliente. No incluyas
+Excel, respaldos, archivos `.env` ni credenciales de servicio en el contenido web.
+
+### Ejecución local
+
 ```bash
 npx expo start
 ```
