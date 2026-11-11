@@ -182,7 +182,9 @@ export default function HomeScreen() {
           <View style={styles.metricsRow}>
             <MetricCard onPress={!isSeller ? () => router.push({pathname:'/team',params:{kind:'debt'}}) : undefined} detail={hasMora ? isSeller ? 'contratos en mora' : isCommercialManager ? 'total · ver jefes de venta' : isManager ? 'total · ver coordinadores' : 'total · ver vendedores' : 'sin mora cargada'} icon="alert-circle-outline" label="MORA" tone={hasMora && moraContracts > 0 ? 'red' : 'green'} value={hasMora ? `${moraContracts}` : '—'} />
             <MetricCard onPress={!isSeller ? () => router.push({pathname:'/team',params:{kind:'productivity'}}) : undefined} detail={hasProductivity?isSeller?'según Producción':'ver productividad del equipo':'sin datos cargados'} icon="briefcase-outline" label="PRODUCTIVIDAD" tone={hasProductivity?productivityTone(productivity):'gold'} value={hasProductivity?productivity.toFixed(2):'—'} />
-            <MetricCard detail={isSeller ? 'posición anual' : 'personas visibles'} icon="trophy-outline" label={isSeller ? 'RANKING' : 'EQUIPO'} tone="gold" value={isSeller ? rankingPosition !== undefined ? `#${rankingPosition}` : '—' : `${sellerRows.length}`} />
+            {!isManager && (
+              <MetricCard detail={isSeller ? 'posición anual' : 'personas visibles'} icon="trophy-outline" label={isSeller ? 'RANKING' : 'EQUIPO'} tone="gold" value={isSeller ? rankingPosition !== undefined ? `#${rankingPosition}` : '—' : `${sellerRows.length}`} />
+            )}
             <MetricCard onPress={!isSeller?()=>router.push({pathname:'/team',params:{kind:'zero'}}):undefined} detail={isSeller?'días desde última venta':`${noSaleCount} ejecutivos con 0 UF este mes · ver detalle`} icon="calendar-outline" label="DÍAS SIN VENDER" value={isSeller?sellerDays(ownMetric):teamDays===null?'Sin fecha':`${teamDays} días`} />
           </View>
 
@@ -219,7 +221,7 @@ export default function HomeScreen() {
             </View>
           ) : null}
 
-          {!isSeller && data ? (
+          {!isSeller && !isManager && data ? (
             <View style={styles.debtCard}>
               <View style={styles.debtHeading}><Ionicons color={colors.goldText} name="wallet-outline" size={20} /><Text style={styles.debtTitle}>Cuotas en deuda</Text></View>
               <View style={styles.debtStats}>
