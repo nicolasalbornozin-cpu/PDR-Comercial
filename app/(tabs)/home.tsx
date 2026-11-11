@@ -127,9 +127,6 @@ export default function HomeScreen() {
   const categoryCount = data ? sellerRows.filter(seller => hasGoalLevel(latestGoal(data, seller.id, 'category')?.category)).length : 0;
   const seniorCount = data ? sellerRows.filter(seller => hasQualifiedSenior(latestGoal(data,seller.id,'senior'))).length : 0;
   const birthdayProfiles = data?.profiles.filter((profile) => isBirthdayToday(profile.birthDate)) ?? [];
-  const debtInstallments = sumMetric(sellerRows, data?.latestByUser ?? {}, 'debtInstallmentsCount');
-  const debtUf08 = sumMetric(sellerRows, data?.latestByUser ?? {}, 'debtUf08');
-  const debtSales = sumMetric(sellerRows, data?.latestByUser ?? {}, 'debtSalesCount');
   const bestMonthlyUf = Math.max(...sellerRows.map((seller) => Number(data?.monthlyEmittedUfByUser[seller.id] ?? 0)), 0);
   const rankingPosition = ownMetric?.rankingPosition;
   const salesforceRecords = isSeller ? Number(ownMetric?.salesforceRecords ?? 0) : sumMetric(sellerRows, data?.latestByUser ?? {}, 'salesforceRecords');
@@ -218,17 +215,6 @@ export default function HomeScreen() {
               <Pressable onPress={() => router.push({ pathname: '/goals', params: { focus: 'category' } })} style={({ pressed }) => pressed && styles.pressed}>
                 <GoalCard badge={ownMetric?.category ?? 'Sin categoría'} icon="star" insight={ownMetric?.categoryRemaining??'Toca para ver ambos períodos'} progress={ownMetric?.categoryTargetUf ? (ownMetric.categoryUf??0)/ownMetric.categoryTargetUf : 0} title={ownMetric?.categoryLabel??'Catego'} tone="green" value={ownMetric?.categoryUf!==undefined?`${formatUF(ownMetric.categoryUf)} UF brutas`:'Sin datos'} />
               </Pressable>
-            </View>
-          ) : null}
-
-          {!isSeller && !isManager && data ? (
-            <View style={styles.debtCard}>
-              <View style={styles.debtHeading}><Ionicons color={colors.goldText} name="wallet-outline" size={20} /><Text style={styles.debtTitle}>Cuotas en deuda</Text></View>
-              <View style={styles.debtStats}>
-                <View><Text style={styles.debtValue}>{debtInstallments}</Text><Text style={styles.debtLabel}>cuotas</Text></View>
-                <View><Text style={styles.debtValue}>{formatUF(debtUf08)} UF</Text><Text style={styles.debtLabel}>grupo 0–8%</Text></View>
-                <View><Text style={styles.debtValue}>{debtSales}</Text><Text style={styles.debtLabel}>ventas en mora</Text></View>
-              </View>
             </View>
           ) : null}
 
@@ -362,12 +348,6 @@ const styles = StyleSheet.create({
   detailLabel: { color: colors.goldText, fontFamily: typography.sans, fontSize: 9, fontWeight: '900', letterSpacing: 0.7 },
   detailValue: { color: colors.primary, fontFamily: typography.serif, fontSize: 19, fontWeight: '600', marginTop: spacing.sm },
   detailHint: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 9, marginTop: spacing.sm },
-  debtCard: { ...shadows.card, backgroundColor: colors.surface, borderRadius: radii.lg, gap: spacing.md, padding: spacing.lg },
-  debtHeading: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
-  debtTitle: { color: colors.text, fontFamily: typography.serif, fontSize: 18, fontWeight: '600' },
-  debtStats: { flexDirection: 'row', justifyContent: 'space-between' },
-  debtValue: { color: colors.primary, fontFamily: typography.sans, fontSize: 16, fontWeight: '900' },
-  debtLabel: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 9, marginTop: 2 },
   section: { gap: spacing.md },
   sectionHeading: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   sectionTitle: { color: colors.text, fontFamily: typography.serif, fontSize: 21, fontWeight: '600' },
