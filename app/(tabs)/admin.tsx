@@ -42,6 +42,7 @@ function AdminDashboard() {
 
   const [resetTarget, setResetTarget] = useState<AdminUser | null>(null);
   const [newPassword, setNewPassword] = useState('');
+  const [recoveryCode, setRecoveryCode] = useState<{ name: string; code: string } | null>(null);
 
   async function refreshUsers() {
     try {
@@ -79,6 +80,21 @@ function AdminDashboard() {
   function clearFeedback() {
     setError('');
     setMessage('');
+    setRecoveryCode(null);
+  }
+
+  async function issueRecoveryCode(account: AdminUser) {
+    if (busy) return;
+    clearFeedback();
+    setBusy(true);
+    try {
+      const code = await adminService.issueRecoveryCode(account.id);
+      setRecoveryCode({ name: account.name, code });
+    } catch {
+      setError('No fue posible generar el código. Verifica que la cuenta esté activa e inténtalo de nuevo.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function createUser() {
@@ -143,7 +159,7 @@ function AdminDashboard() {
               ['users', 'Cuentas'],
               ['resets', `Accesos${pending.length ? ` (${pending.length})` : ''}`],
             ] as [AdminSection, string][]).map(([value, label]) => (
-              <Pressable key={value} onPress={() => { setSection(value); clearFeedback(); }} style={[styles.tab, section === value && styles.tabActive]}>
+              <Pressable key={value} disabled={busy} onPress={() => { setSection(value); clearFeedback(); }} style={[styles.tab, section === value && styles.tabActive]}>
                 <Text style={[styles.tabText, section === value && styles.tabTextActive]}>{label}</Text>
               </Pressable>
             ))}
@@ -151,6 +167,14 @@ function AdminDashboard() {
 
           {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
           {message ? <Text accessibilityRole="alert" style={styles.success}>{message}</Text> : null}
+          {section === 'users' && recoveryCode ? (
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Código para {recoveryCode.name}</Text>
+              <Text selectable style={styles.cardTitle}>{recoveryCode.code}</Text>
+              <Text style={styles.cardText}>Entrégalo en privado. Se puede usar una sola vez.</Text>
+              <AppButton label="Ocultar código" variant="secondary" onPress={() => setRecoveryCode(null)} />
+            </View>
+          ) : null}
 
           {section === 'uploads' ? <><AppUpdateStatus/><IndependentSheetUpload /></> : null}
 
@@ -184,9 +208,16 @@ function AdminDashboard() {
                       <Text style={styles.accountName}>{account.name}</Text>
                       <Text style={styles.accountMeta}>{formatRut(account.rut)} · {roleLabels[account.role]} · {employmentStatusLabels[account.employmentStatus ?? 'active']}</Text>
                     </View>
-                    <Pressable disabled={busy} onPress={() => toggleActive(account)} style={[styles.status, account.active ? styles.statusActive : styles.statusInactive]}>
-                      <Text style={styles.statusText}>{account.active ? 'Activa' : 'Inactiva'}</Text>
-                    </Pressable>
+                    <View style={styles.accountActions}>
+                      <Pressable disabled={busy} onPress={() => toggleActive(account)} style={[styles.status, account.active ? styles.statusActive : styles.statusInactive]}>
+                        <Text style={styles.statusText}>{account.active ? 'Activa' : 'Inactiva'}</Text>
+                      </Pressable>
+                      {account.active && account.employmentStatus === 'active' && account.rut ? (
+                        <Pressable accessibilityRole="button" accessibilityLabel={`Generar código de recuperación para ${account.name}`} disabled={busy} onPress={() => { void issueRecoveryCode(account); }} style={styles.resetButton}>
+                          <Text style={styles.resetText}>Generar código</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
                   </View>
                 ))}
               </View>
@@ -225,6 +256,7 @@ function AdminDashboard() {
 
 const styles = StyleSheet.create({
   page: { alignItems: 'center', paddingBottom: 36 },
+  accountActions: { alignItems: 'flex-end', gap: spacing.sm },
   mobileFrame: { maxWidth: 760, width: '100%' },
   header: { paddingHorizontal: spacing.xl, paddingTop: spacing.sm },
   title: { color: colors.primary, fontFamily: typography.serif, fontSize: 34, fontWeight: '600', marginTop: spacing.xxl },

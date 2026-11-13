@@ -14,6 +14,21 @@ const supabasePublishableKey =
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabasePublishableKey);
 
+export function createRecoveryClient() {
+  if (!supabaseUrl || !supabasePublishableKey) {
+    throw new Error('Recuperar acceso requiere conexión con la plataforma.');
+  }
+  // Keep the recovery session in memory and separate from the regular login.
+  return createClient(supabaseUrl, supabasePublishableKey, {
+    auth: {
+      storageKey: 'pdr-password-recovery',
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+}
+
 const serverStorage = {
   getItem: async () => null,
   setItem: async () => undefined,

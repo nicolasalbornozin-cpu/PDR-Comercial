@@ -39,17 +39,23 @@ npm install
 
 ### Acceso web desde PC
 
-La versión web de producción está en [PDR Comercial](https://pdr-comercial.expo.app).
-Usa el mismo RUT y contraseña de la app. Para actualizar archivos desde el PC:
+Durante el piloto, la web habitual de [PDR Comercial](https://pdr-comercial.expo.app)
+abre en Ranking. Para gestionar cuentas y actualizar archivos desde el PC, abre
+el [portal administrativo](https://pdr-comercial--administracion.expo.app/admin)
+e inicia sesión con tu RUT y contraseña de administrador.
+
 **Administrar → Cargas → elegir destino → Seleccionar Excel → Publicar**.
 Las cargas actualizan los mismos datos consultados por la app móvil; no requieren
 reinstalar la APK. Solo el administrador puede publicar las cargas.
 
-La web se aloja en el proyecto Expo existente. Para publicar una revisión, exporta
-con el entorno de producción y promueve ese resultado al enlace estable:
+La web se aloja en el proyecto Expo existente. Durante el piloto, exporta con
+`EXPO_PUBLIC_PDR_PILOT=1` para el enlace habitual y con `EXPO_PUBLIC_PDR_PILOT=0`
+para el portal administrativo. Usa un directorio distinto para cada exportación
+y limpia la caché de Metro al cambiar el modo. Publica el portal administrativo
+con `--alias administracion` y el piloto habitual con `--prod`.
 
 ```bash
-eas env:exec production "npm run export:web" --non-interactive
+eas env:exec production "npm run export:web -- --clear" --non-interactive
 eas deploy --prod --environment production --export-dir dist --no-source-maps --non-interactive
 ```
 

@@ -164,6 +164,39 @@ Deno.serve(async (request) => {
       return jsonResponse({ ok: true, userId: created.user.id });
     }
 
+    if (body.action === 'issueRecoveryCode') {
+      const userId = String(body.userId ?? '');
+      const { data: target, error: targetError } = await admin
+        .from('profiles')
+        .select('id,rut,active,employment_status')
+        .eq('id', userId)
+        .maybeSingle();
+      if (targetError) throw targetError;
+      if (!target?.active || target.employment_status !== 'active' || !isValidRut(target.rut)) {
+        return jsonResponse({ error: 'Selecciona una cuenta activa con RUT válido.' }, 400);
+      }
+
+      const email = internalEmail(target.rut);
+      const { data: identity, error: identityError } = await admin.auth.admin.getUserById(target.id);
+      if (identityError || identity.user?.email !== email) {
+        return jsonResponse({ error: 'No se pudo verificar la cuenta asociada al RUT.' }, 400);
+      }
+
+      const { data: link, error: linkError } = await admin.auth.admin.generateLink({ type: 'recovery', email });
+      if (linkError || !link.properties?.email_otp) {
+        return jsonResponse({ error: 'No fue posible generar el código. Inténtalo nuevamente.' }, 400);
+      }
+
+      await admin.from('admin_audit_logs').insert({
+        admin_id: callerProfile.id,
+        action: 'password_recovery_code_issued',
+        target_user_id: target.id,
+      });
+      const response = jsonResponse({ ok: true, code: link.properties.email_otp });
+      response.headers.set('Cache-Control', 'no-store');
+      return response;
+    }
+
     if (body.action === 'resetPassword') {
       const userId = String(body.userId ?? '');
       if (!hasStrongPassword(body.password)) {

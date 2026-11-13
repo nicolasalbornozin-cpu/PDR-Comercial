@@ -1,5 +1,5 @@
 import { currentUser, demoAdminUser } from '@/data/mockData';
-import { isSupabaseConfigured, supabase } from '@/services/supabase';
+import { createRecoveryClient, isSupabaseConfigured, supabase } from '@/services/supabase';
 import { EmploymentStatus, User, UserRole } from '@/types';
 import { isEmploymentBlocked } from '@/utils/commercialRules';
 import { isValidRut, normalizeRut, rutToInternalEmail } from '@/utils/rut';
@@ -144,6 +144,36 @@ export const authService = {
       body: { rut: normalizeRut(rut) },
     });
     if (error) throw new Error('No fue posible registrar la solicitud. Inténtalo nuevamente.');
+  },
+
+  async recoverPassword(rut: string, code: string, password: string, confirmation: string): Promise<void> {
+    const validation = registrationValidation(rut, password, confirmation);
+    if (validation) throw new Error(validation);
+    const token = code.trim();
+    if (!/^\d{6,10}$/.test(token)) throw new Error('Ingresa el código de recuperación.');
+
+    const recovery = createRecoveryClient();
+    const { data, error } = await recovery.auth.verifyOtp({
+      email: rutToInternalEmail(rut),
+      token,
+      type: 'recovery',
+    });
+    if (error || !data.session) {
+      throw new Error('El código no es válido o venció. Solicita uno nuevo al administrador.');
+    }
+
+    try {
+      const access = await recovery.rpc('session_access_allowed');
+      if (access.error || access.data !== true) {
+        throw new Error('La cuenta no tiene acceso habilitado. Comunícate con el administrador.');
+      }
+      const result = await recovery.auth.updateUser({ password });
+      if (result.error) {
+        throw new Error('No fue posible guardar la contraseña. Solicita un nuevo código al administrador.');
+      }
+    } finally {
+      await recovery.auth.signOut().catch(() => undefined);
+    }
   },
 
   async signOut(): Promise<void> {

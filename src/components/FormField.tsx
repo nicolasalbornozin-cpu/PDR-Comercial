@@ -9,14 +9,15 @@ interface FormFieldProps extends TextInputProps {
   icon: ComponentProps<typeof Ionicons>['name'];
   error?: string;
   password?: boolean;
+  confirmed?: boolean;
 }
 
-export function FormField({ label, icon, error, password = false, ...inputProps }: FormFieldProps) {
+export function FormField({ label, icon, error, password = false, confirmed = false, ...inputProps }: FormFieldProps) {
   const [hidden, setHidden] = useState(password);
   return (
     <View style={styles.wrapper}>
       <Text style={styles.label}>{label}</Text>
-      <View style={[styles.field, error && styles.fieldError]}>
+      <View style={[styles.field, confirmed && styles.fieldConfirmed, error && styles.fieldError]}>
         <Ionicons color={colors.textMuted} name={icon} size={20} />
         <TextInput
           accessibilityLabel={label}
@@ -30,6 +31,7 @@ export function FormField({ label, icon, error, password = false, ...inputProps 
             <Ionicons color={colors.textMuted} name={hidden ? 'eye-outline' : 'eye-off-outline'} size={21} />
           </Pressable>
         ) : null}
+        {confirmed ? <Ionicons accessibilityLabel="Confirmada" color={colors.success} name="checkmark-circle" size={20} /> : null}
       </View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
@@ -41,6 +43,7 @@ const styles = StyleSheet.create({
   label: { color: colors.text, fontFamily: typography.sans, fontSize: 13, fontWeight: '700' },
   field: { alignItems: 'center', backgroundColor: colors.paleGreen, borderColor: 'transparent', borderRadius: radii.md, borderWidth: 1, flexDirection: 'row', gap: spacing.md, height: 54, paddingHorizontal: spacing.lg },
   fieldError: { borderColor: colors.danger },
+  fieldConfirmed: { borderColor: colors.success },
   input: { color: colors.text, flex: 1, fontFamily: typography.sans, fontSize: 15, height: '100%' },
   error: { color: colors.danger, fontFamily: typography.sans, fontSize: 12 },
 });

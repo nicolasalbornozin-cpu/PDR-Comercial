@@ -61,6 +61,12 @@ export const adminService = {
     await invokeAdmin({ action: 'resetPassword', userId, password });
   },
 
+  async issueRecoveryCode(userId: string): Promise<string> {
+    const result = await invokeAdmin<{ code: string }>({ action: 'issueRecoveryCode', userId });
+    if (!/^\d{6,10}$/.test(result?.code ?? '')) throw new Error('No fue posible generar el código de recuperación.');
+    return result.code;
+  },
+
   async setActive(userId: string, active: boolean): Promise<void> {
     await invokeAdmin({ action: 'setActive', userId, active });
   },
