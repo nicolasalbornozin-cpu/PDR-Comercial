@@ -14,17 +14,18 @@ import { adminService } from '@/services/adminService';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
 import { AdminUser, employmentStatusLabels, PasswordResetRequest, roleLabels, UserRole } from '@/types';
 import { formatRut } from '@/utils/rut';
-import { isPilotMode } from '@/utils/pilotNavigation';
+import { landingTab } from '@/utils/pilotNavigation';
 
 type AdminSection = 'uploads' | 'users' | 'resets';
 
 const roles: UserRole[] = ['seller', 'coordinator', 'sales_manager', 'commercial_manager', 'sales_director', 'audiovisual', 'admin'];
 export default function AdminScreen() {
-  return isPilotMode ? <Redirect href="/(tabs)/ranking" /> : <AdminDashboard />;
+  const { user } = useAuth();
+  if (!user) return null;
+  return user.role === 'admin' ? <AdminDashboard /> : <Redirect href={landingTab(user.role)} />;
 }
 
 function AdminDashboard() {
-  const { user } = useAuth();
   const [section, setSection] = useState<AdminSection>('uploads');
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [resetRequests, setResetRequests] = useState<PasswordResetRequest[]>([]);
@@ -55,7 +56,6 @@ function AdminDashboard() {
   }
 
   useEffect(() => {
-    if (user?.role !== 'admin') return;
     let active = true;
     adminService.list()
       .then((result) => {
@@ -67,15 +67,12 @@ function AdminDashboard() {
         if (active) setError(loadError instanceof Error ? loadError.message : 'No fue posible cargar las cuentas.');
       });
     return () => { active = false; };
-  }, [user?.role]);
+  }, []);
 
   const pending = useMemo(() => resetRequests.map((request) => ({
     request,
     account: users.find((account) => account.id === request.userId),
   })).filter((item): item is { request: PasswordResetRequest; account: AdminUser } => Boolean(item.account)), [resetRequests, users]);
-
-  if (!user) return null;
-  if (user.role !== 'admin') return <Redirect href="/(tabs)/home" />;
 
   function clearFeedback() {
     setError('');

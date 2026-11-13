@@ -9,7 +9,7 @@ import { UpdateController } from '@/components/UpdateController';
 import { AuthProvider } from '@/context/AuthContext';
 import { useAuth } from '@/hooks/useAuth';
 import { colors } from '@/theme';
-import { isPilotMode, landingTab } from '@/utils/pilotNavigation';
+import { hasPilotRestrictions, landingTab } from '@/utils/pilotNavigation';
 
 function RootNavigator() {
   const { isLoading, user } = useAuth();
@@ -47,7 +47,7 @@ function RootNavigator() {
           <Stack.Screen name="index" />
           <Stack.Screen name="(auth)" />
           <Stack.Screen name="(tabs)" />
-          <Stack.Protected guard={!isPilotMode}>
+          <Stack.Protected guard={Boolean(user) && !hasPilotRestrictions(user?.role)}>
             <Stack.Screen name="goals" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="team" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="notifications" options={{ animation: 'slide_from_right' }} />

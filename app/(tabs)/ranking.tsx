@@ -13,7 +13,7 @@ import { snapshotService } from '@/services/snapshotService';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
 import { RankingEntry, RankingPeriod } from '@/types';
 import { formatUF } from '@/utils/format';
-import { isPilotMode } from '@/utils/pilotNavigation';
+import { hasPilotRestrictions } from '@/utils/pilotNavigation';
 
 function rankingCopy(role: string | undefined, mode: 'executives'|'teams') {
   if (mode === 'teams') return {title:'Ranking de equipos',subtitle:role==='sales_manager'?'Comparación de los equipos de tu jefatura':'Comparación de los equipos comerciales',position:role==='seller'||role==='coordinator'?'POSICIÓN DE TU EQUIPO':'MEJOR EQUIPO'};
@@ -87,7 +87,7 @@ export default function RankingScreen() {
           <RankingTabs onChange={setPeriod} value={period} />
           {period === 'monthly' ? <View accessibilityRole="tablist" style={styles.modeTabs}>{([{id:'executives',label:'Por ejecutivo'},{id:'teams',label:'Por equipo'}] as const).map(tab=><Pressable key={tab.id} accessibilityRole="tab" accessibilityState={{selected:mode===tab.id}} onPress={()=>setMonthlyMode(tab.id)} style={[styles.modeTab,mode===tab.id&&styles.modeSelected]}><Text style={[styles.modeText,mode===tab.id&&styles.modeTextSelected]}>{tab.label}</Text></Pressable>)}</View> : null}
           <Text style={styles.period}>{periodLabel} · ventas totales</Text>
-          <Text style={styles.period}>{period === 'monthly' ? 'Los totales de equipos incluyen las ventas de CURSO, sin habilitar acceso. ' : ''}El ranking conserva las anulaciones del Excel.{!isPilotMode ? ' Inicio usa la tabla de totales anuales.' : ''}</Text>
+          <Text style={styles.period}>{period === 'monthly' ? 'Los totales de equipos incluyen las ventas de CURSO, sin habilitar acceso. ' : ''}El ranking conserva las anulaciones del Excel.{!hasPilotRestrictions(user?.role) ? ' Inicio usa la tabla de totales anuales.' : ''}</Text>
           <Pressable accessibilityRole="button" accessibilityState={{expanded:showEmission}} onPress={()=>setShowEmission(current=>!current)} style={styles.emissionToggle}><Ionicons name="swap-horizontal" size={19} color={colors.primary}/><Text style={styles.emissionText}>{showEmission?'Ocultar':'Ver'} emitidas vs. sin emitir</Text></Pressable>
           {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
 

@@ -13,16 +13,19 @@ function load(file) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
   }).outputText;
   const output = {};
-  vm.runInNewContext(code, { exports: output, require(id) {
+  vm.runInNewContext(code, {
+    exports: output,
+    process: { env: { EXPO_PUBLIC_PDR_PILOT: pilot ? '1' : '0' } },
+    require(id) {
     if (id === 'react/jsx-runtime') return { jsx: element, jsxs: element };
-    if (id === 'react-native') return { Text: 'Text', View: 'View', Pressable: 'Pressable', useWindowDimensions: () => dimensions, StyleSheet: { create: x => x } };
+    if (id === 'react-native') return { Platform: { OS: 'web' }, Text: 'Text', View: 'View', Pressable: 'Pressable', useWindowDimensions: () => dimensions, StyleSheet: { create: x => x } };
     if (id === 'react-native-safe-area-context') return { useSafeAreaInsets: () => insets };
     if (id === '@expo/vector-icons') return { Ionicons: 'Ionicons' };
     if (id === 'expo-router') return { Tabs: { Screen: 'Tabs.Screen' }, useRouter: () => ({ replace() {} }), useSegments: () => ['(tabs)', 'home'] };
     if (id === '@/hooks/useAuth') return { useAuth: () => ({ user: { id: 'qa', name: 'Demo', role }, isPreviewing: preview, stopPreview() {} }) };
     if (id === '@/theme') return { colors, typography: { sans: 'sans-serif' }, spacing: { md: 12, lg: 16, sm: 8 }, radii: {}, shadows: {} };
     if (id === '@/utils/bottomNavigation') return metrics;
-    if (id === '@/utils/pilotNavigation') return { get isPilotMode() { return pilot; } };
+    if (id === '@/utils/pilotNavigation') return load('src/utils/pilotNavigation.ts');
     if (id === '@/utils/personName') return { displayPersonName: person => person.name };
     if (id === '@/types') return { roleLabels: { seller: 'Ejecutivo' } };
     throw new Error(id);
@@ -30,7 +33,7 @@ function load(file) {
   return output;
 }
 const metrics = load('src/utils/bottomNavigation.ts');
-const layout = load('app/(tabs)/_layout.tsx');
+let layout = load('app/(tabs)/_layout.tsx');
 const banner = load('src/components/PreviewModeBanner.tsx');
 
 for (const test of [
@@ -81,13 +84,18 @@ for (const test of [
   }
 }
 pilot = true;
+layout = load('app/(tabs)/_layout.tsx');
+const navigation = load('src/utils/pilotNavigation.ts');
 for (role of ['admin', 'seller', 'coordinator', 'sales_manager', 'commercial_manager', 'sales_director', 'audiovisual']) {
   const tree = layout.default();
   const visible = tree.props.children.filter(screen => screen.props.options.href !== null);
   const locked = visible.filter(screen => screen.props.options.tabBarButton);
-  assert.equal(locked.map(screen => screen.props.name).join(','), role === 'admin' ? 'home,admin' : role === 'audiovisual' ? '' : 'home');
-  assert.equal(visible.filter(screen => !screen.props.options.tabBarButton).map(screen => screen.props.name).join(','), role === 'audiovisual' ? 'news,profile' : 'ranking,news,profile');
-  assert.equal(tree.props.initialRouteName, role === 'audiovisual' ? 'news' : 'ranking');
+  assert.equal(locked.map(screen => screen.props.name).join(','), ['admin', 'audiovisual'].includes(role) ? '' : 'home');
+  const unlocked = visible.filter(screen => !screen.props.options.tabBarButton).map(screen => screen.props.name).join(',');
+  assert.equal(unlocked, role === 'admin' ? 'home,ranking,news,admin,profile' : role === 'audiovisual' ? 'news,profile' : 'ranking,news,profile');
+  const firstTab = role === 'admin' ? 'home' : role === 'audiovisual' ? 'news' : 'ranking';
+  assert.equal(tree.props.initialRouteName, firstTab);
+  assert.equal(navigation.landingTab(role), '/(tabs)/' + firstTab);
   for (const screen of locked) {
     assert.equal(screen.props.options.href, undefined);
     const button = screen.props.options.tabBarButton({ onPress() { assert.fail('Locked tab navigated'); } });

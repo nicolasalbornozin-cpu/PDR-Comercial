@@ -39,24 +39,23 @@ npm install
 
 ### Acceso web desde PC
 
-Durante el piloto, la web habitual de [PDR Comercial](https://pdr-comercial.expo.app)
-abre en Ranking. Para gestionar cuentas y actualizar archivos desde el PC, abre
-el [portal administrativo](https://pdr-comercial--administracion.expo.app/admin)
-e inicia sesión con tu RUT y contraseña de administrador.
+Durante el piloto, los perfiles comerciales abren en Ranking y el administrador
+tiene acceso completo. Para gestionar cuentas y actualizar archivos desde el PC,
+inicia sesión con tu RUT y contraseña de administrador en el
+[portal administrativo de PDR Comercial](https://pdr-comercial.expo.app/admin).
 
 **Administrar → Cargas → elegir destino → Seleccionar Excel → Publicar**.
 Las cargas actualizan los mismos datos consultados por la app móvil; no requieren
 reinstalar la APK. Solo el administrador puede publicar las cargas.
 
-La web se aloja en el proyecto Expo existente. Durante el piloto, exporta con
-`EXPO_PUBLIC_PDR_PILOT=1` para el enlace habitual y con `EXPO_PUBLIC_PDR_PILOT=0`
-para el portal administrativo. Usa un directorio distinto para cada exportación
-y limpia la caché de Metro al cambiar el modo. Publica el portal administrativo
-con `--alias administracion` y el piloto habitual con `--prod`.
+Para actualizar los enlaces web durante el piloto, exporta con
+`EXPO_PUBLIC_PDR_PILOT=1` y publica la misma versión en producción y en los
+alias `piloto` y `administracion`. El acceso se decide según el rol de la cuenta.
 
 ```bash
 eas env:exec production "npm run export:web -- --clear" --non-interactive
-eas deploy --prod --environment production --export-dir dist --no-source-maps --non-interactive
+eas deploy --prod --alias piloto --environment production --export-dir dist --no-source-maps --non-interactive
+eas deploy:alias --alias administracion --id ID_DEL_DESPLIEGUE --non-interactive
 ```
 
 Publica únicamente `dist/`, con las variables públicas del cliente. No incluyas

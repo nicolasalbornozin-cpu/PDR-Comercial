@@ -21,7 +21,7 @@ import { daysWithoutSale, hasMonthWithoutSale, hasGoalLevel, hasQualifiedSenior,
 import { formatUF } from '@/utils/format';
 import { displayPersonName } from '@/utils/personName';
 import { teamDaysWithoutSale } from '@/utils/teamOverview';
-import { isPilotMode } from '@/utils/pilotNavigation';
+import { hasPilotRestrictions } from '@/utils/pilotNavigation';
 
 function sumMetric(workers: VisibleProfile[], latest: DashboardData['latestByUser'], key: keyof MetricSnapshot): number {
   return workers.reduce((total, worker) => total + Number(latest[worker.id]?.[key] ?? 0), 0);
@@ -68,7 +68,8 @@ function ScopeCard({ title, subtitle, sellers, data, monthlyTarget, onPress,scop
 }
 
 export default function HomeScreen() {
-  return isPilotMode ? <Redirect href="/(tabs)/ranking" /> : <HomeDashboard />;
+  const { user } = useAuth();
+  return hasPilotRestrictions(user?.role) ? <Redirect href="/(tabs)/ranking" /> : <HomeDashboard />;
 }
 
 function HomeDashboard() {

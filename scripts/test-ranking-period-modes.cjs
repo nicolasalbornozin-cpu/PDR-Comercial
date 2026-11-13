@@ -37,7 +37,7 @@ function harness(role) {
       if (id === '@expo/vector-icons') return { Ionicons: 'Ionicons' };
       if (id === '@/hooks/useAuth') return { useAuth: () => ({ user, isPreviewing: role === 'admin' }) };
       if (id === '@/hooks/useCommercialRefresh') return { useCommercialRefresh: () => 0 };
-      if (id === '@/utils/pilotNavigation') return { isPilotMode: false };
+      if (id === '@/utils/pilotNavigation') return { hasPilotRestrictions: () => false };
       if (id === '@/services/snapshotService') return { snapshotService: {
         async getRanking(account, period, options) {
           requests.push({ userId: account.id, period, ...options });
