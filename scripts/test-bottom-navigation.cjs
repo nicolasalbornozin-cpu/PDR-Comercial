@@ -4,7 +4,7 @@ const vm = require('node:vm');
 const ts = require('typescript');
 const element = (type, props) => ({ type, props: props ?? {} });
 const flatten = style => Object.assign({}, ...[style].flat(Infinity).filter(Boolean));
-let role = 'admin', preview = false;
+let role = 'admin', preview = false, pilot = false;
 let dimensions = { width: 390, height: 844, fontScale: 1 };
 let insets = { top: 24, bottom: 34, left: 0, right: 0 };
 const colors = { primary: '#0E563A', primaryDark: '#093D2A', gold: '#C6A24C', goldOnDark: '#E0C56F', surface: '#FFFFFF', textMuted: '#5F6D65', border: '#E5E9E5' };
@@ -22,6 +22,7 @@ function load(file) {
     if (id === '@/hooks/useAuth') return { useAuth: () => ({ user: { id: 'qa', name: 'Demo', role }, isPreviewing: preview, stopPreview() {} }) };
     if (id === '@/theme') return { colors, typography: { sans: 'sans-serif' }, spacing: { md: 12, lg: 16, sm: 8 }, radii: {}, shadows: {} };
     if (id === '@/utils/bottomNavigation') return metrics;
+    if (id === '@/utils/pilotNavigation') return { get isPilotMode() { return pilot; } };
     if (id === '@/utils/personName') return { displayPersonName: person => person.name };
     if (id === '@/types') return { roleLabels: { seller: 'Ejecutivo' } };
     throw new Error(id);
@@ -79,4 +80,22 @@ for (const test of [
     assert.equal(banner.PreviewModeBanner(), null);
   }
 }
+pilot = true;
+for (role of ['admin', 'seller', 'coordinator', 'sales_manager', 'commercial_manager', 'sales_director', 'audiovisual']) {
+  const tree = layout.default();
+  const visible = tree.props.children.filter(screen => screen.props.options.href !== null);
+  const locked = visible.filter(screen => screen.props.options.tabBarButton);
+  assert.equal(locked.map(screen => screen.props.name).join(','), role === 'admin' ? 'home,admin' : role === 'audiovisual' ? '' : 'home');
+  assert.equal(visible.filter(screen => !screen.props.options.tabBarButton).map(screen => screen.props.name).join(','), role === 'audiovisual' ? 'news,profile' : 'ranking,news,profile');
+  assert.equal(tree.props.initialRouteName, role === 'audiovisual' ? 'news' : 'ranking');
+  for (const screen of locked) {
+    assert.equal(screen.props.options.href, undefined);
+    const button = screen.props.options.tabBarButton({ onPress() { assert.fail('Locked tab navigated'); } });
+    assert.equal(button.props.disabled, true);
+    assert.equal(button.props.onPress, undefined);
+    const icon = screen.props.options.tabBarIcon();
+    assert.equal(icon.props.inactive, 'lock-closed-outline');
+  }
+}
 console.log('PASS: rounded brand navigation, active gold icon, seven-role visibility, keyboard hiding, safe-area/font-scale layouts and non-overlapping administrator preview banner.');
+console.log('PASS: pilot opens the allowed first tab and exposes locked tabs without navigation.');

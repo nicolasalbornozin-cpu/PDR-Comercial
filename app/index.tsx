@@ -4,6 +4,7 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { BrandLogo } from '@/components/BrandLogo';
 import { useAuth } from '@/hooks/useAuth';
 import { colors } from '@/theme';
+import { landingTab } from '@/utils/pilotNavigation';
 
 export default function IndexScreen() {
   const { isLoading, user } = useAuth();
@@ -17,7 +18,7 @@ export default function IndexScreen() {
     );
   }
 
-  return <Redirect href={user ? user.role === 'audiovisual' ? '/(tabs)/news' : '/(tabs)/home' : '/(auth)/login'} />;
+  return <Redirect href={user ? landingTab(user.role) : '/(auth)/login'} />;
 }
 
 const styles = StyleSheet.create({

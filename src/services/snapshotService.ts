@@ -329,12 +329,29 @@ function demoDashboard(): DashboardData {
 }
 
 export const snapshotService = {
-  async getRankingPeriod(user:User,period:RankingPeriod,options:SnapshotRequestOptions={}):Promise<string>{
-    if(options.preview&&user.id.startsWith('preview-'))return period==='annual'?'Año calendario 2026':'Mes de demostración';
-    if(!supabase)return 'Sin carga publicada';
-    const result=await supabase.from('sheet_uploads').select('label').eq('source','ranking_'+period).order('published_at',{ascending:false}).limit(1).maybeSingle();
-    if(result.error)throw Error(result.error.message);
-    return result.data?.label??'Sin carga publicada';
+  async getRankingHeader(user: User, period: RankingPeriod, options: SnapshotRequestOptions = {}) {
+    if (options.preview && user.id.startsWith('preview-')) {
+      const periodLabel = period === 'annual' ? 'Año calendario 2026' : previewDashboard(user).periodLabel;
+      return { periodLabel, executiveCount: undefined };
+    }
+    if (!supabase) {
+      return { periodLabel: period === 'annual' ? 'Sin carga publicada' : demoDashboard().periodLabel, executiveCount: undefined };
+    }
+    const [upload, setting, count] = await Promise.all([
+      supabase.from('sheet_uploads').select('label').eq('source', 'ranking_' + period)
+        .order('published_at', { ascending: false }).limit(1).maybeSingle(),
+      period === 'monthly'
+        ? supabase.from('platform_settings').select('label').eq('id', 'monthly_ranking').maybeSingle()
+        : null,
+      supabase.rpc('ranking_executive_count'),
+    ]);
+    if (upload.error || setting?.error || count.error) {
+      throw Error((upload.error ?? setting?.error ?? count.error)?.message);
+    }
+    return {
+      periodLabel: setting?.data?.label || upload.data?.label || 'Sin carga publicada',
+      executiveCount: typeof count.data === 'number' ? count.data : undefined,
+    };
   },
   async getDashboard(user: User, options: SnapshotRequestOptions = {}): Promise<DashboardData> {
     if (options.preview && user.id.startsWith('preview-')) return previewDashboard(user);

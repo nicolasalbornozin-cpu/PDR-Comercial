@@ -47,13 +47,14 @@ interface IconButtonProps {
   onPress: () => void;
   light?: boolean;
   badge?: boolean;
+  disabled?: boolean;
   children?: ReactNode;
 }
 
-export function IconButton({ icon, label, onPress, light = false, badge = false }: IconButtonProps) {
+export function IconButton({ icon, label, onPress, light = false, badge = false, disabled = false }: IconButtonProps) {
   return (
-    <Pressable accessibilityLabel={label} accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
-      <Ionicons color={light ? colors.surface : colors.primary} name={icon} size={23} />
+    <Pressable accessibilityLabel={label} accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
+      <Ionicons color={disabled ? colors.textMuted : light ? colors.surface : colors.primary} name={icon} size={23} />
       {badge ? <Text style={styles.badge} /> : null}
     </Pressable>
   );

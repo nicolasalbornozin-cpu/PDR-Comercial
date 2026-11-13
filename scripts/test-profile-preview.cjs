@@ -55,6 +55,7 @@ function harness(role = 'admin', isPreviewing = false) {
       if (id === '@/utils/personName') return { displayPersonName: user => user.name };
       if (id === '@/utils/format') return { formatDate: value => value ?? '' };
       if (id === '@/utils/rut') return { formatRut: value => value };
+      if (id === '@/utils/pilotNavigation') return { landingTab: () => '/(tabs)/home' };
       if (id === '@/types') return { roleLabels };
       if (id === '@/theme') return { colors: {}, radii: {}, shadows: {}, spacing: {}, typography: {} };
       if (id === '@/data/mockData') return { currentUser: profile };

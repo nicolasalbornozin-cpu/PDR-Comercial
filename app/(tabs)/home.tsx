@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -21,6 +21,7 @@ import { daysWithoutSale, hasMonthWithoutSale, hasGoalLevel, hasQualifiedSenior,
 import { formatUF } from '@/utils/format';
 import { displayPersonName } from '@/utils/personName';
 import { teamDaysWithoutSale } from '@/utils/teamOverview';
+import { isPilotMode } from '@/utils/pilotNavigation';
 
 function sumMetric(workers: VisibleProfile[], latest: DashboardData['latestByUser'], key: keyof MetricSnapshot): number {
   return workers.reduce((total, worker) => total + Number(latest[worker.id]?.[key] ?? 0), 0);
@@ -67,6 +68,10 @@ function ScopeCard({ title, subtitle, sellers, data, monthlyTarget, onPress,scop
 }
 
 export default function HomeScreen() {
+  return isPilotMode ? <Redirect href="/(tabs)/ranking" /> : <HomeDashboard />;
+}
+
+function HomeDashboard() {
   const router = useRouter();
   const { isPreviewing, user } = useAuth();
   const revision=useCommercialRefresh();

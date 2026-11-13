@@ -14,11 +14,16 @@ import { adminService } from '@/services/adminService';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
 import { AdminUser, employmentStatusLabels, PasswordResetRequest, roleLabels, UserRole } from '@/types';
 import { formatRut } from '@/utils/rut';
+import { isPilotMode } from '@/utils/pilotNavigation';
 
 type AdminSection = 'uploads' | 'users' | 'resets';
 
 const roles: UserRole[] = ['seller', 'coordinator', 'sales_manager', 'commercial_manager', 'sales_director', 'audiovisual', 'admin'];
 export default function AdminScreen() {
+  return isPilotMode ? <Redirect href="/(tabs)/ranking" /> : <AdminDashboard />;
+}
+
+function AdminDashboard() {
   const { user } = useAuth();
   const [section, setSection] = useState<AdminSection>('uploads');
   const [users, setUsers] = useState<AdminUser[]>([]);

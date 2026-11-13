@@ -35,7 +35,6 @@ export default function LoginScreen() {
     setError('');
     try {
       await signIn(rut, password);
-      router.replace('/(tabs)/home');
     } catch (loginError) {
       setError(loginError instanceof Error ? loginError.message : 'No fue posible iniciar sesión.');
     }

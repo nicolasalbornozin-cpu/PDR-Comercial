@@ -16,6 +16,7 @@ import { colors, radii, shadows, spacing, typography } from '@/theme';
 import { roleLabels, User, UserRole } from '@/types';
 import { formatDate } from '@/utils/format';
 import { formatRut } from '@/utils/rut';
+import { landingTab } from '@/utils/pilotNavigation';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 type PreviewRole = Exclude<UserRole, 'admin'>;
@@ -61,7 +62,7 @@ export default function ProfileScreen() {
 
   function openPreview(previewUser: User) {
     startPreview(previewUser);
-    router.replace('/(tabs)/home');
+    router.replace(landingTab(previewUser.role));
   }
 
   async function handleSignOut() {

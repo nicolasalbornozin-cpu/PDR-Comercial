@@ -37,13 +37,13 @@ function harness(role) {
       if (id === '@expo/vector-icons') return { Ionicons: 'Ionicons' };
       if (id === '@/hooks/useAuth') return { useAuth: () => ({ user, isPreviewing: role === 'admin' }) };
       if (id === '@/hooks/useCommercialRefresh') return { useCommercialRefresh: () => 0 };
+      if (id === '@/utils/pilotNavigation') return { isPilotMode: false };
       if (id === '@/services/snapshotService') return { snapshotService: {
         async getRanking(account, period, options) {
           requests.push({ userId: account.id, period, ...options });
           return [{ userId: `${period}-${options.rankingMode}`, position: 1, value: 100, emittedValue: 40, notEmittedValue: 60, isCurrentUser: true }];
         },
-        async getDashboard() { return { periodLabel: 'Octubre comercial 2026', rankingExecutiveCount: 10 }; },
-        async getRankingPeriod(account, period) { return period === 'annual' ? '2026' : 'Octubre comercial 2026'; },
+        async getRankingHeader(account, period) { return { periodLabel: period === 'annual' ? '2026' : 'Octubre comercial 2026', executiveCount: 10 }; },
       } };
       if (id === '@/utils/format') return { formatUF: value => String(value) };
       if (id === '@/theme') return { colors: {}, radii: {}, shadows: {}, spacing: {}, typography: {} };

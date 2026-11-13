@@ -9,6 +9,7 @@ import { UpdateController } from '@/components/UpdateController';
 import { AuthProvider } from '@/context/AuthContext';
 import { useAuth } from '@/hooks/useAuth';
 import { colors } from '@/theme';
+import { isPilotMode, landingTab } from '@/utils/pilotNavigation';
 
 function RootNavigator() {
   const { isLoading, user } = useAuth();
@@ -23,7 +24,7 @@ function RootNavigator() {
     if (isLoading) return;
     const inAuthGroup = segments[0] === '(auth)';
     if (!user && !inAuthGroup && segments[0] !== 'conditions') router.replace('/(auth)/login');
-    if (user && inAuthGroup) router.replace(user.role === 'audiovisual' ? '/(tabs)/news' : '/(tabs)/home');
+    if (user && inAuthGroup) router.replace(landingTab(user.role));
   }, [isLoading, router, segments, user]);
 
   if (isLoading) {
@@ -46,10 +47,12 @@ function RootNavigator() {
           <Stack.Screen name="index" />
           <Stack.Screen name="(auth)" />
           <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="goals" options={{ animation: 'slide_from_right' }} />
-          <Stack.Screen name="team" options={{ animation: 'slide_from_right' }} />
+          <Stack.Protected guard={!isPilotMode}>
+            <Stack.Screen name="goals" options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="team" options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="notifications" options={{ animation: 'slide_from_right' }} />
+          </Stack.Protected>
           <Stack.Screen name="conditions" options={{ animation: 'slide_from_right' }} />
-          <Stack.Screen name="notifications" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="gallery" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="news/[id]" options={{ animation: 'slide_from_right' }} />
         </Stack>
