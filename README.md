@@ -48,18 +48,19 @@ inicia sesión con tu RUT y contraseña de administrador en el
 Las cargas actualizan los mismos datos consultados por la app móvil; no requieren
 reinstalar la APK. Solo el administrador puede publicar las cargas.
 
-Para actualizar los enlaces web durante el piloto, exporta con
-`EXPO_PUBLIC_PDR_PILOT=1` y publica la misma versión en producción y en los
-alias `piloto` y `administracion`. El acceso se decide según el rol de la cuenta.
+Desde el repositorio, con los cambios guardados en Git y la sesión de Expo
+iniciada, este comando publica la misma revisión para la web y Android.
 
 ```bash
-eas env:exec production "npm run export:web -- --clear" --non-interactive
-eas deploy --prod --alias piloto --environment production --export-dir dist --no-source-maps --non-interactive
-eas deploy:alias --alias administracion --id ID_DEL_DESPLIEGUE --non-interactive
+npm run update:production
 ```
 
-Publica únicamente `dist/`, con las variables públicas del cliente. No incluyas
-Excel, respaldos, archivos `.env` ni credenciales de servicio en el contenido web.
+El enlace habitual es [pdr-comercial.expo.app](https://pdr-comercial.expo.app).
+El comando prepara la web, envía la actualización a Android y activa la web
+en producción. Los enlaces anteriores también se actualizan para que sigan
+funcionando. La web y Android comparten la configuración del piloto.
+Publica archivos de la exportación web con las variables públicas del cliente.
+Guarda los Excel, respaldos y credenciales de servicio fuera de esa exportación.
 
 ### Ejecución local
 

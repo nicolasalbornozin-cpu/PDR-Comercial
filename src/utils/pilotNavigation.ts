@@ -1,7 +1,8 @@
-import { Platform } from 'react-native';
 import type { UserRole } from '@/types';
 
-const isPilotMode = Platform.OS === 'android' || process.env.EXPO_PUBLIC_PDR_PILOT === '1';
+const pilotEnabledByDefault = true;
+const pilotOverride = process.env.EXPO_PUBLIC_PDR_PILOT;
+const isPilotMode = pilotOverride === undefined ? pilotEnabledByDefault : pilotOverride === '1';
 
 export function hasPilotRestrictions(role: UserRole | undefined): boolean {
   return isPilotMode && role !== 'admin';

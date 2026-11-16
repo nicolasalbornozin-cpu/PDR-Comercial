@@ -14,7 +14,7 @@
     "build:production:android": "eas build --platform android --profile production",
     "build:production-apk:android": "npx eas-cli@latest build --platform android --profile production-apk",
     "update:preview": "npx eas-cli@latest update --channel preview --environment preview",
-    "update:production": "npx eas-cli@latest update --channel production --environment production",
+    "update:production": "node scripts/publish-production.cjs",
     "postinstall": "node scripts/apply-security-patches.cjs",
     "security:verify": "node scripts/apply-security-patches.cjs && node scripts/test-security-patches.cjs"
   },

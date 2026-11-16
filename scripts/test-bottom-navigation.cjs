@@ -5,6 +5,7 @@ const ts = require('typescript');
 const element = (type, props) => ({ type, props: props ?? {} });
 const flatten = style => Object.assign({}, ...[style].flat(Infinity).filter(Boolean));
 let role = 'admin', preview = false, pilot = false;
+let platform = 'web';
 let dimensions = { width: 390, height: 844, fontScale: 1 };
 let insets = { top: 24, bottom: 34, left: 0, right: 0 };
 const colors = { primary: '#0E563A', primaryDark: '#093D2A', gold: '#C6A24C', goldOnDark: '#E0C56F', surface: '#FFFFFF', textMuted: '#5F6D65', border: '#E5E9E5' };
@@ -15,10 +16,10 @@ function load(file) {
   const output = {};
   vm.runInNewContext(code, {
     exports: output,
-    process: { env: { EXPO_PUBLIC_PDR_PILOT: pilot ? '1' : '0' } },
+    process: { env: { EXPO_PUBLIC_PDR_PILOT: pilot === undefined ? undefined : pilot ? '1' : '0' } },
     require(id) {
     if (id === 'react/jsx-runtime') return { jsx: element, jsxs: element };
-    if (id === 'react-native') return { Platform: { OS: 'web' }, Text: 'Text', View: 'View', Pressable: 'Pressable', useWindowDimensions: () => dimensions, StyleSheet: { create: x => x } };
+    if (id === 'react-native') return { Platform: { OS: platform }, Text: 'Text', View: 'View', Pressable: 'Pressable', useWindowDimensions: () => dimensions, StyleSheet: { create: x => x } };
     if (id === 'react-native-safe-area-context') return { useSafeAreaInsets: () => insets };
     if (id === '@expo/vector-icons') return { Ionicons: 'Ionicons' };
     if (id === 'expo-router') return { Tabs: { Screen: 'Tabs.Screen' }, useRouter: () => ({ replace() {} }), useSegments: () => ['(tabs)', 'home'] };
@@ -107,3 +108,11 @@ for (role of ['admin', 'seller', 'coordinator', 'sales_manager', 'commercial_man
 }
 console.log('PASS: rounded brand navigation, active gold icon, seven-role visibility, keyboard hiding, safe-area/font-scale layouts and non-overlapping administrator preview banner.');
 console.log('PASS: pilot opens the allowed first tab and exposes locked tabs without navigation.');
+for (platform of ['web', 'android']) {
+  for (pilot of [undefined, false]) {
+    const navigation = load('src/utils/pilotNavigation.ts');
+    assert.equal(navigation.hasPilotRestrictions('admin'), false);
+    assert.equal(navigation.hasPilotRestrictions('seller'), pilot === undefined);
+  }
+}
+console.log('PASS: Android and web use the same pilot default and override.');
