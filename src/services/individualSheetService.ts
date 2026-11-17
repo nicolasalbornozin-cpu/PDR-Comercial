@@ -1,5 +1,5 @@
 import {supabase} from './supabase';
-import {searchName,SheetImport,SheetMetrics,SheetSource} from './individualSheetParser';
+import {searchName,RankingImport,SheetImport,SheetMetrics,SheetSource} from './individualSheetParser';
 import {DashboardData,EmploymentStatus,MetricSnapshot,User,UserRole} from '@/types';
 import {normalizeRut} from '@/utils/rut';
 import {categoryProgress,GoalRule,seniorProgress} from '@/utils/goalProgress';
@@ -46,10 +46,10 @@ function goalFields(source:'category'|'senior',v:SheetMetrics,seniorOpen:boolean
  return {cancellationUf:num('cancellationUf'),smadCount:num('smad'),smadRemaining:num('smadRemaining')??missing('SMAD'),seniorSmadCount:num('smad'),seniorSmadRemaining:num('smadRemaining')??missing('SMAD'),restCount:num('rest'),restRemaining:missing('DESCANSO'),ssffCount:num('ssff'),ssffRemaining:missing('SSFF'),tenureMonths:num('tenureMonths'),seniorStatus:seniorOpen?'open':'closed',eligibleTotalUf:num('uf'),emittedUf:num('emittedUf'),notEmittedUf:num('notEmittedUf'),seniorEmittedUf:num('emittedUf'),seniorNotEmittedUf:num('notEmittedUf'),seniorLevel:String(v.level),seniorRemaining:String(v.remaining),seniorTargetUf:remainingUfTarget(num('uf'),v.remaining),...seniorProgress(num('uf'),num('smad'),num('rest'),num('ssff'),rules)};
 }
 export const individualSheetService={
- async publishBundle(items:{parsed:SheetImport;filename:string;label:string;start:string;end:string}[]){
+ async publishBundle(items:(RankingImport&{filename:string})[]){
   if(!supabase)throw Error('Supabase no está configurado.');
   const workers=await allRows<WorkerRow>('commercial_workers');const match=workerMatcher(workers);const skipped:string[]=[];
-  const imports=items.map(({parsed,filename,label,start,end})=>{
+  const imports=items.map(({parsed,filename,label,start,end,slot})=>{
    if(parsed.errors.length)throw Error('Corrige los errores antes de publicar.');
    let records=parsed.records.flatMap(row=>{
     const found=match(row);
@@ -57,13 +57,13 @@ export const individualSheetService={
     if(found.length!==1)throw Error(`Identidad ambigua: ${row.name}.`);
     return [{worker_id:found[0].id,source_row:row.row,metrics:row.values}];
    });
-   if(parsed.source==='ranking_annual')records=mergeHomeTotals(records,parsed.homeTotals,workers);
+   if(parsed.homeTotals)records=mergeHomeTotals(records,parsed.homeTotals,workers,skipped);
    if(parsed.source==='cancellations'){
     records=canonicalCancellationRows(records);
     const present=new Set(records.map(r=>r.worker_id));
     for(const w of workers.filter(w=>w.role==='seller'&&w.active&&w.status==='active'&&!present.has(w.id)))records.push({worker_id:w.id,source_row:1,metrics:{cancellationUf:0}});
    }
-   return {upload:{source:parsed.source,filename,sheet_name:parsed.sheet,label,period_start:start,period_end:end,rules:parsed.rules,goal_slot:'current'},records};
+   return {upload:{source:parsed.source,filename,sheet_name:parsed.sheet,label,period_start:start,period_end:end,rules:parsed.rules,goal_slot:slot},records};
   });
   const result=await supabase.rpc('publish_sheet_bundle',{p_imports:imports});if(result.error)throw Error(result.error.message);
   return {published:imports.reduce((n,i)=>n+i.records.length,0),skipped};
@@ -129,7 +129,7 @@ export const individualSheetService={
     // Preserve uploaded Q3 figures as historical, never silently erase or relabel them as Q4.
     Object.assign(m,goalFields('senior',v,row.senior_status==='open',row.rules),{seniorLabel:displayLabels[`senior_${row.goal_slot??'current'}`]??row.label});
    }
-   if(row.source.startsWith('production_')){m.productivity=num('productivity');m.productionUf=num('uf');if(!rows.some(r=>r.worker_id===row.worker_id&&r.source==='cancellations')){m.lastSaleDate=typeof v.lastSaleDate==='string'?v.lastSaleDate:undefined;m.daysWithoutSaleText=typeof v.daysWithoutSaleText==='string'?v.daysWithoutSaleText:undefined;} }
+   if(row.source.startsWith('production_')){m.productivity=num('productivity');m.productionUf=num('uf');if(!rows.some(r=>r.worker_id===row.worker_id&&r.source==='cancellations'&&(r.metrics.lastSaleDate||r.metrics.daysWithoutSaleText))){m.lastSaleDate=typeof v.lastSaleDate==='string'?v.lastSaleDate:undefined;m.daysWithoutSaleText=typeof v.daysWithoutSaleText==='string'?v.daysWithoutSaleText:undefined;} }
    if(row.source==='cancellations'){m.annualCancellationUf=num('cancellationUf');m.lastSaleDate=typeof v.lastSaleDate==='string'?v.lastSaleDate:undefined;m.daysWithoutSaleText=typeof v.daysWithoutSaleText==='string'?v.daysWithoutSaleText:undefined;}
    if(['titanes','rbh','msc'].includes(row.source)){m.debtInstallmentsCount=num('debtInstallments');m.debtUf08=num('debtUf08');m.debtSalesCount=num('debtSales');m.delinquentClientsCount=num('debtSales');}
    if(row.source==='sauce')m.sauceRisk=num('risk');

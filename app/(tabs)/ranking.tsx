@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader } from '@/components/AppHeader';
@@ -13,46 +13,47 @@ import { snapshotService } from '@/services/snapshotService';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
 import { RankingEntry, RankingPeriod } from '@/types';
 import { formatUF } from '@/utils/format';
-import { hasPilotRestrictions } from '@/utils/pilotNavigation';
 
-function rankingCopy(role: string | undefined, mode: 'executives'|'teams') {
+function rankingCopy(role: string | undefined, mode: 'executives'|'teams'|'units') {
+  if (mode === 'units') return {title:'Ranking de unidades',subtitle:'Comparación de las unidades comerciales',position:'POSICIÓN DE TU UNIDAD'};
   if (mode === 'teams') return {title:'Ranking de equipos',subtitle:role==='sales_manager'?'Comparación de los equipos de tu jefatura':'Comparación de los equipos comerciales',position:role==='seller'||role==='coordinator'?'POSICIÓN DE TU EQUIPO':'MEJOR EQUIPO'};
   return {title:'Ranking por ejecutivo',subtitle:role==='coordinator'?'Ejecutivos de tu equipo':role==='sales_manager'?'Ejecutivos de tu jefatura':'Comparación de los ejecutivos comerciales',position:role==='seller'?'TU POSICIÓN':'MEJOR EJECUTIVO'};
 }
 
 export default function RankingScreen() {
   const [period, setPeriod] = useState<RankingPeriod>('annual');
-  const [monthlyMode,setMonthlyMode] = useState<'executives'|'teams'>('executives');
+  const [monthlyMode,setMonthlyMode] = useState<'executives'|'teams'|'units'>('executives');
+  const [monthlySlot,setMonthlySlot] = useState<'current'|'previous'>('current');
+  const slot = period === 'annual' ? 'current' : monthlySlot;
   const mode = period === 'annual' ? 'executives' : monthlyMode;
-  const [loaded, setLoaded] = useState<{userId:string;period:RankingPeriod;mode:typeof mode;entries:RankingEntry[]}|null>(null);
-  const [periodLabel, setPeriodLabel] = useState('Mes comercial vigente');
-  const [executiveCount,setExecutiveCount]=useState<number>();
+  const [loaded, setLoaded] = useState<{userId:string;period:RankingPeriod;slot:typeof slot;mode:typeof mode;entries:RankingEntry[];label:string;error?:string}|null>(null);
   const revision=useCommercialRefresh();
-  const [error, setError] = useState('');
   const [showEmission, setShowEmission] = useState(false);
   const { isPreviewing, user } = useAuth();
-  const entries = useMemo(() => loaded?.userId === user?.id && loaded?.period === period && loaded?.mode === mode ? loaded.entries : [], [loaded, period, mode, user?.id]);
+  const selected = loaded?.userId === user?.id && loaded?.period === period && loaded.slot === slot && loaded.mode === mode ? loaded : null;
+  const entries = selected?.entries ?? [];
+  const periodLabel = selected?.label ?? '';
+  const error = selected?.error;
 
   useEffect(() => {
     if (!user) return;
     let active = true;
     Promise.all([
-      snapshotService.getRanking(user, period, { preview: isPreviewing,rankingMode:mode }),
-      snapshotService.getRankingHeader(user, period, { preview: isPreviewing }),
+      snapshotService.getRanking(user, period, { preview: isPreviewing,rankingMode:mode,rankingSlot:slot }),
+      snapshotService.getRankingHeader(user, period, { preview: isPreviewing,rankingSlot:slot }),
     ])
       .then(([result, header]) => {
         if (!active) return;
-        setLoaded({ userId: user.id, period, mode, entries: result });
-        setPeriodLabel(header.periodLabel);
-        setExecutiveCount(header.executiveCount);
-        setError('');
+        setLoaded({ userId: user.id, period, slot, mode, entries: result, label:header.periodLabel });
       })
-      .catch(() => { if (active) setError('Error al comunicar con el servidor'); });
+      .catch(() => {
+        if (active) setLoaded({userId:user.id,period,slot,mode,entries:[],label:'',error:'Error al comunicar con el servidor'});
+      });
     return () => { active = false; };
-  }, [isPreviewing, period, mode, user,revision]);
+  }, [isPreviewing, period, mode, slot, user,revision]);
 
   const copy = rankingCopy(user?.role,mode);
-  const totalUf = useMemo(() => entries.reduce((total, entry) => total + entry.value, 0), [entries]);
+  const totalUf = entries.reduce((total, entry) => total + entry.value, 0);
   const currentEntry = entries.find((entry) => entry.isCurrentUser) ?? (user?.role !== 'seller' && user?.role !== 'coordinator' || mode==='executives'&&user?.role==='coordinator' ? entries[0] : undefined);
   const nextEntry = currentEntry ? entries.find((entry) => entry.position === currentEntry.position - 1) : undefined;
   const gap = currentEntry && nextEntry ? Math.max(nextEntry.value - currentEntry.value, 0) : 0;
@@ -73,21 +74,24 @@ export default function RankingScreen() {
             <Ionicons color="rgba(255,255,255,0.08)" name="trophy-outline" size={118} style={styles.pattern} />
             <View style={styles.globalItem}>
               <Ionicons color={colors.gold} name="people-outline" size={20} />
-              <Text style={styles.globalValue}>{mode==='teams'?entries.length:entries.length||(executiveCount??'—')}</Text>
-              <Text style={styles.globalLabel}>{mode==='teams'?'Equipos en ranking':'Ejecutivos en ranking'}</Text>
+              <Text style={styles.globalValue}>{selected ? entries.length : '—'}</Text>
+              <Text style={styles.globalLabel}>{mode==='teams'?'Equipos en ranking':mode==='units'?'Unidades en ranking':'Ejecutivos en ranking'}</Text>
             </View>
             <View style={styles.globalDivider} />
             <View style={styles.globalItemWide}>
               <Ionicons color={colors.gold} name="checkmark-circle-outline" size={20} />
-              <Text adjustsFontSizeToFit numberOfLines={1} style={styles.globalValue}>{formatUF(totalUf)}</Text>
-              <Text style={styles.globalLabel}>UF totales</Text>
+              <Text adjustsFontSizeToFit numberOfLines={1} style={styles.globalValue}>{selected ? formatUF(totalUf) : '—'}</Text>
+              <Text style={styles.globalLabel}>{mode==='executives'?'UF totales netas':'UF brutas'}</Text>
             </View>
           </View>
 
           <RankingTabs onChange={setPeriod} value={period} />
-          {period === 'monthly' ? <View accessibilityRole="tablist" style={styles.modeTabs}>{([{id:'executives',label:'Por ejecutivo'},{id:'teams',label:'Por equipo'}] as const).map(tab=><Pressable key={tab.id} accessibilityRole="tab" accessibilityState={{selected:mode===tab.id}} onPress={()=>setMonthlyMode(tab.id)} style={[styles.modeTab,mode===tab.id&&styles.modeSelected]}><Text style={[styles.modeText,mode===tab.id&&styles.modeTextSelected]}>{tab.label}</Text></Pressable>)}</View> : null}
-          <Text style={styles.period}>{periodLabel} · ventas totales</Text>
-          <Text style={styles.period}>{period === 'monthly' ? 'Los totales de equipos incluyen las ventas de CURSO, sin habilitar acceso. ' : ''}El ranking conserva las anulaciones del Excel.{!hasPilotRestrictions(user?.role) ? ' Inicio usa la tabla de totales anuales.' : ''}</Text>
+          {period === 'monthly' ? <>
+            <View accessibilityRole="tablist" style={styles.modeTabs}>
+              {([{id:'current',label:'Vigente'},{id:'previous',label:'Anterior'}] as const).map(tab=><Pressable key={tab.id} accessibilityRole="tab" accessibilityState={{selected:slot===tab.id}} onPress={()=>setMonthlySlot(tab.id)} style={[styles.modeTab,slot===tab.id&&styles.modeSelected]}><Text style={[styles.modeText,slot===tab.id&&styles.modeTextSelected]}>{tab.label}</Text></Pressable>)}
+            </View>
+            <View accessibilityRole="tablist" style={styles.modeTabs}>{([{id:'executives',label:'Por ejecutivo'},{id:'teams',label:'Por equipo'},{id:'units',label:'Por unidad'}] as const).map(tab=><Pressable key={tab.id} accessibilityRole="tab" accessibilityState={{selected:mode===tab.id}} onPress={()=>setMonthlyMode(tab.id)} style={[styles.modeTab,mode===tab.id&&styles.modeSelected]}><Text style={[styles.modeText,mode===tab.id&&styles.modeTextSelected]}>{tab.label}</Text></Pressable>)}</View>
+          </> : null}
           <Pressable accessibilityRole="button" accessibilityState={{expanded:showEmission}} onPress={()=>setShowEmission(current=>!current)} style={styles.emissionToggle}><Ionicons name="swap-horizontal" size={19} color={colors.primary}/><Text style={styles.emissionText}>{showEmission?'Ocultar':'Ver'} emitidas vs. sin emitir</Text></Pressable>
           {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
 
@@ -111,14 +115,14 @@ export default function RankingScreen() {
 
           <View style={styles.rankingSection}>
             <View style={styles.rankingHeading}>
-              <Text style={styles.rankingTitle}>{`${period==='annual'?'Ranking anual':'Ranking mensual'} · ${periodLabel}`}</Text>
-              {period==='monthly'?<PlatformLabelEditor id="monthly_ranking" label={periodLabel} onSaved={setPeriodLabel}/>:null}
+              <Text style={styles.rankingTitle}>{periodLabel || (period==='annual'?'Ranking anual':'Ranking mensual')}</Text>
+              {period==='monthly'&&periodLabel&&selected?<PlatformLabelEditor id={slot==='current'?'monthly_ranking':'monthly_ranking_previous'} label={periodLabel} onSaved={label=>setLoaded(data=>data===selected?{...data,label}:data)}/>:null}
               <View style={styles.liveBadge}><View style={styles.liveDot} /><Text style={styles.liveText}>TOTALES</Text></View>
             </View>
           </View>
         </View>
       </View>}
-        ListEmptyComponent={<Text style={styles.empty}>Aún no hay un ranking total publicado para este período.</Text>}
+        ListEmptyComponent={<Text style={styles.empty}>{error?'':selected?'Aún no hay resultados para este período.':'Cargando ranking…'}</Text>}
         renderItem={({item:entry})=><View style={styles.rankingRow}><RankingRow entry={entry}/>{showEmission?<View style={styles.comparison}><Text style={styles.emissionText}>Emitidas: {entry.emittedValue===undefined?'Sin dato':`${formatUF(entry.emittedValue)} UF`}</Text><Text style={styles.emissionText}>Sin emitir: {entry.notEmittedValue===undefined?'Sin dato':`${formatUF(entry.notEmittedValue)} UF`}</Text></View>:null}</View>}
       />
     </ScreenContainer>

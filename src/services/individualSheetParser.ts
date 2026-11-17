@@ -19,8 +19,15 @@ export const sheetSources = {
 } as const;
 export type SheetSource = keyof typeof sheetSources;
 export type SheetMetrics = Record<string, string | number>;
-export interface SheetRecord { rut?: string; name: string; role: 'seller' | 'coordinator' | 'sales_manager'; values: SheetMetrics; row: number }
+export interface SheetRecord { rut?: string; name: string; role: 'seller' | 'coordinator' | 'sales_manager'; values: SheetMetrics; row: number; summaryFallback?: boolean }
 export interface SheetImport { source: SheetSource; sheet: string; records: SheetRecord[]; homeTotals?: SheetRecord[]; errors: string[]; warnings: string[]; rules: GoalRule[] }
+export interface RankingImport {
+  parsed: SheetImport;
+  label: string;
+  start: string;
+  end: string;
+  slot: 'current' | 'previous';
+}
 export function searchName(value: unknown): string {
   return String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\([^)]*\)/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
@@ -50,6 +57,10 @@ export function parseIndividualSheet(book: WorkBook, source: SheetSource, period
   if (source === 'dotacion') return parseDotacion(book);
   if (source === 'cancellations') return parseRankingCancellations(book,period);
   if (source === 'ranking_annual' || source === 'ranking_monthly') return parsePreparedRanking(book, source, period) ?? parseCantoRanking(book,source,period);
+  if (source === 'production_sellers' || source === 'production_coordinators') {
+    const revised = parseRevisedProduction(book,source);
+    if (revised) return revised;
+  }
   const expectedSheets = sheetAliases[source] ?? [sheetSources[source].sheet];
   const sheet = expectedSheets.map(expected => book.SheetNames.find(n => searchName(n) === searchName(expected))).find(Boolean);
   const result: SheetImport = { source, sheet: sheet ?? sheetSources[source].sheet, records: [], errors: [], warnings: [], rules: [] };
@@ -116,8 +127,8 @@ export function parseIndividualSheet(book: WorkBook, source: SheetSource, period
     const nameCol = source === 'category' ? 'G' : source === 'senior' ? 'C' : source === 'production_coordinators' ? 'A' : debt ? rowDebtNameCol : source === 'sauce' && sauceLoad ? 'C' : source.startsWith('ranking_') ? 'C' : 'B';
     const name = text(get(nameCol, r, true));
     if(source==='category'&&searchName(name)==='sin dato en dotacion'){
-      if(['H','I','M'].some(c=>Number(ws[`${c}${r}`]?.v??0)!==0))result.errors.push(`${sheet}, fila ${r}: resultados sin identidad en dotación.`);
-      else result.warnings.push(`${sheet}, fila ${r}: marcador sin persona y sin resultados; no es un trabajador.`);
+      if(['I','M'].some(c=>Number(ws[`${c}${r}`]?.v??0)!==0))result.errors.push(`${sheet}, fila ${r}: UF sin identidad en dotación.`);
+      else result.warnings.push(`${sheet}, fila ${r}: no hay una persona identificada ni UF; se omite.`);
       continue;
     }
     if (!name || /^(total|no vigente|\*|0$)/i.test(name)) continue;
@@ -254,48 +265,148 @@ function parsePreparedRanking(book: WorkBook, source: 'ranking_annual'|'ranking_
   if (!period || !/^\d{4}-\d{2}-\d{2}$/.test(period.start) || !/^\d{4}-\d{2}-\d{2}$/.test(period.end) || period.end < period.start) {
     result.errors.push('Indica las fechas del ranking antes de seleccionar el archivo.'); return result;
   }
-  if (!emitted) { result.errors.push('Falta el ranking emitido para comparar con el ranking total.'); return result; }
-  const read = (name: string) => {
+  const combined = hasCombinedRanking(book.Sheets[total.name]);
+  if (!combined && !emitted) { result.errors.push('Falta el ranking emitido para comparar con el ranking total.'); return result; }
+  const read = (name: string, columns = {rut:'E', name:'D', uf:'F', count:'G', position:'A'}) => {
     const ws = book.Sheets[name];
-    const rows = Object.keys(ws).filter(a => /^E\d+$/.test(a)).map(a => Number(a.slice(1))).sort((a,b) => a-b);
+    const rows = Object.keys(ws).filter(a => new RegExp(`^${columns.rut}\\d+$`).test(a)).map(a => Number(a.slice(columns.rut.length))).sort((a,b) => a-b);
     const values = new Map<string, SheetRecord>();
-    if (searchName(ws.E2?.v) !== 'rut' || searchName(ws.D2?.v) !== 'vendedor' || !searchName(ws.F2?.v).startsWith('uf')) {
+    if (searchName(ws[columns.rut+'2']?.v) !== 'rut' || searchName(ws[columns.name+'2']?.v) !== 'vendedor' || !searchName(ws[columns.uf+'2']?.v).startsWith('uf')) {
       result.errors.push(`No se reconocen los encabezados de ${name}.`); return values;
     }
     for (const row of rows.filter(row => row > 2)) {
-      const rawRut = ws[`E${row}`]?.v;
+      const rawRut = ws[columns.rut+row]?.v;
       if (!text(rawRut)) continue;
-      const rut = normalizeRut(rawRut), person = text(ws[`D${row}`]?.v);
-      const ufCell = ws[`F${row}`], businessesCell = ws[`G${row}`];
+      const rut = normalizeRut(rawRut), person = text(ws[columns.name+row]?.v);
+      const ufCell = ws[columns.uf+row], businessesCell = ws[columns.count+row];
       const uf = number(ufCell?.v), businesses = number(businessesCell?.v);
       if (!isValidRut(rut) || !person || ufCell?.t === 'e' || businessesCell?.t === 'e' || uf === undefined || businesses === undefined || !Number.isInteger(businesses) || businesses < 0) {
         result.errors.push(`${name}, fila ${row}: identidad o resultado guardado inválido. Recalcula y guarda el Excel.`); continue;
       }
       if (values.has(rut)) { result.errors.push(`${name}, fila ${row}: RUT repetido.`); continue; }
-      values.set(rut, {rut, name:person, role:'seller', row, values:{uf, businesses}});
+      const position = number(ws[columns.position+row]?.v);
+      values.set(rut, {rut, name:person, role:'seller', row, values:{uf, businesses, ...(position ? {position} : {})}});
     }
     return values;
   };
-  const totals = read(total.name), emissions = read(emitted.name);
+  const emittedName = combined ? total.name : emitted!.name;
+  const totals = read(total.name), emissions = combined
+    ? read(emittedName, {rut:'M', name:'L', uf:'N', count:'O', position:'I'})
+    : read(emittedName);
   for (const [rut, row] of totals) {
     const issued = emissions.get(rut);
-    if (!issued) { result.errors.push(`${emitted.name}: falta el vendedor de la fila ${row.row} del ranking total.`); continue; }
+    if (!issued) { result.errors.push(`${emittedName}: falta el vendedor de la fila ${row.row} del ranking total.`); continue; }
     const totalUf = Number(row.values.uf), emittedUf = Number(issued.values.uf);
     result.records.push({...row, values:{totalUf, emittedUf, notEmittedUf:Math.max(totalUf-emittedUf,0), businesses:row.values.businesses,
-      position:1+[...totals.values()].filter(other => Number(other.values.uf)>totalUf).length}});
+      position:row.values.position??1+[...totals.values()].filter(other => Number(other.values.uf)>totalUf).length}});
   }
   if ([...emissions.keys()].some(rut => !totals.has(rut))) result.errors.push('Los rankings total y emitido no tienen la misma nómina.');
   if (!result.records.length) result.errors.push('No hay resultados válidos en los rankings.');
   if (source === 'ranking_annual') readAnnualHomeTotals(book.Sheets[total.name], result);
-  result.warnings.push(`Se conservan exactamente los valores guardados de «${total.name}» y «${emitted.name}», incluidas sus anulaciones. Solo se publican RUT de trabajador y métricas agregadas. Dotación vigente controla quién aparece.`);
+  if (source === 'ranking_monthly' && combined) readMonthlyHomeTotals(book, book.Sheets[total.name], period, result);
   return result;
+}
+
+const months = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+
+function hasCombinedRanking(sheet: WorkBook['Sheets'][string]) {
+  return searchName(sheet?.M2?.v) === 'rut' && searchName(sheet?.N2?.v) === 'uf emitidas';
+}
+
+export function parseRankingWorkbook(book: WorkBook, fallback: {start:string;end:string;year:string}): RankingImport[] {
+  const annualSheet = book.SheetNames.find(name => searchName(name) === 'ranking anual total');
+  const annualStart = annualSheet ? date(book.Sheets[annualSheet].B1?.v) : undefined;
+  const year = annualStart?.slice(0,4) ?? fallback.year;
+  const annual = {start:`${year}-01-01`,end:`${year}-12-31`};
+  const monthlySheets = book.SheetNames.filter(name => months.some(month => searchName(name) === `ranking ${month}`) && hasCombinedRanking(book.Sheets[name]));
+  const monthly = monthlySheets.map(name => {
+    const ws = book.Sheets[name];
+    const start = date(ws.B1?.v) ?? '';
+    const end = date(ws.D1?.v) ?? '';
+    const month = searchName(name).slice('ranking '.length);
+    const parsed = parsePreparedRanking({...book, SheetNames:book.SheetNames.filter(candidate => !monthlySheets.includes(candidate) || candidate===name)},'ranking_monthly',{start,end});
+    if (!parsed || months[Number(start.slice(5,7))-1] !== month || end < start) throw Error(`Revisa las fechas Desde / Hasta en «${name}».`);
+    return {parsed,start,end,label:`${month[0].toUpperCase()+month.slice(1)} comercial ${start.slice(0,4)}`};
+  }).sort((a,b)=>b.start.localeCompare(a.start));
+  if (monthly[1] && monthly[1].end >= monthly[0].start) throw Error('El mes vigente y el anterior se superponen.');
+  return [
+    ...monthly.slice(0,2).map((item,index):RankingImport=>({...item,slot:index===0?'current':'previous'})),
+    ...(!monthly.length?[{parsed:parseIndividualSheet(book,'ranking_monthly',fallback),start:fallback.start,end:fallback.end,label:'Mes comercial vigente',slot:'current' as const}]:[]),
+    {parsed:parseIndividualSheet(book,'ranking_annual',annual),...annual,label:`Ranking anual ${year}`,slot:'current'},
+    {parsed:parseRankingCancellations(book,annual),...annual,label:`Anulaciones ${year}`,slot:'current'},
+  ];
+}
+
+function readMonthlyHomeTotals(book: WorkBook, ws: WorkBook['Sheets'][string], period:{start:string;end:string}, result:SheetImport) {
+  const base = book.Sheets[book.SheetNames.find(n=>searchName(n)==='base anual')??''];
+  if (!base || searchName(base.AN1?.v)!=='fecha de ranking' || searchName(base.AQ1?.v)!=='emitida' ||
+    searchName(base.AR1?.v)!=='jefe de ventas normalizado' || searchName(base.AS1?.v)!=='coordinador normalizado') {
+    result.errors.push('Faltan las columnas de fecha, emisión y alcance de BASE ANUAL.'); return;
+  }
+  const summary = new Map<string,{gross:number;emitted:number}>();
+  const counts = Object.keys(base).filter(a=>/^AN\d+$/.test(a));
+  for (const a of counts) {
+    const row = Number(a.slice(2)), day = date(base[a]?.v);
+    if (!day || day<period.start || day>period.end) continue;
+    const uf = number(base['F'+row]?.v);
+    const emission = number(base['AQ'+row]?.v);
+    if (uf===undefined || (emission!==0 && emission!==1)) {
+      result.errors.push(`BASE ANUAL, fila ${row}: UF o emisión sin resultado guardado.`); continue;
+    }
+    for (const col of ['AR','AS']) {
+      const key = col+':'+searchName(base[col+row]?.v);
+      const value = summary.get(key)??{gross:0,emitted:0};
+      value.gross+=uf;
+      if (emission===1) value.emitted+=uf;
+      summary.set(key,value);
+    }
+  }
+  const readMap = (person:string, label:string) => new Map(Array.from({length:30},(_,i)=>i+2).flatMap(row=>{
+    const name=text(base[person+row]?.v);
+    if (!name) return [];
+    return [[searchName(base[label+row]?.v||name),name] as const];
+  }));
+  result.homeTotals = [];
+  const rosterKey = (name: string) => searchName(name).replace(/\bguissela\b/g,'guisela');
+  for (const {first,last,role,names,col} of [
+    {first:3,last:10,role:'sales_manager',names:readMap('BM','BN'),col:'AR'},
+    {first:14,last:43,role:'coordinator',names:readMap('BP','BQ'),col:'AS'},
+  ] as const) {
+    const included = new Set<string>();
+    const emitRow = (name:string,row:number,gross:number,summaryFallback = false) => {
+      const key = searchName(name);
+      const emitted = summary.get(col+':'+key)?.emitted??0;
+      included.add(rosterKey(name));
+      result.homeTotals!.push({name,role,row,summaryFallback,values:{homeMonthlyGrossUf:gross,homeMonthlyEmittedUf:Math.round(emitted*100)/100}});
+    };
+    for (let row=first;row<=last;row++) {
+      const label=text(ws['R'+row]?.v);
+      if (!label) continue;
+      const name=names.get(searchName(label))??label;
+      const gross=number(ws['S'+row]?.v);
+      const computed=summary.get(col+':'+searchName(name))?.gross;
+      if (gross===undefined || computed===undefined || included.has(rosterKey(name))) {
+        result.errors.push(`${result.sheet}, fila ${row}: falta un resultado de «${label}» o se repite el nombre.`); continue;
+      }
+      if (Math.abs(gross-computed)>0.011) {
+        result.warnings.push(`${result.sheet}, fila ${row}: se conserva el bruto guardado para «${label}» (${gross} UF); BASE ANUAL suma ${Math.round(computed*100)/100} UF.`);
+      }
+      emitRow(name,row,gross);
+    }
+    for (const name of new Set(names.values())) {
+      if (included.has(rosterKey(name))) continue;
+      const gross=summary.get(col+':'+searchName(name))?.gross??0;
+      emitRow(name,first,Math.round(gross*100)/100,true);
+    }
+  }
 }
 
 // Read only the explicitly labelled worker-summary blocks. Never serialize raw
 // worksheet columns, formulas, operation IDs or customer information.
 function readAnnualHomeTotals(ws: WorkBook['Sheets'][string], result: SheetImport): void {
   const cells = Object.keys(ws).filter(a => /^[A-Z]+\d+$/.test(a));
-  const blocks = cells.filter(a => ['jefes','coordinadores'].includes(searchName(ws[a]?.v)));
+  const titles = ['jefes','jefes de ventas','coordinadores'];
+  const blocks = cells.filter(a => titles.includes(searchName(ws[a]?.v)));
   if (!blocks.length) {
     result.warnings.push('Sin tabla de totales de Inicio: se usarán las sumas del ranking para jefes y coordinadores.');
     return;
@@ -307,15 +418,16 @@ function readAnnualHomeTotals(ws: WorkBook['Sheets'][string], result: SheetImpor
     const index = [...col].reduce((n, c) => n * 26 + c.charCodeAt(0) - 64, 0);
     const column = (n: number): string => n > 26 ? column(Math.floor((n - 1) / 26)) + String.fromCharCode(65 + (n - 1) % 26) : String.fromCharCode(64 + n);
     const grossCol = column(index + 1), emittedCol = column(index + 2);
-    const role = searchName(ws[address]?.v) === 'jefes' ? 'sales_manager' : 'coordinator';
-    if (searchName(ws[`${grossCol}${first + 1}`]?.v) !== 'bruto' || searchName(ws[`${emittedCol}${first + 1}`]?.v) !== 'emitido') {
+    const role = searchName(ws[address]?.v) === 'coordinadores' ? 'coordinator' : 'sales_manager';
+    const header = searchName(ws[grossCol+first]?.v)==='bruto' ? first : first+1;
+    if (searchName(ws[grossCol+header]?.v) !== 'bruto' || searchName(ws[emittedCol+header]?.v) !== 'emitido') {
       result.errors.push(`Totales de Inicio: encabezados Bruto / Emitido inválidos junto a ${address}.`); continue;
     }
     let count = 0;
-    for (let row = first + 2; row <= first + 502; row++) {
+    for (let row = header + 1; row <= header + 501; row++) {
       const name = text(ws[`${col}${row}`]?.v);
       if (!name) break;
-      if (['jefes','coordinadores'].includes(searchName(name))) break;
+      if (titles.includes(searchName(name))) break;
       const gross = ws[`${grossCol}${row}`], emitted = ws[`${emittedCol}${row}`];
       const homeAnnualGrossUf = number(gross?.v), homeAnnualEmittedUf = number(emitted?.v);
       if (gross?.t === 'e' || emitted?.t === 'e' || homeAnnualGrossUf === undefined || homeAnnualEmittedUf === undefined) {
@@ -339,6 +451,33 @@ export function parseRankingCancellations(book:WorkBook,period?:{start:string;en
  const result:SheetImport={source:'cancellations',sheet:sheet??'anulaciones',records:[],errors:[],warnings:[],rules:[]};
  if(!sheet){result.errors.push('Falta la hoja anulaciones de Ranking Plataforma.');return result;}
  const ws=book.Sheets[sheet],year=Number(period?.start.slice(0,4));
+ if(year&&searchName(ws.J1?.v)==='rut vendedor'&&searchName(ws.AC1?.v)==='fecha del descuento'&&searchName(ws.AD1?.v)==='uf a descontar'){
+  const workers=new Map<string,SheetRecord>();
+  for(const a of Object.keys(ws).filter(a=>/^AC\d+$/.test(a))){
+   const row=Number(a.slice(2)),day=date(ws[a]?.v);
+   if(!day?.startsWith(String(year)+'-'))continue;
+   const rut=normalizeRut(ws['J'+row]?.v),name=text(ws['K'+row]?.v),amount=number(ws['AD'+row]?.v);
+   if(!isValidRut(rut)||!name||amount===undefined||amount<0){result.errors.push(`${sheet}, fila ${row}: descuento o vendedor inválido.`);continue;}
+   const record=workers.get(rut)??{rut,name,role:'seller' as const,row,values:{cancellationUf:0}};
+   record.values.cancellationUf=Number(record.values.cancellationUf)+amount;
+   workers.set(rut,record);
+  }
+  const bs=book.Sheets[book.SheetNames.find(n=>searchName(n)==='base anual')??''];
+  if(bs&&searchName(bs.A1?.v)==='canto'&&searchName(bs.AV1?.v)==='operacion anulada'){
+   for(const a of Object.keys(bs).filter(a=>/^A\d+$/.test(a))){
+    const row=Number(a.slice(1)),day=date(bs[a]?.v);
+    if(!day||day>period!.end||number(bs['AV'+row]?.v)!==0||(number(bs['F'+row]?.v)??0)<=0)continue;
+    const rut=normalizeRut(bs['D'+row]?.v),name=text(bs['E'+row]?.v);
+    if(!isValidRut(rut)||!name)continue;
+    const record=workers.get(rut)??{rut,name,role:'seller' as const,row,values:{cancellationUf:0}};
+    if(day>String(record.values.lastSaleDate??''))record.values.lastSaleDate=day;
+    workers.set(rut,record);
+   }
+  }else result.warnings.push('Última venta queda a cargo de la carga de Producción.');
+  result.records=[...workers.values()];
+  if(!result.records.length)result.errors.push('No hay descuentos ni fechas de última venta para publicar.');
+  return result;
+ }
  if(!year||searchName(ws.G1?.v)!=='rut vendedor'||searchName(ws.M1?.v)!=='ejecutivo'||searchName(ws.N1?.v)!=='ultima venta'){
   result.errors.push('Anulaciones debe incluir RUT_VENDEDOR, VENDEDOR, UF, mes de envío, Ejecutivo y Última venta.');return result;
  }
@@ -381,6 +520,35 @@ export function parseRankingCancellations(book:WorkBook,period?:{start:string;en
  result.records=[...workers.values()];
  if(!result.records.length)result.errors.push('Anulaciones no contiene resultados de trabajadores.');
  result.warnings.push('Dos tablas independientes: anulaciones anuales (D/G:H/K) y última venta (M:N). Los días sin vender se calculan con la fecha actual de Chile; «Sin ventas» se conserva sin inventar una fecha. Solo se publican datos agregados de trabajadores.');
+ return result;
+}
+
+function parseRevisedProduction(book:WorkBook, source:'production_sellers'|'production_coordinators'):SheetImport|undefined {
+ const summary=book.SheetNames.find(n=>searchName(n)==='resumen coordinadores');
+ const selected=summary&&text(book.Sheets[summary].B3?.v);
+ const sheet=source==='production_coordinators'?summary:book.SheetNames.find(n=>searchName(n)===searchName(selected));
+ if(!sheet)return;
+ const ws=book.Sheets[sheet];
+ const seller=source==='production_sellers';
+ if(searchName(ws.A8?.v)!==(seller?'rut vendedor':'coordinador')||
+   searchName(ws[seller?'P8':'H8']?.v)!==(seller?'productividad':'prod por ejecutivo'))return;
+ const result:SheetImport={source,sheet,records:[],errors:[],warnings:[],rules:[]};
+ const lastSaleCol='L',role=seller?'seller':'coordinator';
+ for(const a of Object.keys(ws).filter(a=>/^A\d+$/.test(a)&&Number(a.slice(1))>8)){
+  const row=Number(a.slice(1)),name=text(ws[(seller?'B':'A')+row]?.v);
+  if(!name||/^(total|sin coordinador)/i.test(name))continue;
+  const rut=seller?normalizeRut(ws[a]?.v):undefined;
+  const productivity=number(ws[(seller?'P':'H')+row]?.v),businesses=number(ws[(seller?'K':'D')+row]?.v);
+  if(seller&&!ws['F'+row]?.v&&businesses===undefined&&productivity===undefined)continue;
+  const notApplicable=!seller&&number(ws['C'+row]?.v)===0&&searchName(ws['H'+row]?.v)==='n a';
+  if((seller&&!isValidRut(rut!))||(!notApplicable&&productivity===undefined)||businesses===undefined){
+   result.errors.push(`${sheet}, fila ${row}: identidad o productividad inválida.`);continue;
+  }
+  const lastSaleDate=date(ws[lastSaleCol+row]?.v);
+  const uf=number(ws[(seller?'J':'E')+row]?.v);
+  result.records.push({rut,name,role,row,values:{businesses,...(productivity!==undefined?{productivity}:{}),...(uf!==undefined?{uf}:{}),...(lastSaleDate?{lastSaleDate}:{})}});
+ }
+ if(!result.records.length)result.errors.push('La hoja no contiene resultados de productividad.');
  return result;
 }
 

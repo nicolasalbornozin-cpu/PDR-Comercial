@@ -5,7 +5,8 @@ import { individualSheetService } from './individualSheetService';
 
 interface SnapshotRequestOptions {
   preview?: boolean;
-  rankingMode?: 'executives' | 'teams';
+  rankingMode?: 'executives' | 'teams' | 'units';
+  rankingSlot?: 'current' | 'previous';
 }
 
 interface PreviewMetricSeed {
@@ -330,18 +331,19 @@ function demoDashboard(): DashboardData {
 
 export const snapshotService = {
   async getRankingHeader(user: User, period: RankingPeriod, options: SnapshotRequestOptions = {}) {
+    const slot = period === 'monthly' ? options.rankingSlot ?? 'current' : 'current';
     if (options.preview && user.id.startsWith('preview-')) {
-      const periodLabel = period === 'annual' ? 'Año calendario 2026' : previewDashboard(user).periodLabel;
+      const periodLabel = period === 'annual' ? 'Año calendario 2026' : slot==='current'?previewDashboard(user).periodLabel:'Mes comercial anterior';
       return { periodLabel, executiveCount: undefined };
     }
     if (!supabase) {
       return { periodLabel: period === 'annual' ? 'Sin carga publicada' : demoDashboard().periodLabel, executiveCount: undefined };
     }
     const [upload, setting, count] = await Promise.all([
-      supabase.from('sheet_uploads').select('label').eq('source', 'ranking_' + period)
+      supabase.from('sheet_uploads').select('label').eq('source', 'ranking_' + period).eq('goal_slot',slot)
         .order('published_at', { ascending: false }).limit(1).maybeSingle(),
       period === 'monthly'
-        ? supabase.from('platform_settings').select('label').eq('id', 'monthly_ranking').maybeSingle()
+        ? supabase.from('platform_settings').select('label').eq('id', slot==='current'?'monthly_ranking':'monthly_ranking_previous').maybeSingle()
         : null,
       supabase.rpc('ranking_executive_count'),
     ]);
@@ -361,9 +363,9 @@ export const snapshotService = {
   },
 
   async getRanking(user: User, period: RankingPeriod, options: SnapshotRequestOptions = {}): Promise<RankingEntry[]> {
-    if (options.preview && user.id.startsWith('preview-')) return previewRanking(user, period, options.rankingMode);
+    if (options.preview && user.id.startsWith('preview-')) return options.rankingSlot==='previous'||options.rankingMode==='units'?[]:previewRanking(user, period, options.rankingMode);
     if (!supabase) return [];
-    const independent = await supabase.rpc('individual_sheet_ranking_v2', {p_period:period,p_mode:options.rankingMode??'executives',p_target:options.preview&&user.role!=='admin'?user.id:null});
+    const independent = await supabase.rpc('individual_sheet_ranking_v3', {p_period:period,p_mode:options.rankingMode??'executives',p_target:options.preview&&user.role!=='admin'?user.id:null,p_slot:period==='annual'?'current':options.rankingSlot??'current'});
     if(independent.error)throw Error(independent.error.message);
     return independent.data??[];
   },

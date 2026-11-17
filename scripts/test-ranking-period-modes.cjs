@@ -41,9 +41,12 @@ function harness(role) {
       if (id === '@/services/snapshotService') return { snapshotService: {
         async getRanking(account, period, options) {
           requests.push({ userId: account.id, period, ...options });
-          return [{ userId: `${period}-${options.rankingMode}`, position: 1, value: 100, emittedValue: 40, notEmittedValue: 60, isCurrentUser: true }];
+          const suffix = options.rankingSlot === 'previous' ? '-previous' : '';
+          return [{ userId: `${period}-${options.rankingMode}${suffix}`, position: 1, value: 100, emittedValue: 40, notEmittedValue: 60, isCurrentUser: true }];
         },
-        async getRankingHeader(account, period) { return { periodLabel: period === 'annual' ? '2026' : 'Octubre comercial 2026', executiveCount: 10 }; },
+        async getRankingHeader(account, period, options) {
+          return { periodLabel: period === 'annual' ? '2026' : options.rankingSlot==='previous' ? 'Octubre comercial 2026' : 'Noviembre comercial 2026' };
+        },
       } };
       if (id === '@/utils/format') return { formatUF: value => String(value) };
       if (id === '@/theme') return { colors: {}, radii: {}, shadows: {}, spacing: {}, typography: {} };
@@ -97,6 +100,19 @@ const list = tree => one(tree, node => node.type === 'FlatList');
     modeButton(tree, 'Por ejecutivo'); modeButton(tree, 'Por equipo');
     tree = await screen.settle();
     assert.equal(list(tree).props.data[0].userId, 'monthly-executives');
+    modeButton(tree, 'Anterior').props.onPress(); tree = screen.render();
+    assert.equal(list(tree).props.data.length, 0, 'November must not appear under October');
+    assert.equal(screen.requests.at(-1).rankingSlot, 'previous');
+    tree = await screen.settle();
+    assert.equal(list(tree).props.data[0].userId, 'monthly-executives-previous');
+    assert.ok(text(tree).includes('Octubre comercial 2026'));
+    modeButton(tree, 'Por unidad').props.onPress(); tree = screen.render();
+    tree = await screen.settle();
+    assert.equal(list(tree).props.data[0].userId, 'monthly-units-previous');
+    modeButton(tree, 'Vigente').props.onPress(); tree = screen.render();
+    tree = await screen.settle();
+    assert.equal(list(tree).props.data[0].userId, 'monthly-units');
+    assert.ok(text(tree).includes('Noviembre comercial 2026'));
     modeButton(tree, 'Por equipo').props.onPress(); tree = screen.render();
     assert.equal(screen.requests.at(-1).rankingMode, 'teams');
     tree = await screen.settle();

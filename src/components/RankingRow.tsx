@@ -9,7 +9,8 @@ import { formatUF } from '@/utils/format';
 const medals: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' };
 
 export function RankingRow({ entry }: { entry: RankingEntry }) {
-  const name = entry.entityType === 'team' ? entry.teamName?.trim() || 'Equipo sin nombre asignado' : displayPersonName(entry);
+  const name = entry.entityType === 'unit' ? entry.name : entry.entityType === 'team' ? entry.teamName?.trim() || 'Equipo sin nombre asignado' : displayPersonName(entry);
+  const currentLabel = entry.entityType === 'unit' ? ' · Tu unidad' : entry.entityType === 'team' ? ' · Tu equipo' : ' · Tú';
   return (
     <View style={[styles.row, entry.isCurrentUser && styles.current]}>
       <View style={styles.positionBox}>
@@ -17,7 +18,7 @@ export function RankingRow({ entry }: { entry: RankingEntry }) {
       </View>
       <UserAvatar highlighted={entry.isCurrentUser} name={name} size={36} />
       <View style={styles.content}>
-        <Text numberOfLines={2} style={styles.name}>{name}{entry.isCurrentUser ? entry.entityType === 'team' ? ' · Tu equipo' : ' · Tú' : ''}</Text>
+        <Text numberOfLines={2} style={styles.name}>{name}{entry.isCurrentUser ? currentLabel : ''}</Text>
         <Text numberOfLines={1} style={styles.subtitle}>{entry.subtitle}</Text>
       </View>
       <Text style={styles.value}>{formatUF(entry.value)} <Text style={styles.unit}>UF</Text></Text>
