@@ -14,15 +14,14 @@ import { colors, radii, shadows, spacing, typography } from '@/theme';
 import { RankingEntry, RankingPeriod } from '@/types';
 import { formatUF } from '@/utils/format';
 
-function rankingCopy(role: string | undefined, mode: 'executives'|'teams'|'units') {
-  if (mode === 'units') return {title:'Ranking de unidades',subtitle:'Comparación de las unidades comerciales',position:'POSICIÓN DE TU UNIDAD'};
+function rankingCopy(role: string | undefined, mode: 'executives'|'teams') {
   if (mode === 'teams') return {title:'Ranking de equipos',subtitle:role==='sales_manager'?'Comparación de los equipos de tu jefatura':'Comparación de los equipos comerciales',position:role==='seller'||role==='coordinator'?'POSICIÓN DE TU EQUIPO':'MEJOR EQUIPO'};
   return {title:'Ranking por ejecutivo',subtitle:role==='coordinator'?'Ejecutivos de tu equipo':role==='sales_manager'?'Ejecutivos de tu jefatura':'Comparación de los ejecutivos comerciales',position:role==='seller'?'TU POSICIÓN':'MEJOR EJECUTIVO'};
 }
 
 export default function RankingScreen() {
   const [period, setPeriod] = useState<RankingPeriod>('annual');
-  const [monthlyMode,setMonthlyMode] = useState<'executives'|'teams'|'units'>('executives');
+  const [monthlyMode,setMonthlyMode] = useState<'executives'|'teams'>('executives');
   const [monthlySlot,setMonthlySlot] = useState<'current'|'previous'>('current');
   const slot = period === 'annual' ? 'current' : monthlySlot;
   const mode = period === 'annual' ? 'executives' : monthlyMode;
@@ -75,7 +74,7 @@ export default function RankingScreen() {
             <View style={styles.globalItem}>
               <Ionicons color={colors.gold} name="people-outline" size={20} />
               <Text style={styles.globalValue}>{selected ? entries.length : '—'}</Text>
-              <Text style={styles.globalLabel}>{mode==='teams'?'Equipos en ranking':mode==='units'?'Unidades en ranking':'Ejecutivos en ranking'}</Text>
+              <Text style={styles.globalLabel}>{mode==='teams'?'Equipos en ranking':'Ejecutivos en ranking'}</Text>
             </View>
             <View style={styles.globalDivider} />
             <View style={styles.globalItemWide}>
@@ -90,7 +89,7 @@ export default function RankingScreen() {
             <View accessibilityRole="tablist" style={styles.modeTabs}>
               {([{id:'current',label:'Vigente'},{id:'previous',label:'Anterior'}] as const).map(tab=><Pressable key={tab.id} accessibilityRole="tab" accessibilityState={{selected:slot===tab.id}} onPress={()=>setMonthlySlot(tab.id)} style={[styles.modeTab,slot===tab.id&&styles.modeSelected]}><Text style={[styles.modeText,slot===tab.id&&styles.modeTextSelected]}>{tab.label}</Text></Pressable>)}
             </View>
-            <View accessibilityRole="tablist" style={styles.modeTabs}>{([{id:'executives',label:'Por ejecutivo'},{id:'teams',label:'Por equipo'},{id:'units',label:'Por unidad'}] as const).map(tab=><Pressable key={tab.id} accessibilityRole="tab" accessibilityState={{selected:mode===tab.id}} onPress={()=>setMonthlyMode(tab.id)} style={[styles.modeTab,mode===tab.id&&styles.modeSelected]}><Text style={[styles.modeText,mode===tab.id&&styles.modeTextSelected]}>{tab.label}</Text></Pressable>)}</View>
+            <View accessibilityRole="tablist" style={styles.modeTabs}>{([{id:'executives',label:'Por ejecutivo'},{id:'teams',label:'Por equipo'}] as const).map(tab=><Pressable key={tab.id} accessibilityRole="tab" accessibilityState={{selected:mode===tab.id}} onPress={()=>setMonthlyMode(tab.id)} style={[styles.modeTab,mode===tab.id&&styles.modeSelected]}><Text style={[styles.modeText,mode===tab.id&&styles.modeTextSelected]}>{tab.label}</Text></Pressable>)}</View>
           </> : null}
           <Pressable accessibilityRole="button" accessibilityState={{expanded:showEmission}} onPress={()=>setShowEmission(current=>!current)} style={styles.emissionToggle}><Ionicons name="swap-horizontal" size={19} color={colors.primary}/><Text style={styles.emissionText}>{showEmission?'Ocultar':'Ver'} emitidas vs. sin emitir</Text></Pressable>
           {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
