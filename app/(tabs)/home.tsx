@@ -20,7 +20,7 @@ import { DashboardData, MetricSnapshot, roleLabels, VisibleProfile } from '@/typ
 import { daysWithoutSale, hasMonthWithoutSale, hasGoalLevel, hasQualifiedSenior, latestGoal, isBirthdayToday, productivityTone } from '@/utils/commercialRules';
 import { formatUF } from '@/utils/format';
 import { displayPersonName } from '@/utils/personName';
-import { teamDaysWithoutSale } from '@/utils/teamOverview';
+import { scopeDebt, teamDaysWithoutSale } from '@/utils/teamOverview';
 import { hasPilotRestrictions } from '@/utils/pilotNavigation';
 
 function sumMetric(workers: VisibleProfile[], latest: DashboardData['latestByUser'], key: keyof MetricSnapshot): number {
@@ -41,8 +41,9 @@ function ScopeCard({ title, subtitle, sellers, data, monthlyTarget, onPress,scop
   const totals=scopeId?data.salesTotalsByScope?.[scopeId]:undefined;
   const annual = totals?.annualGross??sellers.reduce((total, seller) => total + Number(data.annualTotalUfByUser[seller.id] ?? 0), 0);
   const monthly = totals?.monthlyGross??sellers.reduce((total, seller) => total + Number(data.monthlyTotalUfByUser[seller.id] ?? 0), 0);
-  const mora = sumMetric(sellers, data.latestByUser, 'debtSalesCount');
-  const hasMora = sellers.some(w=>data.latestByUser[w.id]?.debtSalesCount !== undefined);
+  const debt = scopeDebt(sellers, data, scopeId);
+  const mora = debt ?? 0;
+  const hasMora = debt !== undefined;
   const hasProductivity = sellers.some(w=>data.latestByUser[w.id]?.productivity !== undefined);
   const productivity = averageMetric(sellers, data.latestByUser, 'productivity');
   const teamDays = teamDaysWithoutSale(sellers,data);
@@ -121,10 +122,11 @@ function HomeDashboard() {
   const totalMonthlyGrossUf = isSeller ? Number(data?.monthlyTotalUfByUser[user?.id ?? ''] ?? 0)
     : sellerRows.reduce((total,seller)=>total+Number(data?.monthlyTotalUfByUser[seller.id]??0),0);
   const teamDays = data ? teamDaysWithoutSale(sellerRows,data) : null;
-  const moraContracts = isSeller ? Number(ownMetric?.debtSalesCount ?? 0) : sumMetric(sellerRows, data?.latestByUser ?? {}, 'debtSalesCount');
+  const debt = data ? scopeDebt(sellerRows, data, user?.role === 'coordinator' || isManager || isSeller ? user?.id : undefined) : undefined;
+  const moraContracts = debt ?? 0;
   const productivity = ownMetric?.productivity ?? averageMetric(sellerRows, data?.latestByUser ?? {}, 'productivity');
   const cancellations = isSeller ? Number(ownMetric?.annualCancellationUf ?? 0) : sumMetric(sellerRows, data?.latestByUser ?? {}, 'annualCancellationUf');
-  const hasMora = isSeller ? ownMetric?.debtSalesCount !== undefined : sellerRows.some(w=>data?.latestByUser[w.id]?.debtSalesCount !== undefined);
+  const hasMora = debt !== undefined;
   const hasProductivity = ownMetric?.productivity !== undefined || (!isSeller && sellerRows.some(w=>data?.latestByUser[w.id]?.productivity !== undefined));
   const hasSalesforce = isSeller ? ownMetric?.salesforceRecords !== undefined : sellerRows.some(w=>data?.latestByUser[w.id]?.salesforceRecords !== undefined);
   const noSaleCount = isSeller
@@ -247,7 +249,7 @@ function HomeDashboard() {
                               <Pressable accessibilityRole="button" onPress={() => router.push({pathname:'/team',params:{kind:'productivity',scope:coordinator.id}})} key={coordinator.id} style={styles.unitTeamRow}>
                                 <View style={styles.flex}>
                                   <Text numberOfLines={1} style={styles.workerName}>{displayPersonName(coordinator)}</Text>
-                                  <Text style={styles.workerMeta}>{coordinatedSellers.length} vendedores · Mora {sumMetric(coordinatedSellers, data.latestByUser, 'debtSalesCount')} contratos</Text>
+                                  <Text style={styles.workerMeta}>{coordinatedSellers.length} vendedores · Mora {scopeDebt(coordinatedSellers, data, coordinator.id) ?? 0} contratos</Text>
                                 </View>
                                 <Text style={styles.workerUf}>{formatUF(data.salesTotalsByScope?.[coordinator.id]?.monthlyGross??coordinatedSellers.reduce((total, seller) => total + Number(data.monthlyTotalUfByUser[seller.id] ?? 0), 0))} UF mes</Text>
                               </Pressable>

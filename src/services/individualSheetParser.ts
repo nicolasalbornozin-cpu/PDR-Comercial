@@ -19,7 +19,7 @@ export const sheetSources = {
 } as const;
 export type SheetSource = keyof typeof sheetSources;
 export type SheetMetrics = Record<string, string | number>;
-export interface SheetRecord { rut?: string; name: string; role: 'seller' | 'coordinator' | 'sales_manager'; values: SheetMetrics; row: number; summaryFallback?: boolean }
+export interface SheetRecord { rut?: string; name: string; role: 'seller' | 'coordinator' | 'sales_manager'; values: SheetMetrics; row: number; summaryFallback?: boolean; teamName?: string }
 export interface SheetImport { source: SheetSource; sheet: string; records: SheetRecord[]; homeTotals?: SheetRecord[]; errors: string[]; warnings: string[]; rules: GoalRule[] }
 export interface RankingImport {
   parsed: SheetImport;
@@ -373,11 +373,11 @@ function readMonthlyHomeTotals(book: WorkBook, ws: WorkBook['Sheets'][string], p
     {first:14,last:43,role:'coordinator',names:readMap('BP','BQ'),col:'AS'},
   ] as const) {
     const included = new Set<string>();
-    const emitRow = (name:string,row:number,gross:number,summaryFallback = false) => {
+    const emitRow = (name:string,row:number,gross:number,summaryFallback = false,teamName?:string) => {
       const key = searchName(name);
       const emitted = summary.get(col+':'+key)?.emitted??0;
       included.add(rosterKey(name));
-      result.homeTotals!.push({name,role,row,summaryFallback,values:{homeMonthlyGrossUf:gross,homeMonthlyEmittedUf:Math.round(emitted*100)/100}});
+      result.homeTotals!.push({name,role,row,summaryFallback,...(teamName?{teamName}:{}),values:{homeMonthlyGrossUf:gross,homeMonthlyEmittedUf:Math.round(emitted*100)/100}});
     };
     for (let row=first;row<=last;row++) {
       const label=text(ws['R'+row]?.v);
@@ -391,12 +391,13 @@ function readMonthlyHomeTotals(book: WorkBook, ws: WorkBook['Sheets'][string], p
       if (Math.abs(gross-computed)>0.011) {
         result.warnings.push(`${result.sheet}, fila ${row}: se conserva el bruto guardado para «${label}» (${gross} UF); BASE ANUAL suma ${Math.round(computed*100)/100} UF.`);
       }
-      emitRow(name,row,gross);
+      emitRow(name,row,gross,false,role==='coordinator'?label:undefined);
     }
     for (const name of new Set(names.values())) {
       if (included.has(rosterKey(name))) continue;
       const gross=summary.get(col+':'+searchName(name))?.gross??0;
-      emitRow(name,first,Math.round(gross*100)/100,true);
+      const teamName=role==='coordinator'?[...names.entries()].find(([,person])=>person===name)?.[0]:undefined;
+      emitRow(name,first,Math.round(gross*100)/100,true,teamName);
     }
   }
 }

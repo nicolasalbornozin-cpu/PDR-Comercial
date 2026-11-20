@@ -44,7 +44,9 @@ export default function TeamScreen() {
     && (user.role!=='sales_manager'||p.salesManagerId===user.id))??[];
   const workers=sellers.filter(p=>kind==='zero'?hasMonthWithoutSale(data?.latestByUser[p.id]):kind!=='debt'||(data?.latestByUser[p.id]?.debtSalesCount??0)>0)
     .sort((a,b)=>displayPersonName(a).localeCompare(displayPersonName(b),'es'));
-  const summary=data?teamSummary(sellers,data):null;
+  const currentScope=scope?.id??(['coordinator','sales_manager'].includes(user.role)?user.id:undefined);
+  const summary=data?teamSummary(sellers,data,currentScope):null;
+  const detailedDebt=data?(groupRole?groups.reduce((sum,p)=>sum+teamSummary(scopedSellers(data,user,p),data,p.id).debt,0):workers.reduce((sum,p)=>sum+(data.latestByUser[p.id]?.debtSalesCount??0),0)):0;
   return <ScreenContainer contentContainerStyle={styles.page}>
     <DetailHeader title={titles[kind]}/>
     {scope?<Text style={styles.name}>{displayPersonName(scope)}</Text>:null}
@@ -55,7 +57,7 @@ export default function TeamScreen() {
     </View></View>:null}
     {groupRole?groups.map(p=>{
       const children=data?scopedSellers(data,user,p):[];
-      const totals=data?teamSummary(children,data):null;
+      const totals=data?teamSummary(children,data,p.id):null;
       return <Pressable key={p.id} accessibilityRole="button" onPress={()=>router.push({pathname:'/team',params:{kind,scope:p.id}})} style={styles.card}>
         <View style={styles.identity}><Text style={styles.name}>{displayPersonName(p)}</Text><Text style={styles.detail}>{children.length} ejecutivos</Text>
           <Text style={styles.detail}>{kind==='debt'?(totals?.debt??0)+' contratos en mora':kind==='productivity'?'Productividad promedio: '+(totals?.productivity?.toFixed(2)??'Sin dato'):kind==='zero'?(totals?.days??'Sin dato')+' días sin vender como equipo · '+(totals?.zero??0)+' personas sin ventas en un mes':'Ver avance de todos los ejecutivos'}</Text>
@@ -71,6 +73,7 @@ export default function TeamScreen() {
         </View>{kind==='productivity'?<Text style={[styles.productivity,{color:m?.productivity===undefined?colors.textMuted:m.productivity<1?colors.danger:colors.success}]}>{m?.productivity?.toFixed(2)??'—'}</Text>:goalKind?<Ionicons name="chevron-forward" size={22} color={colors.goldText}/>:null}
       </Pressable>;
     })}
+    {kind==='debt'&&summary&&summary.debt>detailedDebt?<View style={styles.card}><View style={styles.identity}><Text style={styles.name}>Otros contratos del equipo</Text><Text style={styles.detail}>{summary.debt-detailedDebt} contratos de personas fuera de la dotación vigente o sin equipo asignado.</Text></View></View>:null}
     {data&&!(groupRole?groups.length:workers.length)?<Text style={styles.subtitle}>No hay personas en este grupo.</Text>:null}
   </ScreenContainer>;
 }

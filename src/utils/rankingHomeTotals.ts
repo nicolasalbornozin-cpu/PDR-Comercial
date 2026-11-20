@@ -1,10 +1,14 @@
 import {searchName, SheetRecord, SheetMetrics} from '../services/individualSheetParser';
 
-interface ScopeWorker {id:string;name:string;display_name?:string|null;aliases?:string[];role:string}
+interface ScopeWorker {id:string;name:string;display_name?:string|null;aliases?:string[];role:string;team_name?:string|null}
 interface UploadRow {worker_id:string;source_row:number;metrics:SheetMetrics}
 
 export function matchHomeTotal(row: SheetRecord, workers: ScopeWorker[]): ScopeWorker[] {
   const key = (name:unknown) => searchName(name).replace(/^manuelo\b/, 'manuel').replace(/\bguissela\b/g,'guisela');
+  if (row.role === 'coordinator' && row.teamName) {
+    const teams = workers.filter(w => key(w.team_name) === key(row.teamName));
+    if (teams.length) return teams;
+  }
   const tokens = key(row.name).split(' ');
   if (tokens.length < 2) return [];
   // The Jefes summary can include the channel director/commercial manager.

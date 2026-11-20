@@ -19,11 +19,24 @@ export function teamDaysWithoutSale(sellers: VisibleProfile[], data: Pick<Dashbo
   return days.length?Math.min(...days):null;
 }
 
-export function teamSummary(sellers: VisibleProfile[], data: DashboardData) {
+export function scopeDebt(sellers: VisibleProfile[], data: DashboardData, scopeId?: string): number | undefined {
+  const direct = scopeId ? data.latestByUser[scopeId]?.debtSalesCount : undefined;
+  if (direct !== undefined) return direct;
+  if (!scopeId) {
+    const units = data.profiles.filter(p => p.role === 'sales_manager' && p.active && p.employmentStatus === 'active');
+    if (units.length && units.every(p => data.latestByUser[p.id]?.debtSalesCount !== undefined)) {
+      return units.reduce((sum, p) => sum + data.latestByUser[p.id]!.debtSalesCount!, 0);
+    }
+  }
+  const values = sellers.map(p => data.latestByUser[p.id]?.debtSalesCount).filter((n): n is number => n !== undefined);
+  return values.length ? values.reduce((sum, n) => sum + n, 0) : undefined;
+}
+
+export function teamSummary(sellers: VisibleProfile[], data: DashboardData, scopeId?: string) {
   const metrics = sellers.map(p => data.latestByUser[p.id]);
   const productivity = metrics.map(m => m?.productivity).filter((n): n is number => n !== undefined);
   return {
-    debt: metrics.reduce((sum,m) => sum + (m?.debtSalesCount ?? 0),0),
+    debt: scopeDebt(sellers, data, scopeId) ?? 0,
     productivity: productivity.length ? productivity.reduce((sum,n) => sum+n,0)/productivity.length : undefined,
     zero: metrics.filter(m => hasMonthWithoutSale(m)).length,
     days: teamDaysWithoutSale(sellers,data),
