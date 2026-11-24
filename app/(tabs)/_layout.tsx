@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { ComponentProps } from 'react';
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, typography } from '@/theme';
@@ -10,7 +10,6 @@ import { bottomNavigationMetrics } from '@/utils/bottomNavigation';
 import { hasPilotRestrictions } from '@/utils/pilotNavigation';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
-type TabButton = NonNullable<import('expo-router/build/react-navigation/bottom-tabs').BottomTabNavigationOptions['tabBarButton']>;
 
 function TabIcon({ focused, active, inactive }: { focused: boolean; active: IconName; inactive: IconName }) {
   return (
@@ -18,21 +17,6 @@ function TabIcon({ focused, active, inactive }: { focused: boolean; active: Icon
       <Ionicons accessible={false} allowFontScaling={false} color={focused ? colors.primaryDark : colors.textMuted} name={focused ? active : inactive} size={23} />
     </View>
   );
-}
-
-function lockedTab(title: string) {
-  const label = `${title}, bloqueado durante el piloto`;
-  const tabBarButton: TabButton = ({ children, style }) => (
-    <Pressable accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ disabled: true }} disabled style={style}>
-      {children}
-    </Pressable>
-  );
-  return {
-    title,
-    tabBarAccessibilityLabel: label,
-    tabBarIcon: () => <TabIcon active="lock-closed" focused={false} inactive="lock-closed-outline" />,
-    tabBarButton,
-  };
 }
 
 export default function TabLayout() {
@@ -63,7 +47,7 @@ export default function TabLayout() {
         }],
       }}
     >
-      <Tabs.Screen name="home" options={restricted && !newsOnly ? lockedTab('Inicio') : { href: newsOnly ? null : '/(tabs)/home', title: 'Inicio', tabBarAccessibilityLabel: 'Inicio', tabBarIcon: ({ focused }) => <TabIcon active="home" focused={focused} inactive="home-outline" /> }} />
+      <Tabs.Screen name="home" options={{ href: newsOnly ? null : '/(tabs)/home', title: 'Inicio', tabBarAccessibilityLabel: 'Inicio', tabBarIcon: ({ focused }) => <TabIcon active="home" focused={focused} inactive="home-outline" /> }} />
       <Tabs.Screen name="ranking" options={{ href: user?.role === 'audiovisual' ? null : '/(tabs)/ranking', title: 'Ranking', tabBarAccessibilityLabel: 'Ranking', tabBarIcon: ({ focused }) => <TabIcon active="trophy" focused={focused} inactive="trophy-outline" /> }} />
       <Tabs.Screen name="news" options={{ title: 'Noticias', tabBarAccessibilityLabel: 'Noticias', tabBarIcon: ({ focused }) => <TabIcon active="newspaper" focused={focused} inactive="newspaper-outline" /> }} />
       <Tabs.Screen name="admin" options={{ href: user?.role === 'admin' ? '/(tabs)/admin' : null, title: 'Administrar', tabBarAccessibilityLabel: 'Administrar', tabBarIcon: ({ focused }) => <TabIcon active="settings" focused={focused} inactive="settings-outline" /> }} />

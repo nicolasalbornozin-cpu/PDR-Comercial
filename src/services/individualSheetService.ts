@@ -9,6 +9,7 @@ import {mergeHomeTotals} from '@/utils/rankingHomeTotals';
 export interface WorkerRow {
  id:string;rut:string|null;name:string;display_name?:string|null;aliases:string[];role:Exclude<UserRole,'admin'|'audiovisual'>;active:boolean;status:EmploymentStatus;
  coordinator_id:string|null;manager_id:string|null;birth_date:string|null;join_date:string|null;
+ team_name?:string|null;
 }
 interface MetricRow {id:string;worker_id:string;source:SheetSource;metrics:SheetMetrics;label:string;period_start:string;period_end:string;published_at:string;sheet_name:string;goal_slot?:'current'|'previous';senior_status:'open'|'closed'|null;rules:GoalRule[]}
 function workerMatcher(workers:WorkerRow[]){
@@ -28,7 +29,7 @@ export function remainingUfTarget(uf:number|undefined,remaining:unknown):number|
  return Number.isFinite(missing)?Math.round((Math.max(uf,0)+missing)*100)/100:undefined;
 }
 export function workerUser(w:WorkerRow):User {
- return {id:String(w.id??''),rut:String(w.rut??''),name:String(w.name??''),displayName:w.display_name??undefined,role:w.role,active:w.active,employmentStatus:w.status,teamId:String(w.coordinator_id??''),supervisorId:String(w.coordinator_id??''),salesManagerId:String(w.manager_id??''),avatar:'',email:'',joinDate:String(w.join_date??''),birthDate:w.birth_date?String(w.birth_date):undefined,mustChangePassword:false};
+ return {id:String(w.id??''),rut:String(w.rut??''),name:String(w.name??''),displayName:w.display_name??undefined,role:w.role,active:w.active,employmentStatus:w.status,teamId:String((w.role==='coordinator'?w.id:w.coordinator_id)??''),teamName:w.team_name??undefined,supervisorId:String(w.coordinator_id??''),salesManagerId:String(w.manager_id??''),avatar:'',email:'',joinDate:String(w.join_date??''),birthDate:w.birth_date?String(w.birth_date):undefined,mustChangePassword:false};
 }
 async function allRows<T>(table:string):Promise<T[]> {
  if(!supabase)throw Error('Supabase no está configurado.');
@@ -52,7 +53,7 @@ export const individualSheetService={
   const imports=items.map(({parsed,filename,label,start,end,slot})=>{
    if(parsed.errors.length)throw Error('Corrige los errores antes de publicar.');
    let records=parsed.records.flatMap(row=>{
-    const found=match(row);
+    const found=match(row).filter(worker=>!parsed.source.startsWith('production_')||worker.role===row.role);
     if(found.length===0){skipped.push(row.name);return [];}
     if(found.length!==1)throw Error(`Identidad ambigua: ${row.name}.`);
     return [{worker_id:found[0].id,source_row:row.row,metrics:row.values}];
@@ -117,6 +118,8 @@ export const individualSheetService={
   // Keep the authenticated UUID as the UI's own key, while roster joins use stable worker IDs.
   const uiId=(id:string|null)=>id===self?.id?user.id:id??'';
   const rows=allMetrics.filter(m=>ids.has(m.worker_id));
+  const currentMonthStart=rows.find(m=>m.source==='ranking_monthly'&&m.goal_slot!=='previous')?.period_start;
+  const validSalesByWorker=new Map(rows.filter(m=>m.source==='production_sellers'&&m.sheet_name==='Ejecutivos').map(m=>[m.worker_id,m]));
   const latest:DashboardData['latestByUser']={},annual:Record<string,number>={},monthly:Record<string,number>={},annualTotal:Record<string,number>={},monthlyTotal:Record<string,number>={},snapshots:MetricSnapshot[]=[];
   const senior=rows.find(m=>m.source==='senior'&&m.goal_slot!=='previous');
   const seniorOpen=Boolean(senior&&senior.senior_status==='open');
@@ -129,8 +132,23 @@ export const individualSheetService={
     // Preserve uploaded Q3 figures as historical, never silently erase or relabel them as Q4.
     Object.assign(m,goalFields('senior',v,row.senior_status==='open',row.rules),{seniorLabel:displayLabels[`senior_${row.goal_slot??'current'}`]??row.label});
    }
-   if(row.source.startsWith('production_')){m.productivity=num('productivity');m.productionUf=num('uf');if(!rows.some(r=>r.worker_id===row.worker_id&&r.source==='cancellations'&&(r.metrics.lastSaleDate||r.metrics.daysWithoutSaleText))){m.lastSaleDate=typeof v.lastSaleDate==='string'?v.lastSaleDate:undefined;m.daysWithoutSaleText=typeof v.daysWithoutSaleText==='string'?v.daysWithoutSaleText:undefined;} }
-   if(row.source==='cancellations'){m.annualCancellationUf=num('cancellationUf');m.lastSaleDate=typeof v.lastSaleDate==='string'?v.lastSaleDate:undefined;m.daysWithoutSaleText=typeof v.daysWithoutSaleText==='string'?v.daysWithoutSaleText:undefined;}
+   const validSales=validSalesByWorker.get(row.worker_id);
+   if(row.source.startsWith('production_')){
+    m.productivity=num('productivity');m.productionUf=num('uf');
+    const zeroSales=num('zeroSales');
+    if(validSales===row&&zeroSales!==undefined&&(!currentMonthStart||row.period_start===currentMonthStart))m.commercialMonthZeroSales=zeroSales===1;
+    if(validSales===row||!rows.some(r=>r.worker_id===row.worker_id&&r.source==='cancellations'&&(r.metrics.lastSaleDate||r.metrics.daysWithoutSaleText))){
+     m.lastSaleDate=typeof v.lastSaleDate==='string'?v.lastSaleDate:undefined;
+     m.daysWithoutSaleText=typeof v.daysWithoutSaleText==='string'?v.daysWithoutSaleText:undefined;
+    }
+   }
+   if(row.source==='cancellations'){
+    m.annualCancellationUf=num('cancellationUf');
+    if(!validSales){
+     m.lastSaleDate=typeof v.lastSaleDate==='string'?v.lastSaleDate:undefined;
+     m.daysWithoutSaleText=typeof v.daysWithoutSaleText==='string'?v.daysWithoutSaleText:undefined;
+    }
+   }
    if(['titanes','rbh','msc'].includes(row.source)){m.debtInstallmentsCount=num('debtInstallments');m.debtUf08=num('debtUf08');m.debtSalesCount=num('debtSales');m.delinquentClientsCount=num('debtSales');}
    if(row.source==='sauce')m.sauceRisk=num('risk');
    if(row.source==='ranking_annual'){annual[id]=num('emittedUf')??0;if(num('totalUf')!==undefined)annualTotal[id]=num('totalUf')!;m.rankingPosition=num('position');}

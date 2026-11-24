@@ -20,7 +20,7 @@ export const sheetSources = {
 export type SheetSource = keyof typeof sheetSources;
 export type SheetMetrics = Record<string, string | number>;
 export interface SheetRecord { rut?: string; name: string; role: 'seller' | 'coordinator' | 'sales_manager'; values: SheetMetrics; row: number; summaryFallback?: boolean; teamName?: string }
-export interface SheetImport { source: SheetSource; sheet: string; records: SheetRecord[]; homeTotals?: SheetRecord[]; errors: string[]; warnings: string[]; rules: GoalRule[] }
+export interface SheetImport { source: SheetSource; sheet: string; records: SheetRecord[]; homeTotals?: SheetRecord[]; period?: {start:string;end:string}; errors: string[]; warnings: string[]; rules: GoalRule[] }
 export interface RankingImport {
   parsed: SheetImport;
   label: string;
@@ -58,6 +58,8 @@ export function parseIndividualSheet(book: WorkBook, source: SheetSource, period
   if (source === 'cancellations') return parseRankingCancellations(book,period);
   if (source === 'ranking_annual' || source === 'ranking_monthly') return parsePreparedRanking(book, source, period) ?? parseCantoRanking(book,source,period);
   if (source === 'production_sellers' || source === 'production_coordinators') {
+    const commercial = parseCommercialProductivity(book,source);
+    if (commercial) return commercial;
     const revised = parseRevisedProduction(book,source);
     if (revised) return revised;
   }
@@ -522,6 +524,61 @@ export function parseRankingCancellations(book:WorkBook,period?:{start:string;en
  if(!result.records.length)result.errors.push('Anulaciones no contiene resultados de trabajadores.');
  result.warnings.push('Dos tablas independientes: anulaciones anuales (D/G:H/K) y última venta (M:N). Los días sin vender se calculan con la fecha actual de Chile; «Sin ventas» se conserva sin inventar una fecha. Solo se publican datos agregados de trabajadores.');
  return result;
+}
+
+function parseCommercialProductivity(book: WorkBook, source: 'production_sellers' | 'production_coordinators'): SheetImport | undefined {
+  const sellers = source === 'production_sellers';
+  const sheet = sellers ? 'Ejecutivos' : 'Equipos';
+  const ws = book.Sheets[sheet];
+  if (!ws || searchName(ws[sellers ? 'M8' : 'N8']?.v) !== 'negocios mes') return;
+
+  const dashboard = book.Sheets.Dashboard;
+  const month = date(dashboard?.D5?.v), end = date(dashboard?.D4?.v);
+  const firstDay = number(book.Sheets.Criterios?.B10?.v);
+  const start = month && firstDay && Number.isInteger(firstDay) && firstDay <= 28 && firstDay >= 1
+    ? month.slice(0,8)+String(firstDay).padStart(2,'0') : undefined;
+  const result: SheetImport = { source, sheet, records: [], errors: [], warnings: [], rules: [] };
+  if (searchName(dashboard?.C5?.v) !== 'mes en curso' || searchName(dashboard?.C4?.v) !== 'corte actual' || !start || !end || start > end) {
+    result.errors.push('Dashboard debe indicar el inicio del mes en curso y la fecha de corte.');
+    return result;
+  }
+  result.period = { start, end };
+  const seen = new Set<string>();
+  for (const address of Object.keys(ws).filter(a => /^A\d+$/.test(a) && Number(a.slice(1)) > 8)) {
+    const row = Number(address.slice(1));
+    const type = searchName(ws[address]?.v);
+    if (sellers ? number(ws['U'+row]?.v) !== 1 : !['coordinador','jefe'].includes(type)) continue;
+    const role = sellers ? 'seller' : type === 'jefe' ? 'sales_manager' : 'coordinator';
+    const rut = normalizeRut(ws[(sellers ? 'A' : 'Z')+row]?.v);
+    const name = text(ws['B'+row]?.v);
+    const productivity = number(ws[(sellers ? 'I' : 'H')+row]?.v);
+    const businesses = number(ws[(sellers ? 'M' : 'N')+row]?.v);
+    const key = role+':'+rut;
+    if (!isValidRut(rut) || !name || seen.has(key) || productivity === undefined || productivity < 0 || businesses === undefined || !Number.isInteger(businesses) || businesses < 0) {
+      result.errors.push(`${sheet}, fila ${row}: identidad repetida o resultado inválido.`);
+      continue;
+    }
+    const values: SheetMetrics = { productivity, businesses };
+    if (sellers) {
+      const lastSale = ws['O'+row];
+      const lastSaleDate = date(lastSale?.v);
+      const uf = number(ws['T'+row]?.v);
+      const zeroFlag = searchName(ws['N'+row]?.v);
+      if (uf === undefined || !['cero venta','ventas'].includes(zeroFlag) ||
+          (lastSaleDate ? lastSaleDate > end : !/^sin ventas?$/.test(searchName(lastSale?.v)))) {
+        result.errors.push(`${sheet}, fila ${row}: revisa negocios del mes, UF y última venta válida.`);
+        continue;
+      }
+      values.uf = uf;
+      values.zeroSales = zeroFlag === 'cero venta' ? 1 : 0;
+      if (lastSaleDate) values.lastSaleDate = lastSaleDate;
+      else values.daysWithoutSaleText = 'Sin ventas';
+    }
+    seen.add(key);
+    result.records.push({ rut, name, role, row, values });
+  }
+  if (!result.records.length) result.errors.push(`${sheet} no contiene resultados de productividad.`);
+  return result;
 }
 
 function parseRevisedProduction(book:WorkBook, source:'production_sellers'|'production_coordinators'):SheetImport|undefined {

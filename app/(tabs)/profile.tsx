@@ -12,6 +12,7 @@ import { UserAvatar } from '@/components/UserAvatar';
 import { currentUser } from '@/data/mockData';
 import { useAuth } from '@/hooks/useAuth';
 import { individualSheetService, WorkerRow, workerUser } from '@/services/individualSheetService';
+import { snapshotService } from '@/services/snapshotService';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
 import { roleLabels, User, UserRole } from '@/types';
 import { formatDate } from '@/utils/format';
@@ -31,8 +32,8 @@ const previewRoles: { icon: IconName; label: string; role: PreviewRole }[] = [
 
 const profileDetails: { icon: IconName; label: string; getValue: (profile: User) => string }[] = [
   { icon: 'card-outline', label: 'Usuario', getValue: (profile) => formatRut(profile.rut) },
-  { icon: 'people-outline', label: 'Equipo', getValue: (profile) => profile.teamId ? 'Equipo asignado' : 'Sin equipo asignado' },
-  { icon: 'person-outline', label: 'Coordinador', getValue: (profile) => profile.supervisorId ? 'Coordinación asignada' : 'No aplica' },
+  { icon: 'people-outline', label: 'Equipo', getValue: (profile) => profile.teamName ?? 'Sin equipo asignado' },
+  { icon: 'person-outline', label: 'Coordinador', getValue: (profile) => profile.role === 'coordinator' ? 'Coordinas este equipo' : profile.supervisorId ? 'Coordinación asignada' : 'No aplica' },
   { icon: 'briefcase-outline', label: 'Jefe de ventas', getValue: (profile) => profile.salesManagerId ? 'Jefatura asignada' : 'No aplica' },
   { icon: 'calendar-outline', label: 'Fecha de ingreso', getValue: (profile) => formatDate(profile.joinDate) },
 ];
@@ -40,9 +41,18 @@ const profileDetails: { icon: IconName; label: string; getValue: (profile: User)
 export default function ProfileScreen() {
   const router = useRouter();
   const { authenticatedUser, isLoading, isPreviewing, signOut, startPreview, user } = useAuth();
-  // Keep rendering the administrator while the route changes into preview
-  // mode. Some roster-only profiles intentionally lack optional profile data.
-  const profile = (isPreviewing ? authenticatedUser : user) ?? currentUser;
+  const account = user ?? authenticatedUser ?? currentUser;
+  const [team, setTeam] = useState<{userId: string; name: string}>();
+  const profile = team?.userId === account.id ? {...account, teamName: team.name} : account;
+  useEffect(() => {
+    if (!user || (user.role !== 'seller' && user.role !== 'coordinator')) return;
+    let active = true;
+    snapshotService.getRanking(user, 'monthly', {preview:isPreviewing,rankingMode:'teams'}).then(entries => {
+      const name = entries.find(entry => entry.isCurrentUser && entry.entityType === 'team')?.teamName?.trim();
+      if (active && name) setTeam({userId:user.id, name});
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [user,isPreviewing]);
   const profileStartYear = profile.joinDate ? new Date(`${profile.joinDate}T12:00:00`).getFullYear() : null;
   const [managedUsers, setManagedUsers] = useState<WorkerRow[]>([]);
   const [selectedPreviewRole, setSelectedPreviewRole] = useState<PreviewRole | null>(null);

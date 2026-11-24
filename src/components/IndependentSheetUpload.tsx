@@ -37,7 +37,10 @@ export function IndependentSheetUpload(){
    const label=uploadCampaignLabel(asset.name,source,slot);
    const imports:RankingImport[]=source==='ranking_monthly'?parseRankingWorkbook(book,dates):
     [{parsed:parseIndividualSheet(selectedBook,source,dates),label,slot,...dates}];
-   if(source==='production_sellers')imports.push({parsed:parseIndividualSheet(book,'production_coordinators',dates),label,slot,...dates});
+   if(source==='production_sellers'){
+    imports.push({parsed:parseIndividualSheet(book,'production_coordinators',dates),label,slot,...dates});
+    for(const item of imports)if(item.parsed.period)Object.assign(item,item.parsed.period);
+   }
    setFilename(asset.name);setParsed(imports);
   }catch(e){setError(e instanceof Error?e.message:'No se pudo leer el Excel.');}finally{if(cachedFile?.exists){try{cachedFile.delete();}catch{/* The OS may already have cleared the picker cache. */}}setBusy(false);}
  }
@@ -62,7 +65,7 @@ export function IndependentSheetUpload(){
   <View style={styles.choices}>{choices.map((choice,index)=><Pressable accessibilityRole="button" accessibilityState={{selected:selection===index}} disabled={busy} key={choice.source+choice.slot} onPress={()=>{setSelection(index);setParsed([]);setFilename('');setError('');setMessage('');}} style={[styles.chip,selection===index&&styles.selected]}><Text style={{color:selection===index?colors.surface:colors.primary}}>{choice.title}</Text></Pressable>)}</View>
   <Text style={styles.sheet}>{source==='ranking_monthly'?'Ranking anual, mes vigente, mes anterior y anulaciones':source==='production_sellers'?'Hojas de productividad de ejecutivos y coordinadores':`Hoja: ${sheetSources[source].sheet}`}</Text>
   {isGoal?<Text style={styles.copy}>Destino: {choices[selection].title}. Sube un Excel con una sola hoja «{source==='category'?'Carga Catego':'Carga Senior'}». Reemplaza únicamente {slot==='current'?'la vigente; la anterior se conserva':'la anterior; la vigente se conserva'}. No necesitas escribir fechas ni período aquí.</Text>:null}
-  {source==='production_sellers'?<Text style={styles.copy}>Usa el Excel con las dos hojas de producción o el formato mensual con «Resumen Coordinadores» vinculado al mes vigente.</Text>:null}
+  {source==='production_sellers'?<Text style={styles.copy}>Usa el Excel de Productividad Santa Clara con «Dashboard», «Ejecutivos» y «Equipos», o uno de los formatos anteriores de producción.</Text>:null}
   {['titanes','rbh','msc'].includes(source)?<Text style={styles.copy}>Sube el archivo individual «{sheetSources[source].sheet}.xlsx», con su hoja del mismo nombre. Solo reemplaza la mora de esta jefatura.</Text>:null}
   {source==='sauce'?<Text style={styles.copy}>Sube «Carga Sauce.xlsx» con la hoja «Carga Sauce». Este porcentaje de riesgo se carga por separado de los contratos en mora.</Text>:null}
   {source==='dotacion'?<Text style={styles.copy}>Nómina completa: los ausentes, con licencia o vacaciones no podrán ingresar (Error 444). Se conservan las tres excepciones autorizadas y el administrador.</Text>:null}

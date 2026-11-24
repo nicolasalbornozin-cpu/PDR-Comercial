@@ -47,9 +47,11 @@ function RootNavigator() {
           <Stack.Screen name="index" />
           <Stack.Screen name="(auth)" />
           <Stack.Screen name="(tabs)" />
-          <Stack.Protected guard={Boolean(user) && !hasPilotRestrictions(user?.role)}>
+          <Stack.Protected guard={Boolean(user) && user?.role !== 'audiovisual'}>
             <Stack.Screen name="goals" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="team" options={{ animation: 'slide_from_right' }} />
+          </Stack.Protected>
+          <Stack.Protected guard={Boolean(user) && !hasPilotRestrictions(user?.role)}>
             <Stack.Screen name="notifications" options={{ animation: 'slide_from_right' }} />
           </Stack.Protected>
           <Stack.Screen name="conditions" options={{ animation: 'slide_from_right' }} />

@@ -91,23 +91,15 @@ for (role of ['admin', 'seller', 'coordinator', 'sales_manager', 'commercial_man
   const tree = layout.default();
   const visible = tree.props.children.filter(screen => screen.props.options.href !== null);
   const locked = visible.filter(screen => screen.props.options.tabBarButton);
-  assert.equal(locked.map(screen => screen.props.name).join(','), ['admin', 'audiovisual'].includes(role) ? '' : 'home');
+  assert.equal(locked.length, 0);
   const unlocked = visible.filter(screen => !screen.props.options.tabBarButton).map(screen => screen.props.name).join(',');
-  assert.equal(unlocked, role === 'admin' ? 'home,ranking,news,admin,profile' : role === 'audiovisual' ? 'news,profile' : 'ranking,news,profile');
+  assert.equal(unlocked, role === 'admin' ? 'home,ranking,news,admin,profile' : role === 'audiovisual' ? 'news,profile' : 'home,ranking,news,profile');
   const firstTab = role === 'admin' ? 'home' : role === 'audiovisual' ? 'news' : 'ranking';
   assert.equal(tree.props.initialRouteName, firstTab);
   assert.equal(navigation.landingTab(role), '/(tabs)/' + firstTab);
-  for (const screen of locked) {
-    assert.equal(screen.props.options.href, undefined);
-    const button = screen.props.options.tabBarButton({ onPress() { assert.fail('Locked tab navigated'); } });
-    assert.equal(button.props.disabled, true);
-    assert.equal(button.props.onPress, undefined);
-    const icon = screen.props.options.tabBarIcon();
-    assert.equal(icon.props.inactive, 'lock-closed-outline');
-  }
 }
 console.log('PASS: rounded brand navigation, active gold icon, seven-role visibility, keyboard hiding, safe-area/font-scale layouts and non-overlapping administrator preview banner.');
-console.log('PASS: pilot opens the allowed first tab and exposes locked tabs without navigation.');
+console.log('PASS: pilot still opens Ranking, and commercial roles can navigate to Inicio.');
 for (platform of ['web', 'android']) {
   for (pilot of [undefined, false]) {
     const navigation = load('src/utils/pilotNavigation.ts');

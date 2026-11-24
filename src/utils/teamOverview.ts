@@ -1,5 +1,15 @@
 import { DashboardData, User, VisibleProfile } from '../types';
-import { daysWithoutSale, hasMonthWithoutSale } from './commercialRules';
+import { daysWithoutSale } from './commercialRules';
+
+export function hasZeroCommercialSales(metric?: DashboardData['latestByUser'][string]): boolean {
+  return metric?.commercialMonthZeroSales ?? (metric?.monthlyTotalUf === 0);
+}
+
+export function daysWithoutSaleLabel(metric?: DashboardData['latestByUser'][string]): string {
+  const days = daysWithoutSale(metric?.lastSaleDate);
+  if (days === null) return /^sin ventas?$/i.test(metric?.daysWithoutSaleText ?? '') ? 'Sin ventas registradas' : 'Sin fecha de última venta';
+  return days === 1 ? '1 día sin vender' : `${days} días sin vender`;
+}
 
 export function scopedSellers(data: DashboardData, user: User, scope?: VisibleProfile) {
   return data.profiles.filter(p => p.role === 'seller' && p.active && p.employmentStatus === 'active'
@@ -38,7 +48,7 @@ export function teamSummary(sellers: VisibleProfile[], data: DashboardData, scop
   return {
     debt: scopeDebt(sellers, data, scopeId) ?? 0,
     productivity: productivity.length ? productivity.reduce((sum,n) => sum+n,0)/productivity.length : undefined,
-    zero: metrics.filter(m => hasMonthWithoutSale(m)).length,
+    zero: metrics.filter(hasZeroCommercialSales).length,
     days: teamDaysWithoutSale(sellers,data),
   };
 }

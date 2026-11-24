@@ -8,14 +8,14 @@ import { useAuth } from '@/hooks/useAuth';
 import { snapshotService } from '@/services/snapshotService';
 import { colors, radii, spacing, typography } from '@/theme';
 import { DashboardData } from '@/types';
-import { daysWithoutSale, hasMonthWithoutSale, latestGoal } from '@/utils/commercialRules';
+import { latestGoal } from '@/utils/commercialRules';
 import { goalRemainingUf } from '@/utils/goalProgress';
 import { formatUF } from '@/utils/format';
-import { scopedSellers, teamSummary } from '@/utils/teamOverview';
+import { daysWithoutSaleLabel, hasZeroCommercialSales, scopedSellers, teamSummary } from '@/utils/teamOverview';
 import {displayPersonName} from '@/utils/personName';
 import {useCommercialRefresh} from '@/hooks/useCommercialRefresh';
 
-const titles = { debt: 'Contratos en mora', zero: 'Días sin vender', category: 'Categorización de mi equipo', senior: 'Senior de mi equipo', productivity: 'Productividad de mi equipo' };
+const titles = { debt: 'Contratos en mora', days: 'Días sin vender', zero: 'Cero ventas', category: 'Categorización de mi equipo', senior: 'Senior de mi equipo', productivity: 'Productividad de mi equipo' };
 export default function TeamScreen() {
   const { kind: rawKind, scope: scopeId } = useLocalSearchParams<{kind?: string; scope?: string}>();
   const kind = rawKind && Object.hasOwn(titles,rawKind) ? rawKind as keyof typeof titles : 'debt';
@@ -42,10 +42,15 @@ export default function TeamScreen() {
   const groups=data?.profiles.filter(p=>p.role===groupRole&&p.active&&p.employmentStatus==='active'
     && (!scope||p.salesManagerId===scope.id)
     && (user.role!=='sales_manager'||p.salesManagerId===user.id))??[];
-  const workers=sellers.filter(p=>kind==='zero'?hasMonthWithoutSale(data?.latestByUser[p.id]):kind!=='debt'||(data?.latestByUser[p.id]?.debtSalesCount??0)>0)
+  const workers=sellers.filter(p=>kind==='zero'?hasZeroCommercialSales(data?.latestByUser[p.id]):kind!=='debt'||(data?.latestByUser[p.id]?.debtSalesCount??0)>0)
     .sort((a,b)=>displayPersonName(a).localeCompare(displayPersonName(b),'es'));
   const currentScope=scope?.id??(['coordinator','sales_manager'].includes(user.role)?user.id:undefined);
   const summary=data?teamSummary(sellers,data,currentScope):null;
+  const salesDetail=kind==='zero'||kind==='days';
+  const groupIds=new Set(groups.map(p=>p.id));
+  const listedWorkers=groupRole
+    ? salesDetail ? workers.filter(p=>!groupIds.has(groupRole==='sales_manager'?p.salesManagerId:p.supervisorId)) : []
+    : workers;
   const detailedDebt=data?(groupRole?groups.reduce((sum,p)=>sum+teamSummary(scopedSellers(data,user,p),data,p.id).debt,0):workers.reduce((sum,p)=>sum+(data.latestByUser[p.id]?.debtSalesCount??0),0)):0;
   return <ScreenContainer contentContainerStyle={styles.page}>
     <DetailHeader title={titles[kind]}/>
@@ -53,28 +58,29 @@ export default function TeamScreen() {
     {error?<Text accessibilityRole="alert" style={styles.error}>{error}</Text>:!data?<ActivityIndicator color={colors.gold}/>:null}
     {summary?<View style={styles.card}><View style={styles.identity}>
       <Text style={styles.name}>{groupRole==='coordinator'?'Mis coordinadores':groupRole==='sales_manager'?'Mis jefes de venta':sellers.length+' ejecutivos de mi equipo'}</Text>
-      <Text style={styles.detail}>{kind==='debt'?summary.debt+' contratos en mora · suma total':kind==='zero'?(summary.days===null?'Sin fecha de última venta del equipo':summary.days+' días desde la última venta del equipo')+' · '+summary.zero+' ejecutivos con 0 UF este mes':goalKind?'Todos los ejecutivos, incluidos quienes todavía no cumplen': 'Productividad de Producción, sin recalcular el resultado individual'}</Text>
+      <Text style={styles.detail}>{kind==='debt'?summary.debt+' contratos en mora · suma total':kind==='zero'?`${summary.zero} ejecutivos sin ventas válidas · ${data?.periodLabel}`:kind==='days'?`${sellers.length} ejecutivos · desde su última venta válida`:goalKind?'Consulta el estado de cada ejecutivo':'Productividad según el último cierre'}</Text>
     </View></View>:null}
-    {groupRole?groups.map(p=>{
+    {groups.map(p=>{
       const children=data?scopedSellers(data,user,p):[];
       const totals=data?teamSummary(children,data,p.id):null;
       return <Pressable key={p.id} accessibilityRole="button" onPress={()=>router.push({pathname:'/team',params:{kind,scope:p.id}})} style={styles.card}>
-        <View style={styles.identity}><Text style={styles.name}>{displayPersonName(p)}</Text><Text style={styles.detail}>{children.length} ejecutivos</Text>
-          <Text style={styles.detail}>{kind==='debt'?(totals?.debt??0)+' contratos en mora':kind==='productivity'?'Productividad promedio: '+(totals?.productivity?.toFixed(2)??'Sin dato'):kind==='zero'?(totals?.days??'Sin dato')+' días sin vender como equipo · '+(totals?.zero??0)+' personas sin ventas en un mes':'Ver avance de todos los ejecutivos'}</Text>
+        <View style={styles.identity}><Text style={styles.name}>{p.teamName ? `${p.teamName} · ${displayPersonName(p)}` : displayPersonName(p)}</Text><Text style={styles.detail}>{children.length} ejecutivos</Text>
+          <Text style={styles.detail}>{kind==='debt'?(totals?.debt??0)+' contratos en mora':kind==='productivity'?'Productividad: '+((data?.latestByUser[p.id]?.productivity??totals?.productivity)?.toFixed(2)??'Sin dato'):kind==='zero'?`${totals?.zero??0} ejecutivos sin ventas válidas`:kind==='days'?'Ver días sin vender por ejecutivo':'Ver avance de todos los ejecutivos'}</Text>
         </View><Ionicons name="chevron-forward" size={22} color={colors.goldText}/>
       </Pressable>;
-    }):workers.map(p=>{
+    })}
+    {listedWorkers.map(p=>{
       const m=data?.latestByUser[p.id];const goal=goalKind&&data?latestGoal(data,p.id,kind):undefined;
       const missing=goalKind?goalRemainingUf(goal,kind):undefined;
       return <Pressable key={p.id} disabled={!goalKind} accessibilityRole={goalKind?'button':undefined} onPress={()=>router.push({pathname:'/goals',params:{worker:p.id,focus:kind}})} style={styles.card}>
         <View style={styles.identity}><Text style={styles.name}>{displayPersonName(p)}</Text>
-          <Text style={styles.detail}>{kind==='debt'?m?.debtSalesCount+' contratos en mora':kind==='zero'?m?.lastSaleDate?daysWithoutSale(m.lastSaleDate)+' días sin vender · última venta '+m.lastSaleDate:'Sin ventas'===m?.daysWithoutSaleText?'Sin ventas registradas':'Sin fecha de venta registrada':kind==='productivity'?(m?.productionUf===undefined?'Sin dato':formatUF(m.productionUf))+' UF de Producción':kind==='category'?goal?.category:goal?.seniorLevel}</Text>
+          <Text style={styles.detail}>{kind==='debt'?m?.debtSalesCount+' contratos en mora':salesDetail?daysWithoutSaleLabel(m):kind==='productivity'?(m?.productionUf===undefined?'Sin dato':formatUF(m.productionUf))+' UF de Producción':kind==='category'?goal?.category:goal?.seniorLevel}</Text>
           {goal?<><Text style={styles.detail}>{goal.goalPending?'Pendiente de nueva carga':formatUF(kind==='category'?goal.categoryUf??0:goal.eligibleTotalUf??0)+' UF · '+(goal.smadCount??'—')+' SMAD'}</Text><Text style={styles.detail}>{missing===undefined?goal.categoryRemaining??goal.seniorRemaining:'Faltan '+formatUF(missing)+' UF y '+(goal.smadRemaining??'—')+' SMAD'}</Text></>:null}
         </View>{kind==='productivity'?<Text style={[styles.productivity,{color:m?.productivity===undefined?colors.textMuted:m.productivity<1?colors.danger:colors.success}]}>{m?.productivity?.toFixed(2)??'—'}</Text>:goalKind?<Ionicons name="chevron-forward" size={22} color={colors.goldText}/>:null}
       </Pressable>;
     })}
     {kind==='debt'&&summary&&summary.debt>detailedDebt?<View style={styles.card}><View style={styles.identity}><Text style={styles.name}>Otros contratos del equipo</Text><Text style={styles.detail}>{summary.debt-detailedDebt} contratos de personas fuera de la dotación vigente o sin equipo asignado.</Text></View></View>:null}
-    {data&&!(groupRole?groups.length:workers.length)?<Text style={styles.subtitle}>No hay personas en este grupo.</Text>:null}
+    {data&&!groups.length&&!listedWorkers.length?<Text style={styles.subtitle}>{kind==='zero'?'No hay ejecutivos con cero ventas en este equipo.':'No hay personas en este grupo.'}</Text>:null}
   </ScreenContainer>;
 }
 const styles=StyleSheet.create({page:{gap:spacing.md,padding:spacing.xl,maxWidth:620,width:'100%',alignSelf:'center'},subtitle:{fontFamily:typography.sans,color:colors.textMuted,fontSize:13},card:{backgroundColor:colors.surface,borderRadius:radii.lg,padding:spacing.lg,flexDirection:'row',alignItems:'center',gap:spacing.md},identity:{flex:1,gap:6},name:{fontFamily:typography.sans,fontSize:13,fontWeight:'800',color:colors.primary},detail:{fontFamily:typography.sans,fontSize:12,color:colors.textMuted},productivity:{fontFamily:typography.sans,fontSize:25,fontWeight:'800'},error:{color:colors.danger}});

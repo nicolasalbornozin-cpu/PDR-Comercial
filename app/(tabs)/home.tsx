@@ -17,11 +17,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { snapshotService } from '@/services/snapshotService';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
 import { DashboardData, MetricSnapshot, roleLabels, VisibleProfile } from '@/types';
-import { daysWithoutSale, hasMonthWithoutSale, hasGoalLevel, hasQualifiedSenior, latestGoal, isBirthdayToday, productivityTone } from '@/utils/commercialRules';
+import { hasGoalLevel, hasQualifiedSenior, latestGoal, isBirthdayToday, productivityTone } from '@/utils/commercialRules';
 import { formatUF } from '@/utils/format';
 import { displayPersonName } from '@/utils/personName';
-import { scopeDebt, teamDaysWithoutSale } from '@/utils/teamOverview';
-import { hasPilotRestrictions } from '@/utils/pilotNavigation';
+import { daysWithoutSaleLabel, hasZeroCommercialSales, scopeDebt, teamDaysWithoutSale } from '@/utils/teamOverview';
 
 function sumMetric(workers: VisibleProfile[], latest: DashboardData['latestByUser'], key: keyof MetricSnapshot): number {
   return workers.reduce((total, worker) => total + Number(latest[worker.id]?.[key] ?? 0), 0);
@@ -30,11 +29,6 @@ function sumMetric(workers: VisibleProfile[], latest: DashboardData['latestByUse
 function averageMetric(workers: VisibleProfile[], latest: DashboardData['latestByUser'], key: keyof MetricSnapshot): number {
   const values = workers.map((worker) => latest[worker.id]?.[key]).filter((value): value is number => typeof value === 'number');
   return values.length ? values.reduce((total, value) => total + value, 0) / values.length : 0;
-}
-
-function sellerDays(metric?: Partial<MetricSnapshot>): string {
-  const days = daysWithoutSale(metric?.lastSaleDate);
-  return days === null ? metric?.daysWithoutSaleText === 'Sin ventas' ? 'Sin ventas' : 'Sin fecha' : `${days} día${days === 1 ? '' : 's'}`;
 }
 
 function ScopeCard({ title, subtitle, sellers, data, monthlyTarget, onPress,scopeId }: { title: string; subtitle: string; sellers: VisibleProfile[]; data: DashboardData; monthlyTarget: number; onPress: () => void;scopeId?:string }) {
@@ -70,7 +64,7 @@ function ScopeCard({ title, subtitle, sellers, data, monthlyTarget, onPress,scop
 
 export default function HomeScreen() {
   const { user } = useAuth();
-  return hasPilotRestrictions(user?.role) ? <Redirect href="/(tabs)/ranking" /> : <HomeDashboard />;
+  return user?.role === 'audiovisual' ? <Redirect href="/(tabs)/news" /> : <HomeDashboard />;
 }
 
 function HomeDashboard() {
@@ -128,16 +122,14 @@ function HomeDashboard() {
   const cancellations = isSeller ? Number(ownMetric?.annualCancellationUf ?? 0) : sumMetric(sellerRows, data?.latestByUser ?? {}, 'annualCancellationUf');
   const hasMora = debt !== undefined;
   const hasProductivity = ownMetric?.productivity !== undefined || (!isSeller && sellerRows.some(w=>data?.latestByUser[w.id]?.productivity !== undefined));
-  const hasSalesforce = isSeller ? ownMetric?.salesforceRecords !== undefined : sellerRows.some(w=>data?.latestByUser[w.id]?.salesforceRecords !== undefined);
-  const noSaleCount = isSeller
-    ? daysWithoutSale(ownMetric?.lastSaleDate) ?? 0
-    : sellerRows.filter((seller) => hasMonthWithoutSale(data?.latestByUser[seller.id])).length;
+  const noSaleCount = sellerRows.filter(seller => hasZeroCommercialSales(data?.latestByUser[seller.id])).length;
+  const sauceRisk = ownMetric?.sauceRisk;
+  const zeroDetail = user?.role==='coordinator' ? 'Ver ejecutivos' : isManager ? 'Ver coordinadores' : 'Ver jefes de venta';
   const categoryCount = data ? sellerRows.filter(seller => hasGoalLevel(latestGoal(data, seller.id, 'category')?.category)).length : 0;
   const seniorCount = data ? sellerRows.filter(seller => hasQualifiedSenior(latestGoal(data,seller.id,'senior'))).length : 0;
   const birthdayProfiles = data?.profiles.filter((profile) => isBirthdayToday(profile.birthDate)) ?? [];
   const bestMonthlyUf = Math.max(...sellerRows.map((seller) => Number(data?.monthlyEmittedUfByUser[seller.id] ?? 0)), 0);
   const rankingPosition = ownMetric?.rankingPosition;
-  const salesforceRecords = isSeller ? Number(ownMetric?.salesforceRecords ?? 0) : sumMetric(sellerRows, data?.latestByUser ?? {}, 'salesforceRecords');
   const seniorUf = Number(ownMetric?.eligibleTotalUf ?? ownMetric?.quarterTotalUf ?? 0);
   const seniorTarget = ownMetric?.seniorTargetUf;
 
@@ -190,25 +182,32 @@ function HomeDashboard() {
             {!isManager && (
               <MetricCard detail={isSeller ? 'posición anual' : 'personas visibles'} icon="trophy-outline" label={isSeller ? 'RANKING' : 'EQUIPO'} tone="gold" value={isSeller ? rankingPosition !== undefined ? `#${rankingPosition}` : '—' : `${sellerRows.length}`} />
             )}
-            <MetricCard onPress={!isSeller?()=>router.push({pathname:'/team',params:{kind:'zero'}}):undefined} detail={isSeller?'días desde última venta':`${noSaleCount} ejecutivos con 0 UF este mes · ver detalle`} icon="calendar-outline" label="DÍAS SIN VENDER" value={isSeller?sellerDays(ownMetric):teamDays===null?'Sin fecha':`${teamDays} días`} />
+            <MetricCard onPress={data&&!isSeller?()=>router.push({pathname:'/team',params:{kind:'days'}}):undefined} detail={isSeller?'Desde tu última venta válida':'Ver días por ejecutivo'} icon="calendar-outline" label="DÍAS SIN VENDER" value={isSeller?daysWithoutSaleLabel(ownMetric):teamDays===null?'Sin fecha':`${teamDays} días`} />
           </View>
 
-          {isSeller ? <View style={styles.secondaryMetrics}><View style={styles.secondaryMetric}><View style={[styles.secondaryIcon, ownMetric?.sauceRisk !== undefined && ownMetric.sauceRisk > 30 ? styles.dangerBackground : undefined]}><Ionicons name="shield-checkmark-outline" color={ownMetric?.sauceRisk !== undefined && ownMetric.sauceRisk > 30 ? colors.danger : colors.goldText} size={20}/></View><View><Text style={styles.secondaryLabel}>Riesgo Sauce</Text><Text style={[styles.secondaryValue, ownMetric?.sauceRisk !== undefined && ownMetric.sauceRisk > 30 ? styles.dangerText : undefined]}>{ownMetric?.sauceRisk === undefined ? 'Sin dato' : `${ownMetric.sauceRisk.toFixed(1)}%`}</Text></View></View></View> : null}
           <View style={styles.secondaryMetrics}>
             <View style={styles.secondaryMetric}>
               <View style={[styles.secondaryIcon, { backgroundColor: cancellations ? '#FBECE9' : colors.softGreen }]}><Ionicons color={cancellations ? colors.danger : colors.success} name="close-circle-outline" size={19} /></View>
               <View><Text style={styles.secondaryLabel}>Anulaciones del año</Text><Text style={[styles.secondaryValue, cancellations ? styles.dangerText : styles.successText]}>{data?`${formatUF(cancellations)} UF`:'Cargando…'}</Text></View>
             </View>
             <View style={styles.secondaryDivider} />
-            <View style={styles.secondaryMetric}>
-              <View style={[styles.secondaryIcon, { backgroundColor: noSaleCount >= 3 ? '#FBECE9' : colors.softGreen }]}><Ionicons color={noSaleCount >= 3 ? colors.danger : colors.success} name="calendar-outline" size={19} /></View>
-              <View><Text style={styles.secondaryLabel}>Salesforce</Text><Text style={styles.secondaryValue}>{hasSalesforce?`${salesforceRecords} registros`:'Sin datos cargados'}</Text></View>
-            </View>
+            {isSeller ? (
+              <View style={styles.secondaryMetric}>
+                <View style={[styles.secondaryIcon, (sauceRisk ?? 0)>30 && styles.dangerBackground]}><Ionicons name="shield-checkmark-outline" color={(sauceRisk ?? 0)>30 ? colors.danger : colors.goldText} size={20}/></View>
+                <View><Text style={styles.secondaryLabel}>Riesgo Sauce</Text><Text style={[styles.secondaryValue, (sauceRisk ?? 0)>30 && styles.dangerText]}>{sauceRisk===undefined?'Sin dato':`${sauceRisk.toFixed(1)}%`}</Text></View>
+              </View>
+            ) : (
+              <Pressable accessibilityRole="button" disabled={!data} onPress={() => router.push({pathname:'/team',params:{kind:'zero'}})} style={styles.secondaryMetric}>
+                <View style={styles.secondaryIcon}><Ionicons color={colors.primary} name="calendar-outline" size={19} /></View>
+                <View style={styles.flex}><Text style={styles.secondaryLabel}>Cero ventas</Text><Text style={styles.secondaryValue}>{data?`${noSaleCount} ejecutivos`:'Cargando…'}</Text><Text style={styles.secondaryLabel}>{zeroDetail}</Text></View>
+                <Ionicons color={colors.goldText} name="chevron-forward" size={16} />
+              </Pressable>
+            )}
           </View>
 
           {user?.role === 'coordinator' ? <View style={styles.metricsRow}>
-            <MetricCard label="CATEGO" icon="star-outline" value={`${categoryCount}`} detail={`cumplen · ver los ${sellerRows.length}`} onPress={() => router.push({pathname:'/team',params:{kind:'category'}})} />
-            <MetricCard label="SENIOR" icon="diamond-outline" value={`${seniorCount}`} detail={`cumplen · ver los ${sellerRows.length}`} onPress={() => router.push({pathname:'/team',params:{kind:'senior'}})} />
+            <MetricCard label="CATEGORIZADOS" icon="star-outline" value={`${categoryCount}`} detail="Ver estado de cada ejecutivo" onPress={() => router.push({pathname:'/team',params:{kind:'category'}})} />
+            <MetricCard label="SENIORS" icon="diamond-outline" value={`${seniorCount}`} detail="Ver estado de cada ejecutivo" onPress={() => router.push({pathname:'/team',params:{kind:'senior'}})} />
           </View> : null}
 
           {isSeller ? (
@@ -283,7 +282,7 @@ function HomeDashboard() {
                         <View style={styles.position}><Text style={styles.positionText}>{index + 1}</Text></View>
                         <View style={styles.workerMain}>
                           <Text numberOfLines={1} style={styles.workerName}>{displayPersonName(seller)}</Text>
-                          <Text style={styles.workerMeta}>Mes {formatUF(data.monthlyEmittedUfByUser[seller.id] ?? 0)} UF · Sin vender: {sellerDays(metric)}</Text>
+                          <Text style={styles.workerMeta}>Mes {formatUF(data.monthlyEmittedUfByUser[seller.id] ?? 0)} UF · {daysWithoutSaleLabel(metric)}</Text>
                           <Text style={styles.workerMeta}>Anul. {metric?.cancellationUf === undefined ? '—' : `${formatUF(metric.cancellationUf)} UF`} · Mora <Text style={{ color: metric?.debtSalesCount === undefined ? colors.textMuted : mora > 0 ? colors.danger : colors.success }}>{metric?.debtSalesCount === undefined ? '—' : `${mora} contratos`}</Text> · Prod. <Text style={metric?.productivity === undefined ? styles.workerMeta : sellerProductivity < 1 ? styles.dangerText : styles.successText}>{metric?.productivity === undefined ? '—' : sellerProductivity.toFixed(2)}</Text></Text>
                           <View style={styles.workerProgress}><ProgressBar color={mora > 0 ? colors.danger : colors.secondary} height={5} progress={bestMonthlyUf ? Number(data.monthlyEmittedUfByUser[seller.id] ?? 0) / bestMonthlyUf : 0} /></View>
                         </View>

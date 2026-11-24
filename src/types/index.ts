@@ -28,6 +28,7 @@ export interface User {
   role: UserRole;
   avatar: string;
   teamId: string;
+  teamName?: string;
   supervisorId: string;
   salesManagerId: string;
   joinDate: string;
@@ -75,6 +76,7 @@ export const snapshotRefreshCadence: Record<SnapshotKind, string> = {
 export interface MetricSnapshot {
   goalSlot?: 'current'|'previous';
   monthlyTotalUf?: number;
+  commercialMonthZeroSales?: boolean;
   seniorLabel?: string;
   goalPending?: boolean;
   nextGoalLevel?: string;
@@ -150,6 +152,7 @@ export interface VisibleProfile {
   role: UserRole;
   avatar: string;
   teamId: string;
+  teamName?: string;
   supervisorId: string;
   salesManagerId: string;
   birthDate?: string;
