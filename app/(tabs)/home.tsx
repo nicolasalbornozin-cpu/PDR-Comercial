@@ -20,6 +20,7 @@ import { DashboardData, MetricSnapshot, roleLabels, VisibleProfile } from '@/typ
 import { hasGoalLevel, hasQualifiedSenior, latestGoal, isBirthdayToday, productivityTone } from '@/utils/commercialRules';
 import { formatUF } from '@/utils/format';
 import { displayPersonName } from '@/utils/personName';
+import { hasPilotRestrictions } from '@/utils/pilotNavigation';
 import { daysWithoutSaleLabel, hasZeroCommercialSales, scopeDebt, teamDaysWithoutSale } from '@/utils/teamOverview';
 
 function sumMetric(workers: VisibleProfile[], latest: DashboardData['latestByUser'], key: keyof MetricSnapshot): number {
@@ -63,8 +64,10 @@ function ScopeCard({ title, subtitle, sellers, data, monthlyTarget, onPress,scop
 }
 
 export default function HomeScreen() {
-  const { user } = useAuth();
-  return user?.role === 'audiovisual' ? <Redirect href="/(tabs)/news" /> : <HomeDashboard />;
+  const { isPreviewing, user } = useAuth();
+  if (user?.role === 'audiovisual') return <Redirect href="/(tabs)/news" />;
+  if (user && hasPilotRestrictions(user.role, isPreviewing)) return <Redirect href="/(tabs)/ranking" />;
+  return <HomeDashboard />;
 }
 
 function HomeDashboard() {

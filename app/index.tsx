@@ -7,7 +7,7 @@ import { colors } from '@/theme';
 import { landingTab } from '@/utils/pilotNavigation';
 
 export default function IndexScreen() {
-  const { isLoading, user } = useAuth();
+  const { isLoading, isPreviewing, user } = useAuth();
 
   if (isLoading) {
     return (
@@ -18,7 +18,7 @@ export default function IndexScreen() {
     );
   }
 
-  return <Redirect href={user ? landingTab(user.role) : '/(auth)/login'} />;
+  return <Redirect href={user ? landingTab(user.role, isPreviewing) : '/(auth)/login'} />;
 }
 
 const styles = StyleSheet.create({

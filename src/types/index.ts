@@ -30,6 +30,7 @@ export interface User {
   teamId: string;
   teamName?: string;
   supervisorId: string;
+  coordinatorName?: string;
   salesManagerId: string;
   joinDate: string;
   birthDate?: string;

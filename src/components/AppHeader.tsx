@@ -11,8 +11,8 @@ import { hasPilotRestrictions } from '@/utils/pilotNavigation';
 
 export function AppHeader() {
   const router = useRouter();
-  const { user } = useAuth();
-  const notificationsLocked = hasPilotRestrictions(user?.role);
+  const { isPreviewing, user } = useAuth();
+  const notificationsLocked = hasPilotRestrictions(user?.role, isPreviewing);
   return (
     <View style={styles.container}>
       <BrandLogo compact />

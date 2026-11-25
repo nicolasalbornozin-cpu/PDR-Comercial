@@ -363,11 +363,17 @@ function readMonthlyHomeTotals(book: WorkBook, ws: WorkBook['Sheets'][string], p
       summary.set(key,value);
     }
   }
-  const readMap = (person:string, label:string) => new Map(Array.from({length:30},(_,i)=>i+2).flatMap(row=>{
-    const name=text(base[person+row]?.v);
-    if (!name) return [];
-    return [[searchName(base[label+row]?.v||name),name] as const];
-  }));
+  const readMap = (person:string, label:string) => {
+    const names = new Map<string,string[]>();
+    for (let row=2;row<=31;row++) {
+      const name = text(base[person+row]?.v);
+      if (!name) continue;
+      const key = searchName(base[label+row]?.v||name);
+      const candidates = names.get(key)??[];
+      if (!candidates.includes(name)) names.set(key,[...candidates,name]);
+    }
+    return names;
+  };
   result.homeTotals = [];
   const rosterKey = (name: string) => searchName(name).replace(/\bguissela\b/g,'guisela');
   for (const {first,last,role,names,col} of [
@@ -384,10 +390,16 @@ function readMonthlyHomeTotals(book: WorkBook, ws: WorkBook['Sheets'][string], p
     for (let row=first;row<=last;row++) {
       const label=text(ws['R'+row]?.v);
       if (!label) continue;
-      const name=names.get(searchName(label))??label;
+      const candidates=names.get(searchName(label))??[label];
       const gross=number(ws['S'+row]?.v);
-      const computed=summary.get(col+':'+searchName(name))?.gross;
-      if (gross===undefined || computed===undefined || included.has(rosterKey(name))) {
+      // A team can have distinct coordinators in different commercial months.
+      const matching=candidates.length===1 ? candidates : candidates.filter(name=>{
+        const candidateGross=summary.get(col+':'+searchName(name))?.gross;
+        return gross!==undefined && candidateGross!==undefined && Math.abs(candidateGross-gross)<=0.011;
+      });
+      const name=matching.length===1 ? matching[0] : undefined;
+      const computed=name ? summary.get(col+':'+searchName(name))?.gross : undefined;
+      if (!name || gross===undefined || computed===undefined || included.has(rosterKey(name))) {
         result.errors.push(`${result.sheet}, fila ${row}: falta un resultado de «${label}» o se repite el nombre.`); continue;
       }
       if (Math.abs(gross-computed)>0.011) {
@@ -395,10 +407,10 @@ function readMonthlyHomeTotals(book: WorkBook, ws: WorkBook['Sheets'][string], p
       }
       emitRow(name,row,gross,false,role==='coordinator'?label:undefined);
     }
-    for (const name of new Set(names.values())) {
+    for (const name of new Set([...names.values()].flat())) {
       if (included.has(rosterKey(name))) continue;
       const gross=summary.get(col+':'+searchName(name))?.gross??0;
-      const teamName=role==='coordinator'?[...names.entries()].find(([,person])=>person===name)?.[0]:undefined;
+      const teamName=role==='coordinator'?[...names.entries()].find(([,people])=>people.includes(name))?.[0]:undefined;
       emitRow(name,first,Math.round(gross*100)/100,true,teamName);
     }
   }

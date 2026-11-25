@@ -1,6 +1,6 @@
 import {searchName, SheetRecord, SheetMetrics} from '../services/individualSheetParser';
 
-interface ScopeWorker {id:string;name:string;display_name?:string|null;aliases?:string[];role:string;team_name?:string|null}
+interface ScopeWorker {id:string;rut?:string|null;active?:boolean;name:string;display_name?:string|null;aliases?:string[];role:string;team_name?:string|null}
 interface UploadRow {worker_id:string;source_row:number;metrics:SheetMetrics}
 
 export function matchHomeTotal(row: SheetRecord, workers: ScopeWorker[]): ScopeWorker[] {
@@ -18,6 +18,12 @@ export function matchHomeTotal(row: SheetRecord, workers: ScopeWorker[]): ScopeW
     const words = new Set(key(name).split(' '));
     return tokens.every(token => words.has(token));
   }));
+  // Once the roster includes a coordinator, an archived team placeholder
+  // without a RUT must not take precedence over that person's roster identity.
+  if (current.length > 1) {
+    const rosterMatches = current.filter(w => w.rut || w.active !== false);
+    if (rosterMatches.length === 1) return rosterMatches;
+  }
   // A historical coordinator may now be a seller. Retain the labelled metric
   // against an exact identity without ever changing their current roster role.
   return current.length ? current : workers.filter(w => row.role==='coordinator' && [w.name,...(w.aliases??[])].some(name=>key(name)===key(row.name)));

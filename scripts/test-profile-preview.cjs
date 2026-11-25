@@ -10,6 +10,9 @@ const roleLabels = {
   admin: 'Administrador', audiovisual: 'Audiovisual',
 };
 const fixtures = [
+  { id: 'seller-fixture', name: 'Vendedor Piloto', role: 'seller', active: true, status: 'active' },
+  { id: 'coordinator-fixture', name: 'Coordinadora Piloto', role: 'coordinator', active: true, status: 'active' },
+  { id: 'manager-fixture', name: 'Jefe Piloto', role: 'sales_manager', active: true, status: 'active' },
   { id: 'commercial-fixture', name: 'Benjamín Hernández', role: 'commercial_manager', active: true, status: 'active' },
   { id: 'director-fixture', name: 'Gabriel De Luca', role: 'sales_director', active: true, status: 'active' },
 ];
@@ -21,7 +24,7 @@ function harness(role = 'admin', isPreviewing = false) {
   const values = [], effects = [], pendingEffects = [], timers = new Map();
   const searched = [], previews = [], routes = [];
   let cursor = 0, effectCursor = 0, nextTimer = 0;
-  const profile = { id: 'viewer', name: 'Viewer', role, rut: '', joinDate: '2026-01-01' };
+  const profile = { id: 'viewer', name: 'Viewer', role, rut: '', supervisorId: 'coordinator-fixture', joinDate: '2026-01-01' };
   const output = {};
   vm.runInNewContext(code, {
     exports: output,
@@ -48,8 +51,9 @@ function harness(role = 'admin', isPreviewing = false) {
       if (id === '@expo/vector-icons') return { Ionicons: 'Ionicons' };
       if (id === 'expo-router') return { useRouter: () => ({ replace: route => routes.push(route), push: route => routes.push(route) }) };
       if (id === '@/hooks/useAuth') return { useAuth: () => ({ authenticatedUser: profile, user: profile, isPreviewing, isLoading: false, startPreview: user => previews.push(user), signOut: async () => {} }) };
+      if (id === '@/hooks/useCommercialRefresh') return { useCommercialRefresh: () => 0 };
       if (id === '@/services/individualSheetService') return {
-        individualSheetService: { async search(query, selectedRole) { searched.push({ query, role: selectedRole }); return fixtures.filter(worker => worker.role === selectedRole); } },
+        individualSheetService: { async profileAssignment() { return {teamName:'ASTRA',coordinatorName:'Guissela Jhonson'}; }, async search(query, selectedRole) { searched.push({ query, role: selectedRole }); return fixtures.filter(worker => worker.role === selectedRole); } },
         workerUser: worker => ({ ...worker, employmentStatus: worker.status }),
       };
       if (id === '@/utils/personName') return { displayPersonName: user => user.name };
@@ -100,7 +104,7 @@ function find(tree, predicate) {
   }
   assert.equal(screen.searched.length, 0, 'No full roster search before typing');
   for (const worker of fixtures) {
-    const label = worker.role === 'commercial_manager' ? 'Ver como jefe comercial' : 'Ver como gerente de ventas';
+    const label = {seller:'Ver como vendedor',coordinator:'Ver como coordinador',sales_manager:'Ver como jefe de venta',commercial_manager:'Ver como jefe comercial',sales_director:'Ver como gerente de ventas'}[worker.role];
     find(tree, node => node.type === 'Pressable' && text(node) === label).props.onPress();
     tree = screen.render();
     assert.equal(text(tree).includes(worker.name), false, 'No automatic full list');
@@ -121,5 +125,10 @@ function find(tree, predicate) {
     assert.equal(text(harness(role).render()).includes('Vista previa de perfiles'), false, role);
   }
   assert.equal(text(harness('admin', true).render()).includes('Vista previa de perfiles'), false, 'No nested preview');
-  console.log('PASS: administrator can search and preview Jefe Comercial and Gerente de Ventas; other profiles and nested previews cannot access the selector.');
+  const sellerProfile = harness('seller');
+  sellerProfile.render();
+  await sellerProfile.flushTimers();
+  assert.ok(text(sellerProfile.render()).includes('ASTRA'));
+  assert.ok(text(sellerProfile.render()).includes('Guissela Jhonson'));
+  console.log('PASS: five administrator previews, protected selector, and profile team and coordinator names.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

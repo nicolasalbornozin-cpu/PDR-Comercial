@@ -12,7 +12,7 @@ import { colors } from '@/theme';
 import { hasPilotRestrictions, landingTab } from '@/utils/pilotNavigation';
 
 function RootNavigator() {
-  const { isLoading, user } = useAuth();
+  const { isLoading, isPreviewing, user } = useAuth();
   const router = useRouter();
   const segments: readonly string[] = useSegments();
 
@@ -24,8 +24,8 @@ function RootNavigator() {
     if (isLoading) return;
     const inAuthGroup = segments[0] === '(auth)';
     if (!user && !inAuthGroup && segments[0] !== 'conditions' && segments[0] !== 'descargar') router.replace('/(auth)/login');
-    if (user && inAuthGroup) router.replace(landingTab(user.role));
-  }, [isLoading, router, segments, user]);
+    if (user && inAuthGroup) router.replace(landingTab(user.role, isPreviewing));
+  }, [isLoading, isPreviewing, router, segments, user]);
 
   if (isLoading) {
     return (
@@ -47,11 +47,11 @@ function RootNavigator() {
           <Stack.Screen name="index" />
           <Stack.Screen name="(auth)" />
           <Stack.Screen name="(tabs)" />
-          <Stack.Protected guard={Boolean(user) && user?.role !== 'audiovisual'}>
+          <Stack.Protected guard={Boolean(user) && user?.role !== 'audiovisual' && !hasPilotRestrictions(user?.role, isPreviewing)}>
             <Stack.Screen name="goals" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="team" options={{ animation: 'slide_from_right' }} />
           </Stack.Protected>
-          <Stack.Protected guard={Boolean(user) && !hasPilotRestrictions(user?.role)}>
+          <Stack.Protected guard={Boolean(user) && !hasPilotRestrictions(user?.role, isPreviewing)}>
             <Stack.Screen name="notifications" options={{ animation: 'slide_from_right' }} />
           </Stack.Protected>
           <Stack.Screen name="conditions" options={{ animation: 'slide_from_right' }} />

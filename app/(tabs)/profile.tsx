@@ -12,7 +12,7 @@ import { UserAvatar } from '@/components/UserAvatar';
 import { currentUser } from '@/data/mockData';
 import { useAuth } from '@/hooks/useAuth';
 import { individualSheetService, WorkerRow, workerUser } from '@/services/individualSheetService';
-import { snapshotService } from '@/services/snapshotService';
+import { useCommercialRefresh } from '@/hooks/useCommercialRefresh';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
 import { roleLabels, User, UserRole } from '@/types';
 import { formatDate } from '@/utils/format';
@@ -33,7 +33,7 @@ const previewRoles: { icon: IconName; label: string; role: PreviewRole }[] = [
 const profileDetails: { icon: IconName; label: string; getValue: (profile: User) => string }[] = [
   { icon: 'card-outline', label: 'Usuario', getValue: (profile) => formatRut(profile.rut) },
   { icon: 'people-outline', label: 'Equipo', getValue: (profile) => profile.teamName ?? 'Sin equipo asignado' },
-  { icon: 'person-outline', label: 'Coordinador', getValue: (profile) => profile.role === 'coordinator' ? 'Coordinas este equipo' : profile.supervisorId ? 'Coordinación asignada' : 'No aplica' },
+  { icon: 'person-outline', label: 'Coordinador', getValue: (profile) => profile.role === 'coordinator' ? 'Coordinas este equipo' : profile.coordinatorName ?? (profile.supervisorId ? 'Coordinación asignada' : 'No aplica') },
   { icon: 'briefcase-outline', label: 'Jefe de ventas', getValue: (profile) => profile.salesManagerId ? 'Jefatura asignada' : 'No aplica' },
   { icon: 'calendar-outline', label: 'Fecha de ingreso', getValue: (profile) => formatDate(profile.joinDate) },
 ];
@@ -42,17 +42,17 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { authenticatedUser, isLoading, isPreviewing, signOut, startPreview, user } = useAuth();
   const account = user ?? authenticatedUser ?? currentUser;
-  const [team, setTeam] = useState<{userId: string; name: string}>();
-  const profile = team?.userId === account.id ? {...account, teamName: team.name} : account;
+  const [assignment, setAssignment] = useState<{userId: string; teamName?: string; coordinatorName?: string}>();
+  const profile = assignment?.userId === account.id ? {...account, teamName: assignment.teamName, coordinatorName: assignment.coordinatorName} : account;
+  const revision = useCommercialRefresh();
   useEffect(() => {
     if (!user || (user.role !== 'seller' && user.role !== 'coordinator')) return;
     let active = true;
-    snapshotService.getRanking(user, 'monthly', {preview:isPreviewing,rankingMode:'teams'}).then(entries => {
-      const name = entries.find(entry => entry.isCurrentUser && entry.entityType === 'team')?.teamName?.trim();
-      if (active && name) setTeam({userId:user.id, name});
+    individualSheetService.profileAssignment(isPreviewing ? user.id : undefined).then(result => {
+      if (active && result) setAssignment({userId: user.id, ...result});
     }).catch(() => {});
     return () => { active = false; };
-  }, [user,isPreviewing]);
+  }, [user, isPreviewing, revision]);
   const profileStartYear = profile.joinDate ? new Date(`${profile.joinDate}T12:00:00`).getFullYear() : null;
   const [managedUsers, setManagedUsers] = useState<WorkerRow[]>([]);
   const [selectedPreviewRole, setSelectedPreviewRole] = useState<PreviewRole | null>(null);
@@ -72,7 +72,7 @@ export default function ProfileScreen() {
 
   function openPreview(previewUser: User) {
     startPreview(previewUser);
-    router.replace(landingTab(previewUser.role));
+    router.replace(landingTab(previewUser.role, true));
   }
 
   async function handleSignOut() {
@@ -117,7 +117,7 @@ export default function ProfileScreen() {
                 <View style={styles.previewHeadingIcon}><Ionicons color={colors.goldText} name="eye-outline" size={20} /></View>
                 <View style={styles.previewHeadingCopy}>
                   <Text style={styles.previewTitle}>Vista previa de perfiles</Text>
-                  <Text style={styles.previewDescription}>Comprueba exactamente lo que verá una cuenta activa. Tus permisos de administrador permanecen protegidos.</Text>
+                  <Text style={styles.previewDescription}>Revisa los datos y pantallas del cargo seleccionado, incluidas las secciones del piloto.</Text>
                 </View>
               </View>
 

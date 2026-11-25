@@ -105,8 +105,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setPreviewUser(null);
   }, []);
 
-  const user = previewUser ?? authenticatedUser;
   const isPreviewing = Boolean(previewUser && authenticatedUser?.role === 'admin');
+  const user = isPreviewing ? previewUser : authenticatedUser;
 
   const value = useMemo<AuthContextValue>(
     () => ({

@@ -91,15 +91,33 @@ for (role of ['admin', 'seller', 'coordinator', 'sales_manager', 'commercial_man
   const tree = layout.default();
   const visible = tree.props.children.filter(screen => screen.props.options.href !== null);
   const locked = visible.filter(screen => screen.props.options.tabBarButton);
-  assert.equal(locked.length, 0);
+  const expectedLocked = role !== 'admin' && role !== 'audiovisual';
+  assert.equal(locked.length, Number(expectedLocked));
+  if (expectedLocked) {
+    assert.equal(locked[0].props.name, 'home');
+    const button = locked[0].props.options.tabBarButton({ children: 'Inicio' });
+    assert.equal(button.props.disabled, true);
+    assert.equal(button.props.accessibilityState.disabled, true);
+  }
   const unlocked = visible.filter(screen => !screen.props.options.tabBarButton).map(screen => screen.props.name).join(',');
-  assert.equal(unlocked, role === 'admin' ? 'home,ranking,news,admin,profile' : role === 'audiovisual' ? 'news,profile' : 'home,ranking,news,profile');
+  assert.equal(unlocked, role === 'admin' ? 'home,ranking,news,admin,profile' : role === 'audiovisual' ? 'news,profile' : 'ranking,news,profile');
   const firstTab = role === 'admin' ? 'home' : role === 'audiovisual' ? 'news' : 'ranking';
   assert.equal(tree.props.initialRouteName, firstTab);
   assert.equal(navigation.landingTab(role), '/(tabs)/' + firstTab);
 }
 console.log('PASS: rounded brand navigation, active gold icon, seven-role visibility, keyboard hiding, safe-area/font-scale layouts and non-overlapping administrator preview banner.');
-console.log('PASS: pilot still opens Ranking, and commercial roles can navigate to Inicio.');
+for (role of ['seller','coordinator','sales_manager']) {
+  preview = true;
+  const tree = layout.default();
+  assert.equal(tree.props.initialRouteName, 'home');
+  assert.equal(navigation.landingTab(role, preview), '/(tabs)/home');
+  assert.equal(navigation.hasPilotRestrictions(role, preview), false);
+  const visible = tree.props.children.filter(screen => screen.props.options.href !== null);
+  assert.equal(visible.map(screen => screen.props.name).join(','), 'home,ranking,news,profile');
+  assert.equal(visible.some(screen => screen.props.options.tabBarButton), false);
+  preview = false;
+}
+console.log('PASS: locked Inicio in ordinary pilot sessions and full operational views in administrator preview.');
 for (platform of ['web', 'android']) {
   for (pilot of [undefined, false]) {
     const navigation = load('src/utils/pilotNavigation.ts');

@@ -2,6 +2,7 @@ import {supabase} from './supabase';
 import {searchName,RankingImport,SheetImport,SheetMetrics,SheetSource} from './individualSheetParser';
 import {DashboardData,EmploymentStatus,MetricSnapshot,User,UserRole} from '@/types';
 import {normalizeRut} from '@/utils/rut';
+import {displayPersonName} from '@/utils/personName';
 import {categoryProgress,GoalRule,seniorProgress} from '@/utils/goalProgress';
 import {canonicalCancellationRows} from '@/utils/cancellationRows';
 import {mergeHomeTotals} from '@/utils/rankingHomeTotals';
@@ -68,6 +69,18 @@ export const individualSheetService={
   });
   const result=await supabase.rpc('publish_sheet_bundle',{p_imports:imports});if(result.error)throw Error(result.error.message);
   return {published:imports.reduce((n,i)=>n+i.records.length,0),skipped};
+ },
+ async profileAssignment(previewWorkerId?:string):Promise<{teamName?:string;coordinatorName?:string}|null>{
+  if(!supabase)return null;
+  const {data,error}=await supabase.rpc('commercial_profile_assignment',{p_preview_worker_id:previewWorkerId??null}).maybeSingle<{
+   team_name:string|null;coordinator_name:string|null;coordinator_display_name:string|null;
+  }>();
+  if(error)throw Error(error.message);
+  if(!data)return null;
+  return {
+   teamName:data.team_name??undefined,
+   coordinatorName:data.coordinator_name?displayPersonName({name:data.coordinator_name,displayName:data.coordinator_display_name??undefined,role:'coordinator'}):undefined,
+  };
  },
  async search(query:string,role:string):Promise<WorkerRow[]>{
   if(!supabase)throw Error('Conecta Supabase para ver trabajadores reales.');
