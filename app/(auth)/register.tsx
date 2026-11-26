@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { BrandLogo } from '@/components/BrandLogo';
@@ -23,11 +23,27 @@ export default function RegisterScreen() {
   const [error, setError] = useState('');
   const [acceptedConditions, setAcceptedConditions] = useState(false);
   const validRut = isValidRut(rut);
+  const [turn, setTurn] = useState<{ rut: string; allowed: boolean; error?: string } | null>(null);
+  const [retry, setRetry] = useState(0);
+  const checkedTurn = turn?.rut === rut ? turn : null;
+  useEffect(() => {
+    if (!validRut) return;
+    let current = true;
+    const timer = setTimeout(async () => {
+      try {
+        const allowed = await authService.checkRegistrationTurn(rut);
+        if (current) setTurn({ rut, allowed });
+      } catch (cause) {
+        if (current) setTurn({ rut, allowed: false, error: cause instanceof Error ? cause.message : 'No se pudo consultar tu turno.' });
+      }
+    }, 450);
+    return () => { current = false; clearTimeout(timer); };
+  }, [rut, validRut, retry]);
   const matching = password.length > 0 && password === confirmation;
   const strong = isStrongRegistrationPassword(password);
 
   async function createAccount() {
-    if (busy) return;
+    if (busy || !checkedTurn?.allowed) return;
     const validation = registrationValidation(rut, password, confirmation);
     if (validation) { setError(validation); return; }
     if (!acceptedConditions) { setError('Lee y acepta las condiciones de uso antes de activar tu cuenta.'); return; }
@@ -65,8 +81,16 @@ export default function RegisterScreen() {
           ) : (
             <>
               <Text style={styles.body}>Tu perfil ya está asociado a tu RUT. Define tu contraseña una sola vez para activar el acceso.</Text>
-              <FormField autoCapitalize="characters" autoComplete="off" editable={!busy} icon="card-outline" label="RUT" maxLength={12} onChangeText={(value) => { setRut(formatRut(value)); setError(''); }} placeholder="12.345.678-9" value={rut} />
+              <FormField autoCapitalize="characters" autoComplete="off" editable={!busy} icon="card-outline" label="RUT" maxLength={12} onChangeText={(value) => {
+                const next = formatRut(value);
+                if (next === rut) return;
+                setRut(next); setTurn(null); setPassword(''); setConfirmation(''); setAcceptedConditions(false); setError('');
+              }} placeholder="12.345.678-9" value={rut} />
               {rut ? <Text accessibilityLiveRegion="polite" style={[styles.check, validRut ? styles.checkOk : styles.checkPending]}>{validRut ? '✓ RUT válido' : '○ Revisa el RUT ingresado'}</Text> : null}
+              {validRut && !checkedTurn ? <Text accessibilityLiveRegion="polite" style={styles.body}>Consultando tu turno…</Text> : null}
+              {checkedTurn && !checkedTurn.allowed ? <Text accessibilityRole="alert" style={styles.error}>{checkedTurn.error ?? 'ups no es tu turno'}</Text> : null}
+              {checkedTurn?.error ? <AppButton label="Volver a consultar" variant="secondary" onPress={() => { setTurn(null); setRetry(n => n + 1); }}/> : null}
+              {checkedTurn?.allowed ? <>
               <FormField autoCapitalize="none" autoComplete="new-password" editable={!busy} icon="lock-closed-outline" label="Contraseña" maxLength={72} onChangeText={(value) => { setPassword(value); setError(''); }} password placeholder="Crea tu contraseña" value={password} />
               <Text accessibilityLiveRegion="polite" style={[styles.check, strong ? styles.checkOk : styles.checkPending]}>{strong ? '✓' : '○'} 8+ caracteres, mayúscula, minúscula y número</Text>
               <FormField autoCapitalize="none" autoComplete="new-password" editable={!busy} icon="lock-closed-outline" label="Confirmar contraseña" maxLength={72} onChangeText={(value) => { setConfirmation(value); setError(''); }} password placeholder="Repite tu contraseña" value={confirmation} />
@@ -76,6 +100,7 @@ export default function RegisterScreen() {
               <Text style={styles.check}>Aviso pendiente de aprobación institucional. No autoriza la publicación de fotografías ni renuncia a tus derechos.</Text>
               {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
               <AppButton disabled={busy||!acceptedConditions} label="Crear contraseña y activar" loading={busy} onPress={createAccount} />
+              </> : null}
               <AppButton disabled={busy} label="Ya tengo cuenta · Iniciar sesión" onPress={() => router.replace('/(auth)/login')} variant="secondary" />
             </>
           )}

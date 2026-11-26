@@ -84,6 +84,18 @@ async function getProfile(userId: string): Promise<User> {
 export const authService = {
   mode: authMode,
 
+  async checkRegistrationTurn(rut: string): Promise<boolean> {
+    if (!supabase) throw Error('Se necesita conexión para consultar tu turno.');
+    const { data, error } = await supabase.functions.invoke('register-account', {
+      body: { action: 'checkTurn', rut: normalizeRut(rut) },
+    });
+    if (error || typeof data?.allowed !== 'boolean') {
+      if (error?.context?.status === 429) throw Error('Demasiadas consultas. Espera 15 minutos antes de volver a intentar.');
+      throw Error('No se pudo consultar tu turno. Revisa tu conexión.');
+    }
+    return data.allowed;
+  },
+
   async register(rut: string, password: string, confirmPassword: string, conditionsVersion: string): Promise<void> {
     const validation = registrationValidation(rut, password, confirmPassword);
     if (validation) throw new Error(validation);

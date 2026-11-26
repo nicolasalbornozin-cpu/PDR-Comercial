@@ -3,6 +3,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.112.3';
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts';
 import { registerAccount } from './handler.ts';
 import { CONDITIONS_VERSION } from '../_shared/platformConditions.ts';
+import { isValidRut, normalizeRut } from '../_shared/rut.ts';
 
 async function findAuthUserIdByEmail(admin: ReturnType<typeof createClient>, email: string) {
   for (let page = 1; page <= 20; page += 1) {
@@ -104,6 +105,16 @@ Deno.serve(async (request) => {
     const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
     const digest = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(ip));
     const ipHash = Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, '0')).join('');
+    if (body && typeof body === 'object' && 'action' in body && body.action === 'checkTurn') {
+      if (!('rut' in body) || typeof body.rut !== 'string' || !isValidRut(body.rut)
+        || Object.keys(body).some(key => !['action', 'rut'].includes(key))) {
+        return jsonResponse({ error: 'Solicitud inválida.' }, 400);
+      }
+      const { data, error } = await admin.rpc('check_registration_turn', { p_rut: normalizeRut(body.rut), p_ip_hash: ipHash });
+      if (error || !data) throw Error('turn_check_failed');
+      if (data.ok === true || data.status === 403) return jsonResponse({ allowed: data.ok === true });
+      return jsonResponse({ error: data.error }, data.status ?? 503);
+    }
     const result = await registerAccount(body, requestId, ipHash, {
       reserve: async (rut, token, hash) => {
         const { data, error } = await admin.rpc('reserve_roster_registration', { p_rut: rut, p_request_id: token, p_ip_hash: hash });

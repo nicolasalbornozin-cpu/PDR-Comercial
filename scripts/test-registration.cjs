@@ -41,6 +41,12 @@ for (const value of [password, 'Password1', 'NoSymbols1234', 'Aa1' + 'x'.repeat(
     await registerAccount(input, 'fixture', 'hash', { ...dependencies, reserve: async () => blocked });
   }
   assert.equal(creates, 1);
+  const waiting = await registerAccount(input, 'fixture', 'hash', {
+    ...dependencies, reserve: async () => ({ status: 403, error: 'ups no es tu turno' }),
+  });
+  assert.deepEqual(waiting, { status: 403, body: { error: 'ups no es tu turno' } });
+  assert.equal(creates, 1);
+  assert.equal(activations, 0);
   assert.equal((await registerAccount(input, 'fixture', 'hash', { ...dependencies, create: async () => ({ ok: false }) })).status, 409);
   assert.equal(releases, 2);
   const weakPassword = await registerAccount(input, 'fixture', 'hash', { ...dependencies, create: async () => ({ ok: false, reason: 'weak_password' }) });
