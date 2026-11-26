@@ -1,6 +1,7 @@
+import { showNewsNotice } from '@/utils/newsNotice';
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { NewsEditorInput, NewsEditorModal } from './NewsEditorModal';
 import { NewsPhoto } from './NewsPhoto';
 import { newsImages } from '@/data/assets';
@@ -18,7 +19,7 @@ export function NewsArticleComposer({ category, onClose, onPublished }: { catego
   const pick = async () => {
     setBusy(true);
     try { const url = await newsService.pickArticleImage(); if (url) setImageUrl(url); }
-    catch (cause) { Alert.alert('No se pudo subir', cause instanceof Error ? cause.message : 'Intenta nuevamente.'); }
+    catch (cause) { showNewsNotice('No se pudo subir', cause instanceof Error ? cause.message : 'Intenta nuevamente.'); }
     finally { setBusy(false); }
   };
   const save = async () => {
@@ -27,7 +28,7 @@ export function NewsArticleComposer({ category, onClose, onPublished }: { catego
       const id = await newsService.createArticle({ title, summary, body, imageUrl, category: kind });
       await onPublished(id);
       onClose();
-    } catch (cause) { Alert.alert('No se pudo publicar', cause instanceof Error ? cause.message : 'Intenta nuevamente.'); }
+    } catch (cause) { showNewsNotice('No se pudo publicar', cause instanceof Error ? cause.message : 'Intenta nuevamente.'); }
     finally { setBusy(false); }
   };
   return <NewsEditorModal visible onClose={() => { if (!busy) onClose(); }}>

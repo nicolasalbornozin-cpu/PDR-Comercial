@@ -30,14 +30,13 @@ export default function NewsScreen() {
   const canEdit = canEditNews(authenticatedUser?.role) && !isPreviewing;
   const trips = seniorTrips(content.articles);
   const latestTrip = trips[0];
-  const events = content.articles.find(article => article.category === 'Eventos recientes');
+  const events = content.articles.filter(article => article.category === 'Eventos recientes').sort((a, b) => b.date.localeCompare(a.date) || Number(b.id) - Number(a.id))[0];
   const featured = content.articles.find(article => article.featured);
   const slides = [...new Map([latestTrip ?? featured, events].filter((article): article is NewsArticle => Boolean(article)).map(article => [article.id, article])).values()];
   const slideKey = slides.map(article => article.id).join(',');
   const slide = page.key === slideKey ? page.index : 0;
   const novelties = content.articles.filter(article => ['Carreras', 'Novedades'].includes(article.category));
   const others = content.articles.filter(article => !trips.some(trip => trip.id === article.id) && !['Carreras', 'Novedades'].includes(article.category));
-  const photos = tripPhotos(content.articles, content.gallery, latestTrip);
   const open = (article: NewsArticle) => {
     if (trips.some(trip => trip.id === article.id)) router.push({ pathname: '/gallery', params: { trip: article.id } });
     else router.push({ pathname: '/news/[id]', params: { id: article.id } });
@@ -99,12 +98,18 @@ export default function NewsScreen() {
           {others.map(article => <View key={article.id} style={styles.articleRow}><View style={styles.flex}><NewsCard article={article} onPress={() => open(article)}/></View>{canEdit ? removeButton(article) : null}</View>)}
           {!others.length ? <Text style={styles.empty}>Aún no hay publicaciones.</Text> : null}
         </View>
-        {latestTrip ? <View style={styles.section}>
-          <SectionHeader title={`Galería ${latestTrip.title}`} actionLabel="Ver todas" onAction={() => open(latestTrip)}/>
-          <Pressable accessibilityLabel="Abrir galería del último paseo" onPress={() => open(latestTrip)} style={styles.gallery}>
-            {photos.slice(0, 3).map(photo => <View key={photo.id} style={styles.galleryTile}><NewsPhoto url={photo.imageUrl} fallback={newsImages.seniorEvent} resizeMode="contain" style={styles.galleryImage}/></View>)}
-            {!photos.length ? <Text style={styles.empty}>Aún no hay fotos de este paseo.</Text> : null}
-          </Pressable>
+        {trips.length ? <View style={styles.section}>
+          <SectionHeader title="Álbumes de Paseo Senior"/>
+          {trips.map(trip => {
+            const photos = tripPhotos(content.articles, content.gallery, trip);
+            return <Pressable key={trip.id} accessibilityRole="button" accessibilityLabel={`Abrir ${trip.title}, ${photos.length} fotos`} onPress={() => open(trip)} style={styles.album}>
+              <View style={styles.gallery}>
+                {photos.slice(0, 3).map((photo, index) => <View key={photo.id} style={[styles.galleryTile, index === 0 && styles.leadTile]}><NewsPhoto url={photo.imageUrl} fallback={newsImages.seniorEvent} resizeMode="cover" style={styles.galleryImage}/></View>)}
+                {!photos.length ? <NewsPhoto url={trip.imageUrl} fallback={newsImages.seniorEvent} style={styles.galleryImage}/> : null}
+              </View>
+              <View style={styles.albumFooter}><View style={styles.flex}><Text style={styles.albumTitle}>{trip.title}</Text><Text style={styles.photoCount}>{photos.length} {photos.length === 1 ? 'fotografía' : 'fotografías'}</Text></View><Ionicons name="arrow-forward" size={22} color={colors.primary}/></View>
+            </Pressable>;
+          })}
         </View> : canEdit ? <Pressable onPress={() => router.push('/gallery')} style={styles.create}><Ionicons name="images-outline" size={20} color={colors.primary}/><Text style={styles.createText}>Crear un paseo y su galería</Text></Pressable> : null}
       </View>
     </View>
@@ -125,6 +130,9 @@ const styles = StyleSheet.create({
   section: { gap: spacing.md }, heading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   add: { backgroundColor: colors.primary, padding: 9, borderRadius: radii.pill }, create: { flexDirection: 'row', alignItems: 'center', gap: 5, padding: 9, backgroundColor: colors.softGreen, borderRadius: radii.pill }, createText: { color: colors.primary, fontFamily: typography.sans, fontSize: 12, fontWeight: '700' },
   novelties: { gap: spacing.md, paddingBottom: 5 }, novelty: { ...shadows.card, width: 245, borderRadius: radii.lg, overflow: 'hidden' }, noveltyImage: { height: 190, justifyContent: 'flex-end' }, noveltyCopy: { padding: spacing.lg, gap: 5 }, noveltyTitle: { color: colors.surface, fontFamily: typography.serif, fontSize: 21 }, noveltyTools: { position: 'absolute', right: 8, top: 8 },
+  album: { ...shadows.card, borderRadius: radii.lg, backgroundColor: colors.surface, overflow: 'hidden' },
+  leadTile: { flex: 1.8 }, albumFooter: { padding: spacing.lg, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  albumTitle: { fontFamily: typography.serif, fontSize: 19, color: colors.primary }, photoCount: { fontSize: 12, marginTop: 4, color: colors.textMuted },
   articleRow: { flexDirection: 'row', gap: 8, alignItems: 'center' }, flex: { flex: 1 }, gallery: { flexDirection: 'row', gap: 8, height: 122 }, galleryTile: { flex: 1, minWidth: 0, borderRadius: radii.md, overflow: 'hidden', backgroundColor: colors.softGreen }, galleryImage: { height: 122, width: '100%' },
   empty: { color: colors.textMuted, fontFamily: typography.sans, padding: 12, lineHeight: 20 }, error: { color: colors.danger, padding: 12 },
 });

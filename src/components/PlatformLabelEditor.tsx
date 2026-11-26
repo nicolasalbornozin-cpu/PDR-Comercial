@@ -7,9 +7,9 @@ import {colors,radii,spacing} from '@/theme';
 import {AppButton} from './Buttons';
 import {FormField} from './FormField';
 export function PlatformLabelEditor({id,label,onSaved}:{id:string;label:string;onSaved:(label:string)=>void}){
- const {authenticatedUser}=useAuth();
+ const {authenticatedUser,isPreviewing}=useAuth();
  const [open,setOpen]=useState(false),[draft,setDraft]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
- if(authenticatedUser?.role!=='admin')return null;
+ if(isPreviewing||authenticatedUser?.role!=='admin')return null;
  async function save(){setBusy(true);setError('');try{await individualSheetService.setDisplayLabel(id,draft);onSaved(draft.trim());setOpen(false);}catch(e){setError(e instanceof Error?e.message:'No se pudo guardar.');}finally{setBusy(false);}}
  return <><Pressable accessibilityRole="button" accessibilityLabel={`Editar nombre de ${label}`} hitSlop={10} onPress={()=>{setDraft(label);setError('');setOpen(true);}}><Ionicons name="pencil" size={20} color={colors.goldText}/></Pressable>
   <Modal visible={open} transparent animationType="fade" onRequestClose={()=>{if(!busy)setOpen(false);}}>

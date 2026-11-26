@@ -1,8 +1,9 @@
+import { showNewsNotice } from '@/utils/newsNotice';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { NewsEditorInput, NewsEditorModal } from '@/components/NewsEditorModal';
 
 import { DetailHeader } from '@/components/DetailHeader';
@@ -17,7 +18,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNewsContent } from '@/hooks/useNewsContent';
 import { newsService } from '@/services/newsService';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
-import { GalleryPhoto } from '@/types';
 import { formatDate } from '@/utils/format';
 import { canEditNews } from '@/utils/permissions';
 import { seniorTrips, tripPhotos } from '@/utils/newsTrips';
@@ -39,7 +39,6 @@ export default function NewsDetailScreen() {
   const [coverSaved, setCoverSaved] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
-  const [deletingPhotoId, setDeletingPhotoId] = useState<string>();
   const [selectedPhoto, setSelectedPhoto] = useState<number | null>(null);
   const isAdmin = canEditNews(authenticatedUser?.role) && !isPreviewing;
   const isTrip = seniorTrips(content.articles).some(trip => trip.id === article?.id);
@@ -74,7 +73,7 @@ export default function NewsDetailScreen() {
         await refresh();
       }
     } catch (cause) {
-      Alert.alert('No se pudo subir la foto', cause instanceof Error ? cause.message : 'Intenta nuevamente.');
+      showNewsNotice('No se pudo subir la foto', cause instanceof Error ? cause.message : 'Intenta nuevamente.');
     } finally {
       setUploadingCover(false);
     }
@@ -88,7 +87,7 @@ export default function NewsDetailScreen() {
       await refresh();
       setEditing(false);
     } catch (cause) {
-      Alert.alert('No se pudo guardar', cause instanceof Error ? cause.message : 'Intenta nuevamente.');
+      showNewsNotice('No se pudo guardar', cause instanceof Error ? cause.message : 'Intenta nuevamente.');
     } finally {
       setSaving(false);
     }
@@ -101,27 +100,11 @@ export default function NewsDetailScreen() {
       if (await newsService.addGalleryPhotos(article.title, article.id, (completed, total) => setUploadProgress(`Procesando ${completed} de ${total} fotos…`))) await refresh();
     } catch (cause) {
       await refresh();
-      Alert.alert('No se pudo publicar la foto', cause instanceof Error ? cause.message : 'Intenta nuevamente.');
+      showNewsNotice('No se pudo publicar la foto', cause instanceof Error ? cause.message : 'Intenta nuevamente.');
     } finally {
       setUploadingPhoto(false);
       setUploadProgress('');
     }
-  };
-
-  const deleteArticlePhoto = (photo: GalleryPhoto) => {
-    Alert.alert('Eliminar fotografía', 'La fotografía dejará de aparecer para todos.', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Eliminar',
-        style: 'destructive',
-        onPress: () => {
-          setDeletingPhotoId(photo.id);
-          newsService.deleteGalleryPhoto(photo).then(refresh).catch((cause) => {
-            Alert.alert('No se pudo eliminar', cause instanceof Error ? cause.message : 'Intenta nuevamente.');
-          }).finally(() => setDeletingPhotoId(undefined));
-        },
-      },
-    ]);
   };
 
   if (!article) {
@@ -169,7 +152,7 @@ export default function NewsDetailScreen() {
                     <Pressable accessibilityLabel={`Abrir fotografía ${index + 1}`} onPress={() => setSelectedPhoto(index)}>
                       <NewsPhoto fallback={newsImages.park} resizeMode="contain" style={styles.articlePhoto} url={photo.imageUrl} />
                     </Pressable>
-                    {isAdmin ? <Pressable accessibilityLabel={`Eliminar fotografía ${index + 1}`} disabled={deletingPhotoId === photo.id} onPress={() => deleteArticlePhoto(photo)} style={styles.articleDelete}><Ionicons color={colors.surface} name="trash-outline" size={17} /></Pressable> : null}
+                    {isAdmin ? <View style={styles.articleDelete}><NewsDeleteButton label={`fotografía ${index + 1}`} onDelete={async () => { await newsService.deleteGalleryPhoto(photo); await refresh(); }}/></View> : null}
                   </View>
                 ))}
               </View>

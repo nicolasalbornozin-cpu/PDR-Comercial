@@ -1,7 +1,8 @@
+import { showNewsNotice } from '@/utils/newsNotice';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { NewsArticleComposer } from '@/components/NewsArticleComposer';
 import { NewsDeleteButton } from '@/components/NewsDeleteButton';
 
@@ -15,7 +16,6 @@ import { canEditNews } from '@/utils/permissions';
 import { useNewsContent } from '@/hooks/useNewsContent';
 import { newsService } from '@/services/newsService';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
-import { GalleryPhoto } from '@/types';
 import { seniorTrips, tripPhotos } from '@/utils/newsTrips';
 
 export default function GalleryScreen() {
@@ -26,7 +26,6 @@ export default function GalleryScreen() {
   const [selected, setSelected] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
-  const [deletingId, setDeletingId] = useState<string>();
   const [tripId, setTripId] = useState<string>();
   const [creating, setCreating] = useState(false);
   const isAdmin = canEditNews(authenticatedUser?.role) && !isPreviewing;
@@ -41,27 +40,11 @@ export default function GalleryScreen() {
       if (await newsService.addGalleryPhotos(trip.title, trip.id, (completed, total) => setUploadProgress(`Procesando ${completed} de ${total} fotos…`))) await refresh();
     } catch (cause) {
       await refresh();
-      Alert.alert('No se pudo publicar la foto', cause instanceof Error ? cause.message : 'Intenta nuevamente.');
+      showNewsNotice('No se pudo publicar la foto', cause instanceof Error ? cause.message : 'Intenta nuevamente.');
     } finally {
       setUploading(false);
       setUploadProgress('');
     }
-  };
-
-  const deletePhoto = (photo: GalleryPhoto) => {
-    Alert.alert('Eliminar fotografía', 'La fotografía dejará de aparecer para todos.', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Eliminar',
-        style: 'destructive',
-        onPress: () => {
-          setDeletingId(photo.id);
-          newsService.deleteGalleryPhoto(photo).then(refresh).catch((cause) => {
-            Alert.alert('No se pudo eliminar', cause instanceof Error ? cause.message : 'Intenta nuevamente.');
-          }).finally(() => setDeletingId(undefined));
-        },
-      },
-    ]);
   };
 
   return (
@@ -95,13 +78,11 @@ export default function GalleryScreen() {
           {photos.map((photo, index) => (
             <View key={photo.id} style={styles.photoTile}>
               <Pressable accessibilityLabel={`Abrir fotografía ${index + 1}`} onPress={() => setSelected(index)} style={({ pressed }) => [styles.imageButton, pressed && styles.pressed]}>
-                <NewsPhoto fallback={newsImages.seniorEvent} resizeMode="contain" style={styles.image} url={photo.imageUrl} />
+                <NewsPhoto fallback={newsImages.seniorEvent} resizeMode="cover" style={styles.image} url={photo.imageUrl} />
                 <View style={styles.imageNumber}><Text style={styles.imageNumberText}>{String(index + 1).padStart(2, '0')}</Text></View>
               </Pressable>
               {isAdmin ? (
-                <Pressable accessibilityLabel={`Eliminar fotografía ${index + 1}`} disabled={deletingId === photo.id} onPress={() => deletePhoto(photo)} style={styles.deleteButton}>
-                  {deletingId === photo.id ? <ActivityIndicator color={colors.surface} size="small" /> : <Ionicons color={colors.surface} name="trash-outline" size={17} />}
-                </Pressable>
+                <View style={styles.deleteButton}><NewsDeleteButton label={`fotografía ${index + 1}`} onDelete={async () => { await newsService.deleteGalleryPhoto(photo); await refresh(); }}/></View>
               ) : null}
             </View>
           ))}
@@ -126,7 +107,7 @@ const styles = StyleSheet.create({
   addButton: { alignItems: 'center', backgroundColor: colors.primary, borderRadius: radii.pill, height: 46, justifyContent: 'center', width: 46 },
   loader: { paddingTop: spacing.xxl },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, paddingHorizontal: spacing.xl, paddingTop: spacing.xxl },
-  photoTile: { aspectRatio: 0.86, position: 'relative', width: '46%' },
+  photoTile: { aspectRatio: 1.22, position: 'relative', width: '46%' },
   imageButton: { ...shadows.card, borderRadius: radii.lg, height: '100%', overflow: 'hidden', position: 'relative', width: '100%' },
   image: { backgroundColor: colors.softGreen, height: '100%', width: '100%' },
   imageNumber: { backgroundColor: 'rgba(9,61,42,0.72)', borderRadius: radii.pill, bottom: 10, paddingHorizontal: 8, paddingVertical: 5, position: 'absolute', right: 10 },

@@ -15,7 +15,7 @@ export function NewsDeleteButton({ label, onDelete, onDeleted }: { label: string
   };
   return <>
     <Pressable accessibilityRole="button" accessibilityLabel={`Eliminar ${label}`} onPress={event => { event.stopPropagation(); setError(''); setOpen(true); }} style={styles.trash}><Ionicons name="trash-outline" color={colors.surface} size={18}/></Pressable>
-    <Modal visible={open} transparent animationType="fade" onRequestClose={() => { if (!busy) setOpen(false); }}>
+    {open ? <Modal visible transparent animationType="fade" onRequestClose={() => { if (!busy) setOpen(false); }}>
       <View style={styles.backdrop}><View style={styles.dialog}>
         <Text style={styles.title}>Eliminar {label}</Text>
         <Text style={styles.copy}>Dejará de aparecer para todos.</Text>
@@ -25,7 +25,7 @@ export function NewsDeleteButton({ label, onDelete, onDeleted }: { label: string
           <Pressable disabled={busy} onPress={() => { void remove(); }} style={styles.remove}>{busy ? <ActivityIndicator color={colors.surface}/> : <Text style={styles.white}>Eliminar</Text>}</Pressable>
         </View>
       </View></View>
-    </Modal>
+    </Modal> : null}
   </>;
 }
 const styles = StyleSheet.create({
