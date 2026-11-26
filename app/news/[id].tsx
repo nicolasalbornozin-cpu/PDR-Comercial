@@ -28,6 +28,11 @@ export default function NewsDetailScreen() {
   const { authenticatedUser, isPreviewing } = useAuth();
   const { content, loading, refresh } = useNewsContent();
   const article = content.articles.find((item) => item.id === id);
+  // The original events publication is the entry point for the event albums.
+  const eventAlbums = article?.id === '5' && article.category === 'Eventos recientes'
+    ? content.articles.filter(item => item.id !== article.id && item.category === 'Eventos recientes')
+      .sort((a, b) => b.date.localeCompare(a.date) || Number(b.id) - Number(a.id))
+    : [];
   const related = article ? content.articles.find((item) => item.id !== article.id && item.category === article.category) ?? content.articles.find((item) => item.id !== article.id) : undefined;
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState('');
@@ -135,6 +140,15 @@ export default function NewsDetailScreen() {
             <Text style={styles.summary}>{article.summary}</Text>
             <View style={styles.goldLine} />
             <Text style={styles.body}>{article.body}</Text>
+            {eventAlbums.length > 0 ? <View style={styles.relatedSection}>
+              <Text style={styles.galleryTitle}>Álbumes de últimos eventos</Text>
+              {eventAlbums.map(album => <Pressable key={album.id} accessibilityRole="button"
+                accessibilityLabel={`Abrir álbum ${album.title}`}
+                onPress={() => router.push({ pathname: '/news/[id]', params: { id: album.id } })} style={styles.eventAlbum}>
+                <NewsPhoto url={album.imageUrl} fallback={newsImages.park} resizeMode="cover" style={styles.eventCover}/>
+                <View style={styles.eventCaption}><Text style={styles.eventName}>{album.title}</Text><Ionicons name="arrow-forward" size={20} color={colors.primary}/></View>
+              </Pressable>)}
+            </View> : null}
             {isTrip ? <Pressable onPress={() => router.push({ pathname: '/gallery', params: { trip: article.id } })} style={styles.bottomEdit}><Ionicons name="images-outline" color={colors.primary} size={20}/><Text style={styles.bottomEditText}>Ver galería de este paseo</Text></Pressable> : null}
             <View style={styles.galleryHeading}>
               <Text style={styles.galleryTitle}>Fotografías</Text>
@@ -167,7 +181,7 @@ export default function NewsDetailScreen() {
 
           <NewsEventSections articleId={article.id} sections={content.sections.filter(section=>section.newsArticleId===article.id)} photos={content.gallery} canEdit={isAdmin} refresh={refresh}/>
 
-          {related ? (
+          {related && !eventAlbums.some(album => album.id === related.id) ? (
             <View style={styles.relatedSection}>
               <Text style={styles.relatedTitle}>También te puede interesar</Text>
               <NewsCard article={related} onPress={() => router.replace({ pathname: '/news/[id]', params: { id: related.id } })} />
@@ -228,6 +242,10 @@ const styles = StyleSheet.create({
   bottomEdit: { alignItems: 'center', alignSelf: 'flex-start', backgroundColor: colors.softGreen, borderRadius: radii.pill, flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: 10 },
   bottomEditText: { color: colors.primary, fontFamily: typography.sans, fontSize: 11, fontWeight: '800' },
   relatedSection: { gap: spacing.md },
+  eventAlbum: { backgroundColor: colors.softGreen, borderRadius: radii.lg, overflow: 'hidden' },
+  eventCover: { width: '100%', aspectRatio: 1.65 },
+  eventCaption: { flexDirection: 'row', alignItems: 'center', padding: spacing.md, gap: spacing.sm },
+  eventName: { flex: 1, fontFamily: typography.serif, fontSize: 19, color: colors.primary },
   relatedTitle: { color: colors.text, fontFamily: typography.serif, fontSize: 22, fontWeight: '600' },
   modalBackdrop: { backgroundColor: 'rgba(7,30,21,0.58)', flex: 1, justifyContent: 'flex-end' },
   modalCard: { backgroundColor: colors.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, flexGrow: 0, maxHeight: '94%' },
