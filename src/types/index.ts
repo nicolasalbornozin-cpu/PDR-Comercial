@@ -136,6 +136,7 @@ export interface MetricSnapshot {
   rankingPosition?: number;
   category?: string;
   seniorLevel?: string;
+  seniorTrack?: string;
   estimatedPrizeClp?: number;
   lastSaleDate?: string;
   daysWithoutSale?: number;

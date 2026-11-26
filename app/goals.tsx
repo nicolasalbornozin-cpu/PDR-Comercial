@@ -16,7 +16,7 @@ import { colors, radii, shadows, spacing, typography } from '@/theme';
 import { DashboardData, MetricSnapshot } from '@/types';
 import { formatUF, getProgress } from '@/utils/format';
 import { displayPersonName } from '@/utils/personName';
-import { goalRemainingUf } from '@/utils/goalProgress';
+import { goalStatusLabel } from '@/utils/goalProgress';
 import {compareGoalSnapshots} from '@/utils/commercialRules';
 
 type GoalKind = 'senior' | 'category';
@@ -110,7 +110,7 @@ export default function GoalsScreen() {
 
           {!data ? <ActivityIndicator color={colors.gold} style={styles.loader} /> : null}
           <Pressable accessibilityRole="button" accessibilityState={{ expanded: openGoal === 'senior' }} onPress={() => setOpenGoal((current) => current === 'senior' ? null : 'senior')} style={({ pressed }) => [styles.goalButton, pressed && styles.pressed]}>
-            <GoalCard badge={`${metric?.seniorSmadCount ?? '—'} SMAD`} icon="diamond-outline" insight={openGoal === 'senior' ? 'Toca para ocultar el detalle' : metric?.seniorRemaining ?? 'Sin carga Senior publicada'} progress={getProgress(seniorValue,metric?.seniorTargetUf??0)} title={metric?.seniorLabel ?? 'Senior'} value={metric?.eligibleTotalUf !== undefined ? `${formatUF(seniorValue)} UF brutas` : 'Sin carga vigente'} />
+            <GoalCard badge={`${metric?.seniorSmadCount ?? '—'} SMAD`} icon="diamond-outline" status={goalStatusLabel(metric, 'senior')} insight={openGoal === 'senior' ? 'Toca para ocultar el detalle' : metric?.seniorRemaining ?? 'Sin carga Senior publicada'} progress={getProgress(seniorValue,metric?.seniorTargetUf??0)} title={metric?.seniorLabel ?? 'Senior'} value={metric?.eligibleTotalUf !== undefined ? `${formatUF(seniorValue)} UF brutas` : 'Sin carga vigente'} />
           </Pressable>
           {openGoal === 'senior' ? (
             <View style={[styles.goalDetail, styles.seniorDetail]}>
@@ -123,6 +123,7 @@ export default function GoalsScreen() {
                 <View style={styles.detailHeading}>
                   <Text style={styles.detailEyebrow}>PERÍODO SENIOR</Text>
                   <Text style={styles.detailTitle}>{seniorSnapshot?.seniorLabel ?? 'Sin período publicado'}</Text>
+                  <Text style={styles.goalStatus}>{goalStatusLabel(seniorSnapshot, 'senior')}</Text>
                   <PlatformLabelEditor id={`senior_${periodView.senior}`} label={seniorSnapshot?.seniorLabel??'Senior'} onSaved={()=>setLabelRevision(value=>value+1)}/>
                 </View>
               </View>
@@ -133,8 +134,7 @@ export default function GoalsScreen() {
               </View>
               <View style={styles.requirementsSection}>
                 {selected ? <Text style={styles.detailNote}>Tiene {seniorSnapshot?.smadCount ?? '—'} SMAD · {seniorSnapshot?.restCount ?? '—'} descansos · {seniorSnapshot?.ssffCount ?? '—'} SSFF</Text> : null}
-                <Text style={styles.detailNote}>Tramo informado: {seniorSnapshot?.seniorLevel ?? 'Sin dato'}</Text>
-                <Text style={styles.requirementsTitle}>{seniorSnapshot?.nextGoalLevel ? `Solo falta para ${seniorSnapshot.nextGoalLevel}` : 'Solo falta para cumplir'}</Text>
+                {seniorSnapshot?.nextGoalLevel ? <Text style={styles.requirementsTitle}>Próximo objetivo · {seniorSnapshot.nextGoalLevel}</Text> : null}
                 <View style={styles.requirementsGrid}>
                   {([
                     { icon: 'ribbon-outline' as const, label: 'SMAD', value: missingSmad(seniorSnapshot, 'senior') },
@@ -152,13 +152,13 @@ export default function GoalsScreen() {
                   ) : null}
                 </View>
               </View>
-              <Text style={styles.detailNote}>{goalRemainingUf(seniorSnapshot,'senior')!==undefined?`Faltan ${formatUF(goalRemainingUf(seniorSnapshot,'senior')!)} UF. `:''}{seniorSnapshot?.seniorRemaining ?? 'Sin detalle de tramo publicado.'}</Text>
+              <Text style={styles.detailNote}>{seniorSnapshot?.seniorRemaining ?? 'Sin detalle de tramo publicado.'}</Text>
               {seniorSnapshot?.goalPending?<Text style={styles.emissionNote}>Todavía no hay una carga vigente. Puedes consultar el período anterior en «Pasada».</Text>:null}
             </View>
           ) : null}
 
           <Pressable accessibilityRole="button" accessibilityState={{ expanded: openGoal === 'category' }} onPress={() => setOpenGoal((current) => current === 'category' ? null : 'category')} style={({ pressed }) => [styles.goalButton, pressed && styles.pressed]}>
-            <GoalCard badge={metric?.category ?? 'Sin categoría'} icon="star" insight={openGoal === 'category' ? 'Toca para ocultar el detalle' : metric?.categoryRemaining ?? 'Toca para ver el período y la emisión'} progress={getProgress(categoryValue,categoryTarget)} title={metric?.categoryLabel ?? 'Catego'} tone="green" value={metric?.categoryUf !== undefined ? `${formatUF(categoryValue)} UF brutas` : 'Sin datos'} />
+            <GoalCard status={goalStatusLabel(metric, 'category')} icon="star" insight={openGoal === 'category' ? 'Toca para ocultar el detalle' : metric?.categoryRemaining ?? 'Toca para ver el período y la emisión'} progress={getProgress(categoryValue,categoryTarget)} title={metric?.categoryLabel ?? 'Catego'} tone="green" value={metric?.categoryUf !== undefined ? `${formatUF(categoryValue)} UF brutas` : 'Sin datos'} />
           </Pressable>
           {openGoal === 'category' ? (
             <View style={[styles.goalDetail, styles.categoryDetail]}>
@@ -171,6 +171,7 @@ export default function GoalsScreen() {
                 <View style={styles.detailHeading}>
                   <Text style={styles.detailEyebrow}>PERÍODO DE CATEGO</Text>
                   <Text style={styles.detailTitle}>{categorySnapshot?.categoryLabel ?? 'Período de Catego sin publicar'}</Text>
+                  <Text style={styles.goalStatus}>{goalStatusLabel(categorySnapshot, 'category')}</Text>
                   <PlatformLabelEditor id={`category_${periodView.category}`} label={categorySnapshot?.categoryLabel??'Catego'} onSaved={()=>setLabelRevision(value=>value+1)}/>
                 </View>
               </View>
@@ -236,6 +237,7 @@ const styles = StyleSheet.create({
   detailIconGold: { alignItems: 'center', backgroundColor: colors.goldSoft, borderRadius: radii.pill, height: 46, justifyContent: 'center', width: 46 },
   detailIconGreen: { alignItems: 'center', backgroundColor: colors.softGreen, borderRadius: radii.pill, height: 46, justifyContent: 'center', width: 46 },
   detailEyebrow: { color: colors.goldText, fontFamily: typography.sans, fontSize: 9, fontWeight: '900', letterSpacing: 0.8 },
+  goalStatus: { color: colors.primary, fontFamily: typography.sans, fontSize: 13, fontWeight: '800', marginTop: 4 },
   detailTitle: { color: colors.primary, fontFamily: typography.serif, fontSize: 18, fontWeight: '600', marginTop: 2 },
   detailDates: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 10, marginTop: 3 },
   detailGrid: { flexDirection: 'row', gap: spacing.sm },

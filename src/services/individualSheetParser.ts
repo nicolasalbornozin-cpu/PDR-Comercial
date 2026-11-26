@@ -244,7 +244,7 @@ export function parseIndividualSheet(book: WorkBook, source: SheetSource, period
       for(let r=5;r<=30;r++){
         if(tramos[`E${r}`]?.v)label=text(tramos[`E${r}`].v);
         const uf=number(tramos[`F${r}`]?.v),smad=number(tramos[`G${r}`]?.v),rest=number(tramos[`H${r}`]?.v),ssff=number(tramos[`I${r}`]?.v),prize=number(tramos[`J${r}`]?.v);
-        if(label&&uf!==undefined&&smad!==undefined&&rest!==undefined&&ssff!==undefined&&prize!==undefined&&prize>0)result.rules.push({label,uf,smad,rest,ssff,prize});
+        if(label&&uf!==undefined&&smad!==undefined&&rest!==undefined&&ssff!==undefined&&prize!==undefined&&(prize>0||searchName(label)==='acompanante senior'&&prize===0))result.rules.push({label,uf,smad,rest,ssff,prize});
       }
     }
   }

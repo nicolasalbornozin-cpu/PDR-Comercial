@@ -18,6 +18,7 @@ import { snapshotService } from '@/services/snapshotService';
 import { colors, radii, shadows, spacing, typography } from '@/theme';
 import { DashboardData, MetricSnapshot, roleLabels, VisibleProfile } from '@/types';
 import { hasGoalLevel, hasQualifiedSenior, latestGoal, isBirthdayToday, productivityTone } from '@/utils/commercialRules';
+import { goalStatusLabel } from '@/utils/goalProgress';
 import { formatUF } from '@/utils/format';
 import { displayPersonName } from '@/utils/personName';
 import { hasPilotRestrictions } from '@/utils/pilotNavigation';
@@ -181,11 +182,11 @@ function HomeDashboard() {
 
           <View style={styles.metricsRow}>
             <MetricCard onPress={!isSeller ? () => router.push({pathname:'/team',params:{kind:'debt'}}) : undefined} detail={hasMora ? isSeller ? 'contratos en mora' : isCommercialManager ? 'total · ver jefes de venta' : isManager ? 'total · ver coordinadores' : 'total · ver vendedores' : 'sin mora cargada'} icon="alert-circle-outline" label="MORA" tone={hasMora && moraContracts > 0 ? 'red' : 'green'} value={hasMora ? `${moraContracts}` : '—'} />
-            <MetricCard onPress={!isSeller ? () => router.push({pathname:'/team',params:{kind:'productivity'}}) : undefined} detail={hasProductivity?isSeller?'según Producción':'ver productividad del equipo':'sin datos cargados'} icon="briefcase-outline" label="PRODUCTIVIDAD" tone={hasProductivity?productivityTone(productivity):'gold'} value={hasProductivity?productivity.toFixed(2):'—'} />
+            <MetricCard onPress={!isSeller ? () => router.push({pathname:'/team',params:{kind:'productivity'}}) : undefined} detail={hasProductivity ? (isSeller ? undefined : 'ver productividad del equipo') : 'sin datos cargados'} icon="briefcase-outline" label="PRODUCTIVIDAD" tone={hasProductivity?productivityTone(productivity):'gold'} value={hasProductivity?productivity.toFixed(2):'—'} />
             {!isManager && (
               <MetricCard detail={isSeller ? 'posición anual' : 'personas visibles'} icon="trophy-outline" label={isSeller ? 'RANKING' : 'EQUIPO'} tone="gold" value={isSeller ? rankingPosition !== undefined ? `#${rankingPosition}` : '—' : `${sellerRows.length}`} />
             )}
-            <MetricCard onPress={data&&!isSeller?()=>router.push({pathname:'/team',params:{kind:'days'}}):undefined} detail={isSeller?'Desde tu última venta válida':'Ver días por ejecutivo'} icon="calendar-outline" label="DÍAS SIN VENDER" value={isSeller?daysWithoutSaleLabel(ownMetric):teamDays===null?'Sin fecha':`${teamDays} días`} />
+            <MetricCard onPress={data&&!isSeller?()=>router.push({pathname:'/team',params:{kind:'days'}}):undefined} detail={isSeller?'Desde tu última venta válida':'Ver días por ejecutivo'} icon="calendar-outline" label="DÍAS SIN VENDER" wrapValue={isSeller} value={isSeller?daysWithoutSaleLabel(ownMetric):teamDays===null?'Sin fecha':`${teamDays} días`} />
           </View>
 
           <View style={styles.secondaryMetrics}>
@@ -220,10 +221,10 @@ function HomeDashboard() {
                 <Pressable onPress={() => router.push('/goals')}><Text style={styles.detailLink}>Ver detalle  ›</Text></Pressable>
               </View>
               <Pressable onPress={() => router.push({ pathname: '/goals', params: { focus: 'senior' } })} style={({ pressed }) => pressed && styles.pressed}>
-                <GoalCard icon="diamond-outline" badge={`${ownMetric?.seniorSmadCount ?? '—'} SMAD`} insight={ownMetric?.seniorRemaining ?? 'Toca para ver UF brutas y emitidas'} progress={seniorTarget ? seniorUf / seniorTarget : 0} title={ownMetric?.seniorLabel ?? 'Senior'} value={ownMetric?.eligibleTotalUf !== undefined ? `${formatUF(seniorUf)} UF` : 'Sin carga vigente'} />
+                <GoalCard icon="diamond-outline" status={goalStatusLabel(ownMetric, 'senior')} badge={`${ownMetric?.seniorSmadCount ?? '—'} SMAD`} insight={ownMetric?.seniorRemaining ?? 'Toca para ver UF brutas y emitidas'} progress={seniorTarget ? seniorUf / seniorTarget : 0} title={ownMetric?.seniorLabel ?? 'Senior'} value={ownMetric?.eligibleTotalUf !== undefined ? `${formatUF(seniorUf)} UF` : 'Sin carga vigente'} />
               </Pressable>
               <Pressable onPress={() => router.push({ pathname: '/goals', params: { focus: 'category' } })} style={({ pressed }) => pressed && styles.pressed}>
-                <GoalCard badge={ownMetric?.category ?? 'Sin categoría'} icon="star" insight={ownMetric?.categoryRemaining??'Toca para ver ambos períodos'} progress={ownMetric?.categoryTargetUf ? (ownMetric.categoryUf??0)/ownMetric.categoryTargetUf : 0} title={ownMetric?.categoryLabel??'Catego'} tone="green" value={ownMetric?.categoryUf!==undefined?`${formatUF(ownMetric.categoryUf)} UF brutas`:'Sin datos'} />
+                <GoalCard status={goalStatusLabel(ownMetric, 'category')} icon="star" insight={ownMetric?.categoryRemaining??'Toca para ver ambos períodos'} progress={ownMetric?.categoryTargetUf ? (ownMetric.categoryUf??0)/ownMetric.categoryTargetUf : 0} title={ownMetric?.categoryLabel??'Catego'} tone="green" value={ownMetric?.categoryUf!==undefined?`${formatUF(ownMetric.categoryUf)} UF brutas`:'Sin datos'} />
               </Pressable>
             </View>
           ) : null}
@@ -301,7 +302,7 @@ function HomeDashboard() {
 
           <View style={styles.privacyNote}>
             <Ionicons color={colors.secondary} name="shield-checkmark-outline" size={21} />
-            <Text style={styles.privacyText}>Ranking por ventas totales del Excel cargado. Puedes comparar emitidas y sin emitir en mensual y anual. Producción, Catego y Senior conservan los resultados de sus hojas cargadas.</Text>
+            <Text style={styles.privacyText}>Ranking por ventas totales del Excel cargado. Puedes comparar emitidas y sin emitir en mensual y anual. Producción, Catego y Senior conservan los resultados de sus hojas cargadas.{isSeller ? '\n\nLas cifras son referenciales y no garantizan el premio. Si encuentras alguna diferencia, comunícate con tu coordinador.' : null}</Text>
           </View>
           <RecentAchievements data={data} />
         </View>

@@ -12,11 +12,12 @@ interface GoalCardProps {
   insight: string;
   icon: ComponentProps<typeof Ionicons>['name'];
   badge?: string;
+  status?: string;
   compact?: boolean;
   tone?: 'green' | 'gold' | 'red';
 }
 
-export function GoalCard({ title, value, progress, insight, icon, badge, compact = false, tone = 'gold' }: GoalCardProps) {
+export function GoalCard({ title, value, progress, insight, icon, badge, status, compact = false, tone = 'gold' }: GoalCardProps) {
   const accent = tone === 'red' ? colors.danger : tone === 'green' ? colors.success : colors.gold;
   const iconBackground = tone === 'red' ? '#FBECE9' : colors.primary;
   const iconColor = tone === 'red' ? colors.danger : colors.goldOnDark;
@@ -52,6 +53,7 @@ export function GoalCard({ title, value, progress, insight, icon, badge, compact
           </View>
           <Text numberOfLines={1} style={[styles.value, { color: accent }]}>{value}</Text>
         </View>
+        {status ? <Text style={styles.status}>{status}</Text> : null}
         <ProgressBar color={tone === 'gold' ? colors.success : accent} height={9} progress={progress} />
         <Text numberOfLines={1} style={styles.insight}>{insight}</Text>
       </View>
@@ -66,6 +68,7 @@ const styles = StyleSheet.create({
   heading: { flex: 1, minWidth: 0 },
   icon: { alignItems: 'center', borderRadius: radii.pill, height: 62, justifyContent: 'center', width: 62 },
   title: { color: colors.primary, fontFamily: typography.sans, fontSize: 16, fontWeight: '800' },
+  status: { color: colors.primary, fontFamily: typography.sans, fontSize: 12, fontWeight: '800' },
   badge: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 9, marginTop: 2 },
   value: { fontFamily: typography.sans, fontSize: 13, fontWeight: '900', maxWidth: '48%', textAlign: 'right' },
   insight: { color: colors.textMuted, fontFamily: typography.sans, fontSize: 11, fontWeight: '600' },
