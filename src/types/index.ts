@@ -267,6 +267,7 @@ export interface NewsArticle {
   body: string;
   image: string;
   imageUrl?: string;
+  videoPath?: string;
   date: string;
   featured: boolean;
   category: string;

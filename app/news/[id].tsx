@@ -8,6 +8,7 @@ import { NewsEditorInput, NewsEditorModal } from '@/components/NewsEditorModal';
 
 import { DetailHeader } from '@/components/DetailHeader';
 import { NewsCard } from '@/components/NewsCard';
+import { NewsArticleVideo } from '@/components/NewsArticleVideo';
 import { NewsPhoto, NewsPhotoBackground } from '@/components/NewsPhoto';
 import { NewsPhotoViewer } from '@/components/NewsPhotoViewer';
 import { NewsEventSections } from '@/components/NewsEventSections';
@@ -140,6 +141,7 @@ export default function NewsDetailScreen() {
             <Text style={styles.summary}>{article.summary}</Text>
             <View style={styles.goldLine} />
             <Text style={styles.body}>{article.body}</Text>
+            {article.videoPath ? <NewsArticleVideo key={article.videoPath} path={article.videoPath} /> : null}
             {eventAlbums.length > 0 ? <View style={styles.relatedSection}>
               <Text style={styles.galleryTitle}>Álbumes de últimos eventos</Text>
               {eventAlbums.map(album => <Pressable key={album.id} accessibilityRole="button"

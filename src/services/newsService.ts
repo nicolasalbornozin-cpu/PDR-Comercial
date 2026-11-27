@@ -37,6 +37,7 @@ interface NewsRow {
   summary: string;
   body: string;
   image_url: string | null;
+  video_path?: string | null;
   published_at: string;
   featured: boolean;
   category: string;
@@ -90,6 +91,7 @@ function rowToArticle(row: NewsRow): NewsArticle {
     body: row.body,
     image: row.category === 'Eventos' ? 'seniorEvent' : row.category === 'Reconocimientos' ? 'gardenTable' : 'park',
     imageUrl: row.image_url ?? undefined,
+    videoPath: row.video_path ?? undefined,
     date: row.published_at.slice(0, 10),
     featured: row.featured,
     category: row.category,
@@ -153,10 +155,19 @@ async function uploadImage(asset: DocumentPicker.DocumentPickerAsset, folder: 'a
 export const newsService = {
   currentMonthStart,
 
+  async resolveArticleVideo(path: string): Promise<string> {
+    if (!supabase || !/^articles\/[a-z0-9][a-z0-9-]{0,119}\.mp4$/.test(path)) {
+      throw Error('El video no está disponible.');
+    }
+    const { data, error } = await supabase.storage.from('news-videos').createSignedUrl(path, 600);
+    if (error || !data?.signedUrl) throw Error('No se pudo abrir el video. Revisa tu sesión e inténtalo de nuevo.');
+    return data.signedUrl;
+  },
+
   async getContent(): Promise<NewsContent> {
     if (!supabase) return fallbackContent();
     const [articlesResult, galleryResult, sectionsResult] = await Promise.all([
-      supabase.from('news_articles').select('id,title,summary,body,image_url,published_at,featured,category,event_month,sort_order').eq('active', true).order('sort_order').order('published_at', { ascending: false }),
+      supabase.from('news_articles').select('id,title,summary,body,image_url,published_at,featured,category,event_month,sort_order,video_path').eq('active', true).order('sort_order').order('published_at', { ascending: false }),
       supabase.from('gallery_images').select('id,news_article_id,news_section_id,title,image_url,sort_order').eq('active', true).order('sort_order').order('created_at', { ascending: false }),
       supabase.from('news_sections').select('id,news_article_id,title,description,sort_order').eq('active', true).order('sort_order').order('id'),
     ]);
