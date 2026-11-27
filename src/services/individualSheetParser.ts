@@ -12,7 +12,7 @@ export const sheetSources = {
   titanes: { label: 'Mora TITANES · Manuel Olmedo', sheet: 'Carga Titanes' },
   rbh: { label: 'Mora RBH · Rodolfo', sheet: 'Carga RBH' },
   msc: { label: 'Mora MSC · Mauricio', sheet: 'Carga MSC' },
-  sauce: { label: 'Riesgo Sauce', sheet: 'Carga Sauce' },
+  sauce: { label: 'Riesgo Sauce', sheet: 'Sauce ejecutivos + Sauce coordinadores' },
   ranking_monthly: { label: 'Ranking Plataforma · anual y mensual', sheet: 'Ranking del mes + emitido' },
   ranking_annual: { label: 'Ranking anual · ventas totales', sheet: 'BASE ANUAL' },
   cancellations: { label: 'Anulaciones anuales y última venta', sheet: 'anulaciones' },
@@ -57,6 +57,10 @@ export function parseIndividualSheet(book: WorkBook, source: SheetSource, period
   if (source === 'dotacion') return parseDotacion(book);
   if (source === 'cancellations') return parseRankingCancellations(book,period);
   if (source === 'ranking_annual' || source === 'ranking_monthly') return parsePreparedRanking(book, source, period) ?? parseCantoRanking(book,source,period);
+  if (source === 'sauce') {
+    const reports = parseSauceReports(book);
+    if (reports) return reports;
+  }
   if (source === 'production_sellers' || source === 'production_coordinators') {
     const commercial = parseCommercialProductivity(book,source);
     if (commercial) return commercial;
@@ -251,6 +255,58 @@ export function parseIndividualSheet(book: WorkBook, source: SheetSource, period
   if (!result.records.length) result.errors.push('No hay trabajadores válidos en la hoja seleccionada.');
   if (source === 'sauce') result.warnings.push(sauceLoad ? 'Riesgo Sauce tomado de PORC RIESGO (columna E) de Carga Sauce.' : `Riesgo tomado de ${searchName(ws[`G${first}`]?.v).startsWith('actualizado') ? 'G' : 'D'} del formato anterior.`);
   if (source.startsWith('production_')) result.warnings.push('Se conserva la productividad calculada en el Excel. Sus UF históricas no se convierten en ventas emitidas anuales.');
+  return result;
+}
+
+function parseSauceReports(book: WorkBook): SheetImport | undefined {
+  const reports = [
+    { label: 'Sauce ejecutivos', role: 'seller' },
+    { label: 'Sauce coordinadores', role: 'coordinator' },
+  ] as const;
+  const sheets = reports.map(({ label, role }) => ({
+    label, role, name: book.SheetNames.find(name => searchName(name) === searchName(label)),
+  }));
+  if (!sheets.some(sheet => sheet.name)) return undefined;
+
+  const result: SheetImport = {
+    source: 'sauce', sheet: sheetSources.sauce.sheet, records: [], errors: [], warnings: [], rules: [],
+  };
+  const seen = new Set<string>();
+  for (const { label, role, name } of sheets) {
+    if (!name) {
+      result.errors.push(`Falta la hoja «${label}».`);
+      continue;
+    }
+    const ws = book.Sheets[name];
+    if (searchName(ws.B1?.v) !== 'rut agente' || searchName(ws.C1?.v) !== 'nombre agente' ||
+        searchName(ws.E1?.v) !== 'porc riesgo') {
+      result.errors.push(`«${name}»: se necesitan RUT AGENTE en B, NOMBRE AGENTE en C y PORC RIESGO en E.`);
+      continue;
+    }
+    const start = result.records.length;
+    const rows = new Set(Object.keys(ws).filter(key => /^[BCE]\d+$/.test(key)).map(key => Number(key.slice(1))));
+    for (const row of rows) {
+      if (row === 1) continue;
+      const rut = normalizeRut(ws[`B${row}`]?.v);
+      const person = text(ws[`C${row}`]?.v);
+      const cell = ws[`E${row}`];
+      if (!rut && !person && !cell?.f && !text(cell?.v)) continue;
+      const risk = cell?.t === 'e' ? undefined : number(cell?.v);
+      const value = risk === undefined ? undefined : typeof cell?.v === 'number' && /%/.test(cell.z ?? '') ? risk * 100 : risk;
+      if (row > 100000 || !isValidRut(rut) || !person || value === undefined || value < 0 || value > 100) {
+        result.errors.push(`«${name}», fila ${row}: revisa el RUT, el nombre y el porcentaje de riesgo (0 a 100%).`);
+        continue;
+      }
+      if (seen.has(rut)) {
+        result.errors.push(`«${name}», fila ${row}: RUT repetido en la carga de Sauce.`);
+        continue;
+      }
+      seen.add(rut);
+      result.records.push({ rut, name: person, role, values: { risk: value }, row });
+    }
+    if (result.records.length === start) result.errors.push(`«${name}» no contiene resultados válidos.`);
+    else result.warnings.push(`${name}: ${result.records.length - start} porcentajes de riesgo encontrados.`);
+  }
   return result;
 }
 

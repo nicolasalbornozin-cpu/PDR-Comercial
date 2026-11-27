@@ -33,6 +33,23 @@ function averageMetric(workers: VisibleProfile[], latest: DashboardData['latestB
   return values.length ? values.reduce((total, value) => total + value, 0) / values.length : 0;
 }
 
+const saucePercentage = new Intl.NumberFormat('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+function SauceRisk({ risk }: { risk?: number }) {
+  const high = risk !== undefined && risk > 30;
+  return (
+    <View style={styles.secondaryMetric}>
+      <View style={[styles.secondaryIcon, high && styles.dangerBackground]}>
+        <Ionicons name="shield-checkmark-outline" color={high ? colors.danger : colors.goldText} size={20}/>
+      </View>
+      <View style={styles.flex}>
+        <Text style={styles.secondaryLabel}>Riesgo Sauce</Text>
+        <Text style={[styles.secondaryValue, high && styles.dangerText]}>{risk === undefined ? 'Sin dato' : `${saucePercentage.format(risk)}%`}</Text>
+      </View>
+    </View>
+  );
+}
+
 function ScopeCard({ title, subtitle, sellers, data, monthlyTarget, onPress,scopeId }: { title: string; subtitle: string; sellers: VisibleProfile[]; data: DashboardData; monthlyTarget: number; onPress: () => void;scopeId?:string }) {
   const totals=scopeId?data.salesTotalsByScope?.[scopeId]:undefined;
   const annual = totals?.annualGross??sellers.reduce((total, seller) => total + Number(data.annualTotalUfByUser[seller.id] ?? 0), 0);
@@ -43,6 +60,7 @@ function ScopeCard({ title, subtitle, sellers, data, monthlyTarget, onPress,scop
   const hasProductivity = sellers.some(w=>data.latestByUser[w.id]?.productivity !== undefined);
   const productivity = averageMetric(sellers, data.latestByUser, 'productivity');
   const teamDays = teamDaysWithoutSale(sellers,data);
+  const sauce = scopeId ? data.latestByUser[scopeId]?.sauceRisk : undefined;
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={`Ver equipo de ${title}`} onPress={onPress} style={styles.scopeCard}>
       <View style={styles.scopeHeading}>
@@ -57,6 +75,7 @@ function ScopeCard({ title, subtitle, sellers, data, monthlyTarget, onPress,scop
         <Text style={[styles.scopeStat, { color: hasMora ? mora > 0 ? colors.danger : colors.success : colors.textMuted }]}>Mora total <Text style={styles.scopeStrong}>{hasMora ? `${mora} contratos` : '—'}</Text></Text>
         <Text style={[styles.scopeStat, hasProductivity && productivity < 1 && styles.dangerText]}>Prod. <Text style={styles.scopeStrong}>{hasProductivity ? productivity.toFixed(2) : '—'}</Text></Text>
         <Text style={styles.scopeStat}>Equipo sin vender <Text style={styles.scopeStrong}>{teamDays === null ? 'Sin fecha' : `${teamDays} días`}</Text></Text>
+        {sauce !== undefined ? <Text style={[styles.scopeStat, sauce > 30 && styles.dangerText]}>Riesgo Sauce <Text style={styles.scopeStrong}>{saucePercentage.format(sauce)}%</Text></Text> : null}
       </View>
       <ProgressBar color={colors.secondary} height={7} progress={monthlyTarget ? monthly / monthlyTarget : 0} />
       <Text style={styles.progressCaption}>{monthlyTarget ? `${Math.round((monthly / monthlyTarget) * 100)}% del mejor resultado visible` : 'Sin ventas emitidas este mes'}</Text>
@@ -196,10 +215,7 @@ function HomeDashboard() {
             </View>
             <View style={styles.secondaryDivider} />
             {isSeller ? (
-              <View style={styles.secondaryMetric}>
-                <View style={[styles.secondaryIcon, (sauceRisk ?? 0)>30 && styles.dangerBackground]}><Ionicons name="shield-checkmark-outline" color={(sauceRisk ?? 0)>30 ? colors.danger : colors.goldText} size={20}/></View>
-                <View><Text style={styles.secondaryLabel}>Riesgo Sauce</Text><Text style={[styles.secondaryValue, (sauceRisk ?? 0)>30 && styles.dangerText]}>{sauceRisk===undefined?'Sin dato':`${sauceRisk.toFixed(1)}%`}</Text></View>
-              </View>
+              <SauceRisk risk={sauceRisk} />
             ) : (
               <Pressable accessibilityRole="button" disabled={!data} onPress={() => router.push({pathname:'/team',params:{kind:'zero'}})} style={styles.secondaryMetric}>
                 <View style={styles.secondaryIcon}><Ionicons color={colors.primary} name="calendar-outline" size={19} /></View>
@@ -208,6 +224,8 @@ function HomeDashboard() {
               </Pressable>
             )}
           </View>
+
+          {user?.role === 'coordinator' ? <View style={styles.secondaryMetrics}><SauceRisk risk={sauceRisk} /></View> : null}
 
           {user?.role === 'coordinator' ? <View style={styles.metricsRow}>
             <MetricCard label="CATEGORIZADOS" icon="star-outline" value={`${categoryCount}`} detail="Ver estado de cada ejecutivo" onPress={() => router.push({pathname:'/team',params:{kind:'category'}})} />

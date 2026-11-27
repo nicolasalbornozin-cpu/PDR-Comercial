@@ -1,5 +1,5 @@
 import {supabase} from './supabase';
-import {searchName,RankingImport,SheetImport,SheetMetrics,SheetSource} from './individualSheetParser';
+import {searchName,RankingImport,SheetImport,SheetMetrics,SheetSource,sheetSources} from './individualSheetParser';
 import {DashboardData,EmploymentStatus,MetricSnapshot,User,UserRole} from '@/types';
 import {normalizeRut} from '@/utils/rut';
 import {displayPersonName} from '@/utils/personName';
@@ -107,8 +107,24 @@ export const individualSheetService={
    const found=match(row);
    if(found.length===0&&['category','sauce','cancellations','ranking_annual','ranking_monthly','senior'].includes(parsed.source)){skipped.push(row.name);return [];}
    if(found.length!==1)throw Error(`No hay una identidad única en dotación para ${row.name}. Revisa su RUT o nombre antes de cargar.`);
+   if(parsed.source==='sauce' && parsed.sheet===sheetSources.sauce.sheet && found[0].role!==row.role) {
+    throw Error(`El cargo de ${row.name} no coincide con su hoja de Sauce. Revisa la dotación y el RUT antes de cargar.`);
+   }
    return [{worker_id:found[0].id,metrics:row.values,source_row:row.row}];
   });
+  if(parsed.source==='sauce' && parsed.sheet!==sheetSources.sauce.sheet) {
+   const coordinatorIds=workers.filter(worker=>worker.role==='coordinator').map(worker=>worker.id);
+   if(coordinatorIds.length) {
+    const {data,error}=await supabase.from('active_worker_metrics').select('worker_id,metrics').eq('source','sauce').in('worker_id',coordinatorIds);
+    if(error)throw Error(error.message);
+    const included=new Set(records.map(record=>record.worker_id));
+    for(const row of data??[]) {
+     if(!included.has(row.worker_id) && typeof row.metrics?.risk==='number') {
+      records.push({worker_id:row.worker_id,source_row:1,metrics:{risk:row.metrics.risk}});
+     }
+    }
+   }
+  }
   if(parsed.source==='ranking_annual')records=mergeHomeTotals(records,parsed.homeTotals,workers);
   // These are complete debt reports for one jefatura. Absence means no debt,
   // not an unknown value; keep active sellers with zero contracts visible.
