@@ -5,7 +5,7 @@ import { BrandLogo } from '@/components/BrandLogo';
 import { ScreenContainer } from '@/components/ScreenContainer';
 import { colors, radii, spacing, typography } from '@/theme';
 
-const androidInstaller = 'https://github.com/nicolasalbornozin-cpu/PDR-Comercial/releases/download/android-1.2.0/PDR-Comercial.apk';
+const androidInstaller = 'https://github.com/nicolasalbornozin-cpu/PDR-Comercial/releases/download/android-1.2.1/PDR-Comercial.apk';
 
 export default function DownloadScreen() {
   return (

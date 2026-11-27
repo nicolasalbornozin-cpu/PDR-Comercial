@@ -1,12 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppHeader } from '@/components/AppHeader';
 import { NewsArticleComposer } from '@/components/NewsArticleComposer';
 import { NewsDeleteButton } from '@/components/NewsDeleteButton';
 import { NewsCard } from '@/components/NewsCard';
+import { NewsVideoPreview } from '@/components/NewsArticleVideo';
 import { NewsPhoto, NewsPhotoBackground } from '@/components/NewsPhoto';
 import { ScreenContainer } from '@/components/ScreenContainer';
 import { SectionHeader } from '@/components/SectionHeader';
@@ -26,6 +27,8 @@ export default function NewsScreen() {
   const [composer, setComposer] = useState(false);
   const [width, setWidth] = useState(0);
   const [page, setPage] = useState({ key: '', index: 0 });
+  const [focused, setFocused] = useState(false);
+  useFocusEffect(useCallback(() => { setFocused(true); return () => setFocused(false); }, []));
   const pager = useRef<ScrollView>(null);
   const canEdit = canEditNews(authenticatedUser?.role) && !isPreviewing;
   const trips = seniorTrips(content.articles);
@@ -44,7 +47,6 @@ export default function NewsScreen() {
   const go = (index: number) => {
     const next = Math.max(0, Math.min(index, slides.length - 1));
     pager.current?.scrollTo({ x: next * width, animated: true });
-    setPage({ key: slideKey, index: next });
   };
   const removeButton = (article: NewsArticle) => <NewsDeleteButton label={article.title} onDelete={async () => { await newsService.deleteArticle(article.id); await refresh(); }}/>;
 
@@ -58,11 +60,16 @@ export default function NewsScreen() {
         {loading ? <ActivityIndicator color={colors.gold}/> : null}
         {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
         {slides.length ? <View onLayout={event => setWidth(event.nativeEvent.layout.width)} style={styles.carousel}>
-          <ScrollView key={slideKey} ref={pager} horizontal pagingEnabled showsHorizontalScrollIndicator={false}
-            onMomentumScrollEnd={event => { if (width) setPage({ key: slideKey, index: Math.round(event.nativeEvent.contentOffset.x / width) }); }}>
-            {slides.map(article => <View key={article.id} style={{ width: width || 300 }}>
+          <ScrollView key={slideKey} ref={pager} horizontal pagingEnabled showsHorizontalScrollIndicator={false} scrollEventThrottle={32}
+            onScroll={event => {
+              if (!width) return;
+              const index = Math.min(slides.length - 1, Math.max(0, Math.round(event.nativeEvent.contentOffset.x / width)));
+              setPage(previous => previous.key === slideKey && previous.index === index ? previous : { key: slideKey, index });
+            }}>
+            {slides.map((article, index) => <View key={article.id} style={{ width: width || 300 }}>
               <Pressable accessibilityRole="button" accessibilityLabel={`Ver más: ${article.title}`} onPress={() => open(article)}>
                 <NewsPhotoBackground url={article.imageUrl} fallback={newsImages[article.image as keyof typeof newsImages] ?? newsImages.park} style={styles.cover}>
+                  {article.videoPath && focused && index === slide ? <NewsVideoPreview key={article.videoPath} path={article.videoPath} /> : null}
                   <LinearGradient colors={['rgba(9,61,42,0.02)', 'rgba(9,61,42,0.92)']} style={StyleSheet.absoluteFill}/>
                   <View style={styles.badge}><Text style={styles.badgeText}>{trips.some(trip => trip.id === article.id) ? 'PASEO SENIOR' : article.category === 'Eventos recientes' ? 'ÚLTIMOS EVENTOS' : 'DESTACADA'}</Text></View>
                   <View style={styles.coverCopy}><Text style={styles.coverTitle}>{article.title}</Text><Text style={styles.coverSummary}>{article.summary}</Text><View style={styles.more}><Text style={styles.white}>Ver más</Text><Ionicons name="chevron-forward" color={colors.goldOnDark} size={17}/></View></View>

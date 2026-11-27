@@ -1,14 +1,14 @@
 import { showNewsNotice } from '@/utils/newsNotice';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { NewsEditorInput, NewsEditorModal } from '@/components/NewsEditorModal';
 
 import { DetailHeader } from '@/components/DetailHeader';
 import { NewsCard } from '@/components/NewsCard';
-import { NewsArticleVideo } from '@/components/NewsArticleVideo';
+import { NewsArticleVideo, NewsVideoPreview } from '@/components/NewsArticleVideo';
 import { NewsPhoto, NewsPhotoBackground } from '@/components/NewsPhoto';
 import { NewsPhotoViewer } from '@/components/NewsPhotoViewer';
 import { NewsEventSections } from '@/components/NewsEventSections';
@@ -46,6 +46,10 @@ export default function NewsDetailScreen() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
   const [selectedPhoto, setSelectedPhoto] = useState<number | null>(null);
+  const [openVideoPath, setOpenVideoPath] = useState<string>();
+  const [focused, setFocused] = useState(false);
+  useFocusEffect(useCallback(() => { setFocused(true); return () => setFocused(false); }, []));
+  const videoOpen = Boolean(article?.videoPath && article.videoPath === openVideoPath);
   const isAdmin = canEditNews(authenticatedUser?.role) && !isPreviewing;
   const isTrip = seniorTrips(content.articles).some(trip => trip.id === article?.id);
   const articleGallery = article ? isTrip ? tripPhotos(content.articles, content.gallery, article).filter(photo => !photo.newsSectionId) : content.gallery.filter((photo) => photo.newsArticleId === article.id && !photo.newsSectionId) : [];
@@ -121,10 +125,16 @@ export default function NewsDetailScreen() {
     <ScreenContainer contentContainerStyle={styles.page} edges={['top', 'left', 'right', 'bottom']}>
       <View style={styles.mobileFrame}>
         <NewsPhotoBackground fallback={newsImages[article.image as keyof typeof newsImages] ?? newsImages.park} style={styles.hero} url={article.imageUrl}>
+          {article.videoPath && focused && !videoOpen && !editing && selectedPhoto === null ? <NewsVideoPreview key={article.videoPath} path={article.videoPath} /> : null}
           <LinearGradient colors={['rgba(9,61,42,0.66)', 'rgba(9,61,42,0.04)', 'rgba(9,61,42,0.85)']} style={StyleSheet.absoluteFill} />
-          <View style={styles.heroInner}>
+          {article.videoPath ? (
+            <Pressable accessibilityRole="button" accessibilityLabel="Reproducir video de portada en grande" onPress={() => setOpenVideoPath(article.videoPath)} style={[StyleSheet.absoluteFill, styles.heroPlay]}>
+              <View style={styles.playCircle}><Ionicons name="play" size={25} color={colors.surface} /></View>
+            </Pressable>
+          ) : null}
+          <View style={styles.heroInner} pointerEvents="box-none">
             <DetailHeader light title="Detalle de noticia" />
-            <View style={styles.heroCopy}>
+            <View style={styles.heroCopy} pointerEvents="box-none">
               <View style={styles.categoryBadge}><Text style={styles.categoryText}>{article.category.toUpperCase()}</Text></View>
               <View style={styles.titleRow}>
                 <Text style={styles.title}>{article.title}</Text>
@@ -141,7 +151,6 @@ export default function NewsDetailScreen() {
             <Text style={styles.summary}>{article.summary}</Text>
             <View style={styles.goldLine} />
             <Text style={styles.body}>{article.body}</Text>
-            {article.videoPath ? <NewsArticleVideo key={article.videoPath} path={article.videoPath} /> : null}
             {eventAlbums.length > 0 ? <View style={styles.relatedSection}>
               <Text style={styles.galleryTitle}>Álbumes de últimos eventos</Text>
               {eventAlbums.map(album => <Pressable key={album.id} accessibilityRole="button"
@@ -173,6 +182,17 @@ export default function NewsDetailScreen() {
                 ))}
               </View>
             ) : <Text style={styles.photoEmpty}>Aún no hay fotografías adicionales.</Text>}
+            {article.videoPath ? (
+              <View style={styles.relatedSection}>
+                <Text accessibilityRole="header" style={styles.galleryTitle}>Videos</Text>
+                <Pressable accessibilityRole="button" accessibilityLabel="Ver video de la actividad" onPress={() => setOpenVideoPath(article.videoPath)} style={styles.eventAlbum}>
+                  <NewsPhotoBackground url={article.imageUrl} fallback={newsImages.park} style={styles.videoThumbnail}>
+                    <View style={styles.playCircle}><Ionicons name="play" size={22} color={colors.surface} /></View>
+                  </NewsPhotoBackground>
+                  <View style={styles.eventCaption}><Text style={styles.eventName}>{article.title}</Text><Ionicons name="expand-outline" size={20} color={colors.primary}/></View>
+                </Pressable>
+              </View>
+            ) : null}
             {isAdmin ? (
               <Pressable accessibilityRole="button" onPress={openEditor} style={styles.bottomEdit}>
                 <Ionicons color={colors.primary} name="pencil-outline" size={18} />
@@ -210,6 +230,7 @@ export default function NewsDetailScreen() {
       </NewsEditorModal>
 
       {selectedPhoto !== null && articleGallery.length ? <NewsPhotoViewer initialIndex={selectedPhoto} onClose={() => setSelectedPhoto(null)} photos={articleGallery} /> : null}
+      {videoOpen && article.videoPath ? <NewsArticleVideo key={article.videoPath} path={article.videoPath} onClose={() => setOpenVideoPath(undefined)} /> : null}
     </ScreenContainer>
   );
 }
@@ -219,6 +240,9 @@ const styles = StyleSheet.create({
   page: { alignItems: 'center', backgroundColor: colors.background, paddingBottom: 34 },
   mobileFrame: { maxWidth: 620, width: '100%' },
   hero: { height: 420 },
+  heroPlay: { alignItems: 'center', justifyContent: 'center' },
+  playCircle: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(7,42,30,0.86)', borderColor: 'rgba(255,255,255,0.7)', borderWidth: 1 },
+  videoThumbnail: { width: '100%', aspectRatio: 16 / 9, alignItems: 'center', justifyContent: 'center' },
   heroInner: { flex: 1, justifyContent: 'space-between', paddingHorizontal: spacing.xl, paddingTop: 2 },
   heroCopy: { gap: 8, paddingBottom: 44 },
   categoryBadge: { alignSelf: 'flex-start', backgroundColor: colors.goldSoft, borderRadius: radii.pill, paddingHorizontal: 11, paddingVertical: 6 },

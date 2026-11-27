@@ -2,7 +2,7 @@
   "expo": {
     "name": "PDR Comercial",
     "slug": "pdr-comercial",
-    "version": "1.2.0",
+    "version": "1.2.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "pdrcomercial",
@@ -21,7 +21,7 @@
         "backgroundColor": "#0E563A"
       },
       "predictiveBackGestureEnabled": false,
-      "runtimeVersion": "1.2.0"
+      "runtimeVersion": "1.2.1"
     },
     "web": {
       "bundler": "metro",
